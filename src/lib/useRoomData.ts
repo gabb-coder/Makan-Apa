@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
 
-export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit'>>;
+export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode'>>;
 export type MemberPatch = Partial<Pick<MemberRow, 'name' | 'color' | 'sort_order'>>;
 
 function upsert(rows: MemberRow[], row: MemberRow): MemberRow[] {
@@ -82,5 +82,14 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[]) {
     }
   };
 
-  return { room, members, updateRoom, updateMember, moveMember };
+  /** Remove someone who joined by mistake. Members with any history can't be removed yet. */
+  const removeMember = async (id: string) => {
+    const name = members.find((m) => m.id === id)?.name ?? 'They';
+    const { error } = await supabase.from('members').delete().eq('id', id);
+    if (error?.code === '23503') throw new Error(`${name} already has meals or vetoes in this room, so they can’t be removed.`);
+    if (error) throw new Error(error.message);
+    setMembers((cur) => cur.filter((m) => m.id !== id));
+  };
+
+  return { room, members, updateRoom, updateMember, moveMember, removeMember };
 }

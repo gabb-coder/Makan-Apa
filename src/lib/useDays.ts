@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deciderFor } from './rotation';
-import { supabase, type DayEntryRow, type MemberRow, type RoomRow, type VetoRow } from './supabase';
+import { supabase, type DayEntryRow, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
 
 /** What the decider is proposing: a pool food, or a name typed in. */
 export type Pick = { foodId: string; name: string } | { foodId: null; name: string };
@@ -81,6 +81,38 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     [vetoes, todayEntry],
   );
   const computedDecider = deciderFor(members, room.rotation_start, today);
+
+  // Secret picks for today, live. Every phone holds them all, but the UI only shows
+  // other people's picks once everyone is in (the room code is the only lock).
+  const [secretPicks, setSecretPicks] = useState<SecretPickRow[]>([]);
+  const todayId = todayEntry?.id ?? null;
+  useEffect(() => {
+    setSecretPicks([]);
+    if (!todayId) return;
+    const loadPicks = () =>
+      supabase
+        .from('secret_picks')
+        .select('*')
+        .eq('day_entry_id', todayId)
+        .then(({ data }) => data && setSecretPicks(data as SecretPickRow[]));
+    const upsertPick = (row: SecretPickRow) =>
+      setSecretPicks((cur) => [...cur.filter((x) => x.member_id !== row.member_id), row]);
+    loadPicks();
+    const channel = supabase
+      .channel(`picks:${todayId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'secret_picks', filter: `day_entry_id=eq.${todayId}` }, (p) =>
+        upsertPick(p.new as SecretPickRow),
+      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'secret_picks', filter: `day_entry_id=eq.${todayId}` }, (p) =>
+        upsertPick(p.new as SecretPickRow),
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') loadPicks();
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [todayId]);
 
   // Step 1: the first visit of the day creates the entry. Both phones may race; the unique
   // (room_id, entry_date) constraint keeps one row.
@@ -195,8 +227,34 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     setVetoes((cur) => cur.filter((x) => x.id !== vetoRow.id));
   };
 
+  /** Secret picks mode: set or change my pick for today. */
+  const submitSecretPick = async (foodText: string) => {
+    if (!todayEntry) throw new Error('Today isn’t ready yet. Try again in a moment.');
+    const { data, error: err } = await supabase
+      .from('secret_picks')
+      .upsert({ day_entry_id: todayEntry.id, member_id: meId, food_text: foodText }, { onConflict: 'day_entry_id,member_id' })
+      .select()
+      .single();
+    if (err) throw new Error(err.message);
+    const row = data as SecretPickRow;
+    setSecretPicks((cur) => [...cur.filter((x) => x.member_id !== row.member_id), row]);
+  };
+
+  /**
+   * Secret picks mode: save the wheel's result as today's meal. Only the first spin counts;
+   * returns false if someone else's spin got there first.
+   */
+  const settleSecretSpin = async (pick: Pick) =>
+    updateToday(
+      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'wheel', status: 'accepted' },
+      (q) => q.eq('status', 'pending'),
+    );
+
   return {
     entries,
+    secretPicks,
+    submitSecretPick,
+    settleSecretSpin,
     vetoes,
     error,
     todayEntry,

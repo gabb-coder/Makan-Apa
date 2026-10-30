@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FoodTile } from '../components/FoodTile';
-import { landingAngle, SPIN_MS, Wheel, type TickSpeed } from '../components/Wheel';
+import { Wheel } from '../components/Wheel';
 import { shortDate } from '../lib/dates';
 import {
   filterByTags,
@@ -14,8 +14,7 @@ import {
 } from '../lib/foods';
 import { FOOD_COLORS, nextColor } from '../lib/palette';
 import { soundPref, usePref } from '../lib/prefs';
-import { playChime, playTick, unlockAudio } from '../lib/sound';
-import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useWheelSpin } from '../lib/useWheelSpin';
 
 const SHORTLIST_MAX = 3;
 
@@ -36,7 +35,6 @@ interface Props {
 }
 
 export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBack, onSend }: Props) {
-  const reducedMotion = usePrefersReducedMotion();
   const [sending, setSending] = useState(false);
 
   const [mode, setMode] = useState<'all' | 'shortlist'>('all');
@@ -47,53 +45,10 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState('');
 
-  const [rotation, setRotation] = useState(0);
-  const [spinning, setSpinning] = useState(false);
-  const [tick, setTick] = useState<TickSpeed>(null);
   const [result, setResult] = useState<Food | null>(null);
-  const [burstKey, setBurstKey] = useState<number | null>(null);
-  const timers = useRef<number[]>([]);
-
-  const clearTimers = () => {
-    timers.current.forEach((t) => window.clearTimeout(t));
-    timers.current = [];
-  };
-  const rotor = useRef<HTMLDivElement>(null);
-  const tickLoop = useRef(0);
+  const wheel = useWheelSpin();
+  const { spinning } = wheel;
   const sound = usePref(soundPref);
-
-  const stopTickLoop = () => cancelAnimationFrame(tickLoop.current);
-  useEffect(
-    () => () => {
-      clearTimers();
-      stopTickLoop();
-    },
-    [],
-  );
-
-  /** Click once per slice boundary the pointer passes, read from the disc's live angle. */
-  const startTickLoop = (seg: number) => {
-    stopTickLoop();
-    let last: number | null = null;
-    let total = 0;
-    let lastSlice = 0;
-    const frame = () => {
-      const el = rotor.current;
-      if (el) {
-        const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
-        const angle = (Math.atan2(m.b, m.a) * 180) / Math.PI;
-        if (last !== null) total += ((angle - last + 540) % 360) - 180;
-        last = angle;
-        const slice = Math.floor(total / seg);
-        if (slice !== lastSlice) {
-          lastSlice = slice;
-          playTick();
-        }
-      }
-      tickLoop.current = requestAnimationFrame(frame);
-    };
-    tickLoop.current = requestAnimationFrame(frame);
-  };
 
   const tagChips = useMemo(() => popularTags(pool, 6), [pool]);
   const shortlistOptions = useMemo(() => [...pool, ...customFoods], [pool, customFoods]);
@@ -112,7 +67,7 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
   // Any change to the candidate set invalidates a shown result.
   const resetResult = () => {
     setResult(null);
-    setBurstKey(null);
+    wheel.clearBurst();
   };
 
   const toggleTag = (tag: string) => {
@@ -152,42 +107,10 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
 
   const spin = () => {
     if (!canSpin) return;
-    const n = wheelFoods.length;
     const k = weightedPick(wheelFoods, wheelWeight);
     const winner = wheelFoods[k];
-    const seg = 360 / n;
-    const jitterMax = Math.min(12, seg * 0.35);
-    const jitter = Math.random() * 2 * jitterMax - jitterMax;
-    const base = rotation - (((rotation % 360) + 360) % 360);
-
-    clearTimers();
     setResult(null);
-    setBurstKey(null);
-
-    if (reducedMotion) {
-      setRotation(base + landingAngle(k, n) + jitter);
-      setResult(winner);
-      return;
-    }
-
-    unlockAudio();
-    startTickLoop(seg);
-    setRotation(base + 360 * 6 + landingAngle(k, n) + jitter);
-    setSpinning(true);
-    setTick('fast');
-    timers.current = [
-      window.setTimeout(() => setTick('mid'), 1500),
-      window.setTimeout(() => setTick('slow'), 2700),
-      window.setTimeout(() => setTick('crawl'), 3500),
-      window.setTimeout(() => {
-        stopTickLoop();
-        playChime();
-        setTick(null);
-        setSpinning(false);
-        setResult(winner);
-        setBurstKey(Date.now());
-      }, SPIN_MS + 100),
-    ];
+    wheel.spinTo(k, wheelFoods.length, () => setResult(winner));
   };
 
   const switchMode = (next: 'all' | 'shortlist') => {
@@ -326,12 +249,12 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
 
       <Wheel
         foods={wheelFoods}
-        rotation={rotation}
-        animate={!reducedMotion}
-        sway={!reducedMotion && !spinning && !result}
-        tick={tick}
-        burstKey={reducedMotion ? null : burstKey}
-        rotorRef={rotor}
+        rotation={wheel.rotation}
+        animate={!wheel.reducedMotion}
+        sway={!wheel.reducedMotion && !spinning && !result}
+        tick={wheel.tick}
+        burstKey={wheel.burstKey}
+        rotorRef={wheel.rotorRef}
       />
 
       {result ? (

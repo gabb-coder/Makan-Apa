@@ -13,6 +13,7 @@ interface Props {
   updateRoom: (patch: RoomPatch) => Promise<void>;
   updateMember: (id: string, patch: MemberPatch) => Promise<void>;
   moveMember: (id: string, delta: -1 | 1) => Promise<void>;
+  removeMember: (id: string) => Promise<void>;
   onBack: () => void;
   onLeave: () => void;
   onToast: (message: string) => void;
@@ -32,10 +33,11 @@ function timeZones(current: string): string[] {
 
 const cardStyle = { padding: 16, display: 'flex', flexDirection: 'column', gap: 14 } as const;
 
-export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, onBack, onLeave, onToast }: Props) {
+export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, onBack, onLeave, onToast }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
   const theme = usePref(themePref);
   const sound = usePref(soundPref);
@@ -209,6 +211,23 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                     })}
                   </div>
                 </div>
+                {editing && m.id !== me.id && (
+                  <button
+                    type="button"
+                    className="btn btn--danger press"
+                    data-armed={confirmRemove === m.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (confirmRemove !== m.id) return setConfirmRemove(m.id);
+                      setConfirmRemove(null);
+                      setEditingId(null);
+                      attempt(() => removeMember(m.id), `${m.name} removed from the room.`);
+                    }}
+                    style={{ order: 2, marginLeft: 26, height: 40, fontSize: 14 }}
+                  >
+                    {confirmRemove === m.id ? `Tap again to remove ${m.name}` : `Remove ${m.name} from the room`}
+                  </button>
+                )}
                 {editing && (
                   <div role="group" aria-label={`${m.name}'s colour`} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 26 }}>
                     {MEMBER_COLORS.map((c) => {
@@ -250,6 +269,32 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
         <span className="section-label">Rules</span>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span id="mode-label" style={{ fontSize: 15, fontWeight: 700 }}>How we decide</span>
+          <div className="segmented" role="group" aria-labelledby="mode-label">
+            {(
+              [
+                ['decider', 'Decider picks'],
+                ['secret', 'Secret picks'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={room.decision_mode === value}
+                onClick={() => room.decision_mode !== value && attempt(() => updateRoom({ decision_mode: value }))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+            {room.decision_mode === 'secret'
+              ? 'Everyone picks in secret. Once everyone’s in, the picks are revealed and the wheel spins among them. No vetoes.'
+              : 'Today’s decider picks or spins, and everyone else can accept or veto.'}
+          </span>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

@@ -92,10 +92,10 @@ export function popularTags(foods: Food[], limit = Infinity): string[] {
     .map(([t]) => t);
 }
 
-/** "A", "A and B", "A, B and C". */
-export function joinNames(names: string[]): string {
+/** "A", "A and B", "A, B and C" (or "A, B or C"). */
+export function joinNames(names: string[], conjunction: 'and' | 'or' = 'and'): string {
   if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${names.slice(0, -1).join(', ')} ${conjunction} ${names[names.length - 1]}`;
 }
 
 export function filterByTags(foods: Food[], tags: string[], mode: 'and' | 'or'): Food[] {

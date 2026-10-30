@@ -9,12 +9,14 @@ interface Props {
   vetoed: string[];
   /** Who the pick goes to; null in a room of one, where it's final. */
   sendTo: string | null;
+  /** Secret picks mode: the pick stays hidden until everyone's in. */
+  secret?: boolean;
   onClose: () => void;
   onPick: (pick: { food: Food } | { name: string }) => Promise<void>;
 }
 
 /** Bottom sheet for the decider: pick straight from the food list, or type a food. */
-export function PickSheet({ mode, foods, vetoed, sendTo, onClose, onPick }: Props) {
+export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose, onPick }: Props) {
   const [query, setQuery] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, onClose, onPick }: Prop
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">{sendTo ? `Your turn · goes to ${sendTo}` : 'Your turn · this one’s final'}</span>
+            <span className="eyebrow">{secret ? 'Secret pick · hidden until everyone’s in' : sendTo ? `Your turn · goes to ${sendTo}` : 'Your turn · this one’s final'}</span>
             <h2 id="pick-title" className="title title--sm" style={{ fontSize: 24 }}>
               {mode === 'list' ? 'Pick from list' : 'Type my own'}
             </h2>
@@ -127,7 +129,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, onClose, onPick }: Prop
             />
             {typedVetoed && <span style={{ fontSize: 13, color: 'var(--danger)' }}>{typedName} was vetoed today.</span>}
             <button type="submit" className="btn btn--primary press" style={{ height: 52 }} disabled={!typedName || typedVetoed || busy}>
-              {sendTo ? `Send to ${sendTo}` : 'Lock it in'}
+              {secret ? 'Lock in my pick' : sendTo ? `Send to ${sendTo}` : 'Lock it in'}
             </button>
           </form>
         )}

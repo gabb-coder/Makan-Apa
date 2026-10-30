@@ -61,3 +61,11 @@ export interface VetoRow {
   rejected_food: string;
   created_at: string;
 }
+
+export interface SecretPickRow {
+  id: string;
+  day_entry_id: string;
+  member_id: string;
+  food_text: string;
+  created_at: string;
+}

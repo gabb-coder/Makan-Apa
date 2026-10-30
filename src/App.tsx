@@ -153,8 +153,17 @@ function Toast({ message, raised }: { message: string; raised: boolean }) {
 
 function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m: string) => void; onLeave: () => void }) {
   const [route, setRoute] = useState<Route>(routeFromHash);
-  const { room, members, updateRoom, updateMember, moveMember } = useRoomData(session.room, session.members);
+  const { room, members, updateRoom, updateMember, moveMember, removeMember } = useRoomData(session.room, session.members);
   const me = members.find((m) => m.id === session.me.id) ?? session.me;
+  const removed = !members.some((m) => m.id === session.me.id);
+
+  // Someone removed this phone's member from the room.
+  useEffect(() => {
+    if (removed) {
+      onToast(`You were removed from room ${room.code}. Join again with the code.`);
+      onLeave();
+    }
+  }, [removed]);
   const today = useToday(room.timezone);
   const days = useDays(room, members, me.id, today);
   const foodsApi = useFoods(room, me.id, days.entries, today);
@@ -184,7 +193,8 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
   const decidedFood = entry?.status === 'accepted' ? entryFood(entry, new Map((foods ?? []).map((f) => [f.id, f]))) : null;
 
   let wheelSend: WheelSend;
-  if (decidedFood) wheelSend = { kind: 'note', text: `Today's already decided: ${decidedFood.name}. Spin for fun.` };
+  if (room.decision_mode === 'secret' && !decidedFood) wheelSend = { kind: 'note', text: 'Secret picks are on today. Make your pick on Today.' };
+  else if (decidedFood) wheelSend = { kind: 'note', text: `Today's already decided: ${decidedFood.name}. Spin for fun.` };
   else if (!isDecider) wheelSend = { kind: 'note', text: `It's ${decider?.name ?? 'someone else'}'s turn, so only they can send today's pick.` };
   else if (!sendTo) wheelSend = { kind: 'send', label: 'Lock it in' };
   else wheelSend = { kind: 'send', label: entry?.status === 'proposed' ? `Send instead` : `Send to ${sendTo}` };
@@ -234,6 +244,7 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
           updateRoom={updateRoom}
           updateMember={updateMember}
           moveMember={moveMember}
+          removeMember={removeMember}
           onBack={() => go('today')}
           onLeave={onLeave}
           onToast={onToast}

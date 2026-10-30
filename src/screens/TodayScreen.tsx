@@ -12,8 +12,9 @@ import {
 } from '../components/DayCards';
 import { FoodTile } from '../components/FoodTile';
 import { PickSheet } from '../components/PickSheet';
+import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
-import { entryFood, joinNames, timesWord, type Food } from '../lib/foods';
+import { customFood, entryFood, joinNames, timesWord, type Food } from '../lib/foods';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
@@ -57,6 +58,24 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const latestVeto = todayVetoes[todayVetoes.length - 1] ?? null;
   const myVetoesLeft = Math.max(0, room.veto_limit - myVetoesToday);
 
+  // Secret picks mode: everyone picks, then the wheel spins among the picks.
+  const secret = room.decision_mode === 'secret';
+  const [holdReveal, setHoldReveal] = useState(false);
+  const foodByName = (name: string) => pickable.find((f) => f.name.toLowerCase() === name.toLowerCase()) ?? customFood(name);
+  const revealed: RevealedPick[] = days.secretPicks
+    .map((p) => ({ member: memberById.get(p.member_id), food: foodByName(p.food_text) }))
+    .filter((p): p is RevealedPick => !!p.member)
+    .sort((a, b) => a.member.sort_order - b.member.sort_order);
+  const pickedIds = new Set(revealed.map((p) => p.member.id));
+  const allIn = members.length > 0 && members.every((m) => pickedIds.has(m.id));
+  const myPick = revealed.find((p) => p.member.id === me.id)?.food ?? null;
+  const showReveal = secret && !!todayEntry && ((todayEntry.status === 'pending' && allIn) || holdReveal);
+
+  // Keep the reveal on screen while this phone watches the wheel land, then show the result.
+  useEffect(() => {
+    if (secret && todayEntry?.status === 'pending' && allIn) setHoldReveal(true);
+  }, [secret, todayEntry?.status, allIn]);
+
   // The "Back to <decider>" card lasts until the decider sends something new.
   useEffect(() => {
     if (justVetoed && (!todayEntry || todayEntry.status !== 'pending' || todayEntry.id !== justVetoed.previous.id)) {
@@ -88,13 +107,37 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         {days.error ? `Couldn't load today. ${days.error}` : 'Getting today ready…'}
       </section>
     );
+  } else if (showReveal) {
+    main = (
+      <SecretRevealCard
+        picks={revealed}
+        me={me}
+        result={todayEntry.status === 'accepted' ? todayFood : null}
+        onSpin={(p) => days.settleSecretSpin(p.food.id.startsWith('custom') ? { foodId: null, name: p.food.name } : { foodId: p.food.id, name: p.food.name })}
+        onDone={() => setHoldReveal(false)}
+        onError={onToast}
+      />
+    );
   } else if (todayEntry.status === 'accepted' && todayFood) {
     main = (
       <DecidedCard
         food={todayFood}
         tomorrowText={tomorrowText}
         busy={busy}
-        onUndo={!isDecider ? () => run(days.undoAccept) : undefined}
+        // A secret-picks result is everyone's, so it's final.
+        onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
+      />
+    );
+  } else if (secret && todayEntry.status === 'pending') {
+    main = (
+      <SecretCollectCard
+        decider={decider}
+        members={members}
+        me={me}
+        pickedIds={pickedIds}
+        myPick={myPick}
+        onPickList={() => setSheet('list')}
+        onType={() => setSheet('type')}
       />
     );
   } else if (isDecider) {
@@ -105,6 +148,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           food={todayFood}
           method={todayEntry.method}
           waitingFor={waitingFor}
+          answerers={joinNames(others.map((m) => m.name), 'or')}
           busy={busy}
           onChange={() => setSheet('list')}
           onRetract={() => run(days.retract)}
@@ -321,10 +365,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           foods={pickable}
           vetoed={vetoedNames}
           sendTo={others.length === 0 ? null : waitingFor}
+          secret={secret && todayEntry?.status === 'pending'}
           onClose={() => setSheet(null)}
           onPick={async (p) => {
-            await pickFromSheet(p);
             const name = 'food' in p ? p.food.name : p.name;
+            if (secret && todayEntry?.status === 'pending') {
+              await days.submitSecretPick('food' in p ? p.food.name : foodByName(p.name).name);
+              onToast(`Locked in. Only you can see ${name} until the reveal.`);
+              return;
+            }
+            await pickFromSheet(p);
             onToast(others.length === 0 ? `${name} it is.` : `Sent ${name} to ${waitingFor}.`);
           }}
         />

@@ -28,7 +28,7 @@ export function useAction(onError: (message: string) => void) {
 
 /* ---------- Decider card (orange) ---------- */
 
-function DeciderShell({ decider, label, children }: { decider: MemberRow; label: string; children: ReactNode }) {
+export function DeciderShell({ decider, label, children }: { decider: MemberRow; label: string; children: ReactNode }) {
   return (
     <section
       style={{
@@ -160,15 +160,17 @@ interface SentProps {
   food: Food;
   method: 'direct' | 'wheel' | null;
   waitingFor: string;
+  /** Who can answer, e.g. "Alex" or "Alex or Sam". */
+  answerers: string;
   busy: boolean;
   onChange: () => void;
   onRetract: () => void;
 }
 
-export function SentCard({ me, food, method, waitingFor, busy, onChange, onRetract }: SentProps) {
+export function SentCard({ me, food, method, waitingFor, answerers, busy, onChange, onRetract }: SentProps) {
   return (
     <DeciderShell decider={me} label="Today's decider">
-      <DeciderHeading decider={me} title={`Sent to ${waitingFor}`} sub={`Waiting for ${waitingFor} to say yes…`} />
+      <DeciderHeading decider={me} title={`Sent to ${waitingFor}`} sub={answerers.includes(' or ') ? `Waiting for a yes from ${answerers}…` : `Waiting for ${answerers} to say yes…`} />
       <div
         style={{
           position: 'relative',
