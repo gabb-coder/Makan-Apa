@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar } from '../components/Avatar';
+import { Avatar, HostBadge } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { shareInvite } from '../lib/invite';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
 import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
-import { MEMBER_COLORS } from '../lib/session';
+import { hostOf, MEMBER_COLORS } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
 
@@ -41,6 +41,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const host = hostOf(members);
+  const iAmHost = host?.id === me.id;
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
   const theme = usePref(themePref);
   const sound = usePref(soundPref);
@@ -122,6 +124,13 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
             The top person decides on the rotation start date, then it goes down the list, one day each.
           </span>
+          {members.length > 1 && (
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+              {iAmHost
+                ? 'You’re the host: tap someone’s name to rename them, change their colour or remove them from the room.'
+                : `${host?.name ?? 'The host'} is the host and can remove people from the room.`}
+            </span>
+          )}
         </div>
         <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
           {members.map((m, i) => {
@@ -162,7 +171,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                         minHeight: 44,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 8,
+                        flexWrap: 'wrap',
+                        gap: '2px 8px',
                         padding: 0,
                         border: 'none',
                         background: 'none',
@@ -170,14 +180,15 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                         textAlign: 'left',
                       }}
                     >
-                      <span style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ maxWidth: '100%', fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {m.name}
                       </span>
-                      {m.id === me.id && (
+                      {m.id === me.id && m.id !== host?.id && (
                         <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
                           You
                         </span>
                       )}
+                      {m.id === host?.id && <HostBadge you={m.id === me.id} />}
                     </button>
                   )}
                   <div style={{ display: 'flex', gap: 4 }}>
@@ -206,7 +217,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                     })}
                   </div>
                 </div>
-                {editing && m.id !== me.id && (
+                {editing && iAmHost && m.id !== me.id && (
                   <button
                     type="button"
                     className="btn btn--danger press"

@@ -9,6 +9,18 @@ interface Props {
   style?: CSSProperties;
 }
 
+/** Small label marking the room's host ("You · Host" on the host's own phone). */
+export function HostBadge({ you = false }: { you?: boolean }) {
+  return (
+    <span className="badge" style={{ background: 'var(--streak-bg)', color: 'var(--streak-ink)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" />
+      </svg>
+      {you ? 'You · Host' : 'Host'}
+    </span>
+  );
+}
+
 /** Round initial badge in the member's colour. */
 export function Avatar({ name, color, size = 26, inverted = false, style }: Props) {
   return (

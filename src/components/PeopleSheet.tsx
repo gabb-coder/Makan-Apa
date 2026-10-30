@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
+import { hostOf } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
-import { Avatar } from './Avatar';
+import { Avatar, HostBadge } from './Avatar';
 
 interface Props {
   room: RoomRow;
@@ -53,6 +54,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
   }, [onClose]);
 
   const hereNow = members.filter((m) => online.has(m.id)).length;
+  const host = hostOf(members);
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -91,11 +93,12 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
                 <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <span style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
-                    {m.id === me.id && (
+                    {m.id === me.id && m.id !== host?.id && (
                       <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
                         You
                       </span>
                     )}
+                    {m.id === host?.id && <HostBadge you={m.id === me.id} />}
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>
                     {[here ? 'Here now' : null, turn].filter(Boolean).join(' · ') || 'Away'}

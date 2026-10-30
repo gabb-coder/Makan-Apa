@@ -25,6 +25,8 @@ Push reminders need the app served over HTTPS (any static host works). On iPhone
 
 ### Rooms and identity
 
+The person who creates a room is its host (the first member, by join time). Only the host can remove people, from Settings; everyone else can rename, recolour and reorder.
+
 There are no accounts. A phone joins a room with a name and the room code, and remembers its `room_id` and `member_id` in `localStorage`. Joining again with the same name (on a new phone, or after leaving) continues as that member. Invite links look like `https://<host>/?join=K7M2QX`.
 
 ## After the spec
