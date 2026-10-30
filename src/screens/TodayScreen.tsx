@@ -47,9 +47,9 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const { entries, todayEntry, todayVetoes, myVetoesToday } = days;
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
-  const nameFor = (id: string, you = 'You') => (id === me.id ? you : memberById.get(id)?.name ?? 'Someone');
+  const nameFor = (id: string | null, you = 'You') => (id === me.id ? you : (id && memberById.get(id)?.name) || 'Someone');
 
-  const decider = (todayEntry && memberById.get(todayEntry.decider_id)) || deciderFor(members, room.rotation_start, today) || me;
+  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today) || me;
   const isDecider = decider.id === me.id;
   const others = members.filter((m) => m.id !== decider.id);
   const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? 'nobody yet' : 'everyone';

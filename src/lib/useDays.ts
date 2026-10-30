@@ -131,6 +131,17 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   useEffect(() => {
     if (!todayEntry || !computedDecider) return;
     const untouched = todayEntry.status === 'pending' && !todayEntry.food_option_id && !todayEntry.custom_food && todayVetoes.length === 0;
+    // Today's decider was removed from the room: hand the day to whoever the rotation says now.
+    if (todayEntry.decider_id === null && todayEntry.status !== 'accepted') {
+      supabase
+        .from('day_entries')
+        .update({ decider_id: computedDecider.id, status: 'pending', food_option_id: null, custom_food: null, method: null })
+        .eq('id', todayEntry.id)
+        .is('decider_id', null)
+        .neq('status', 'accepted')
+        .then(({ error: err }) => err && setError(err.message));
+      return;
+    }
     if (untouched && todayEntry.decider_id !== computedDecider.id) {
       supabase
         .from('day_entries')

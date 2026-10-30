@@ -1,6 +1,6 @@
 // Makan apa? service worker: keeps the app shell and fonts available offline.
 // Room data always comes live from Supabase and is never cached here.
-const CACHE = 'makan-apa-v1';
+const CACHE = 'makan-apa-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -51,5 +51,36 @@ self.addEventListener('fetch', (event) => {
           return res;
         }),
     ),
+  );
+});
+
+// Daily reminders from the send-reminders Edge Function.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data && event.data.text() };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Makan apa?', {
+      body: data.body || 'Time to decide what to eat.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: data.tag || 'makan-reminder',
+      data: { url: data.url || '/#today' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || '/#today', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => w.url.startsWith(self.location.origin));
+      if (open) return open.focus().then((w) => w.navigate(url));
+      return self.clients.openWindow(url);
+    }),
   );
 });

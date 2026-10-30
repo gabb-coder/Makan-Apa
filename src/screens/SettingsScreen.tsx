@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
+import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
 import { MEMBER_COLORS } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
@@ -391,6 +392,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           />
         </label>
 
+        <ReminderSetting room={room} me={me} onToast={onToast} />
+
         {!installed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4, borderTop: '1px solid var(--divider)' }}>
             <span style={{ fontSize: 15, fontWeight: 700, paddingTop: 10 }}>Add to Home Screen</span>
@@ -440,5 +443,120 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         </p>
       </section>
     </main>
+  );
+}
+
+const REMINDER_HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6am to 10pm
+
+function hourLabel(h: number): string {
+  const suffix = h < 12 ? 'am' : 'pm';
+  return `${h % 12 === 0 ? 12 : h % 12}:00 ${suffix}`;
+}
+
+/** Daily push reminder for this phone (sent by the send-reminders Edge Function). */
+function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; onToast: (m: string) => void }) {
+  const support = pushSupport();
+  const [status, setStatus] = useState<{ hour: number } | null | 'loading'>('loading');
+  const [hour, setHour] = useState(11);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    reminderStatus(me.id).then(
+      (s) => {
+        if (!live) return;
+        setStatus(s);
+        if (s) setHour(s.hour);
+      },
+      () => live && setStatus(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, [me.id]);
+
+  const on = status !== 'loading' && status !== null;
+  const what = room.decision_mode === 'secret' ? 'to make your secret pick' : 'when it’s your turn to choose';
+
+  const run = async (fn: () => Promise<void>, ok: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      onToast(ok);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : 'Could not change reminders.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = (next: boolean) =>
+    run(
+      async () => {
+        if (next) {
+          await enableReminders(me.id, hour);
+          setStatus({ hour });
+        } else {
+          await disableReminders();
+          setStatus(null);
+        }
+      },
+      next ? `Reminders on. We'll nudge you at ${hourLabel(hour)}.` : 'Reminders off on this phone.',
+    );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: support === 'ok' ? 'pointer' : 'default' }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Daily reminder</span>
+          <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>
+            {support === 'ok'
+              ? `A notification ${what}, if it’s not decided yet.`
+              : support === 'needs-install'
+                ? 'On iPhone, add Makan apa? to your Home Screen first (below), then turn this on from there.'
+                : 'This browser can’t show notifications.'}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="switch"
+          checked={on}
+          disabled={support !== 'ok' || busy || status === 'loading'}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+      </label>
+      {on && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <label htmlFor="reminder-hour" style={{ fontSize: 14, fontWeight: 600 }}>
+            Remind me at
+          </label>
+          <select
+            id="reminder-hour"
+            className="input"
+            value={hour}
+            disabled={busy}
+            onChange={(e) => {
+              const h = Number(e.target.value);
+              setHour(h);
+              run(async () => {
+                await enableReminders(me.id, h);
+                setStatus({ hour: h });
+              }, `Reminder moved to ${hourLabel(h)}.`);
+            }}
+            style={{ width: 'auto', height: 44 }}
+          >
+            {REMINDER_HOURS.map((h) => (
+              <option key={h} value={h}>
+                {hourLabel(h)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {on && (
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>Times are in the room’s timezone ({room.timezone.replace(/_/g, ' ')}).</span>
+      )}
+    </div>
   );
 }

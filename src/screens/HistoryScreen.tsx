@@ -60,7 +60,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const stats = useMemo(() => monthStats(month, entries, vetoes, members, foodsById), [month, entries, vetoes, members, foodsById]);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
-  const nameFor = (id: string) => (id === me.id ? 'You' : memberById.get(id)?.name ?? 'Someone');
+  const nameFor = (id: string | null) => (id === me.id ? 'You' : (id && memberById.get(id)?.name) || 'Someone');
 
   const currentYear = today.slice(0, 4);
   const isCurrent = month === monthKey(today);

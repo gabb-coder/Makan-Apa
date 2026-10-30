@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
+import { disableReminders } from './lib/push';
 import { forgetSession, restoreSession, type Session } from './lib/session';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
@@ -97,6 +98,7 @@ export default function App() {
         onToast={setToast}
         onLeave={() => {
           generation.current++;
+          void disableReminders().catch(() => {});
           forgetSession();
           setState({ status: 'join' });
         }}
@@ -183,7 +185,7 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
   // Today's decider and what the wheel may do about it.
   const memberById = new Map(members.map((m) => [m.id, m]));
   const entry = days.todayEntry;
-  const decider = (entry && memberById.get(entry.decider_id)) || deciderFor(members, room.rotation_start, today);
+  const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today);
   const isDecider = decider?.id === me.id;
   const others = members.filter((m) => m.id !== decider?.id);
   const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : 'everyone';

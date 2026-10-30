@@ -46,7 +46,7 @@ export interface DayEntryRow {
   id: string;
   room_id: string;
   entry_date: string;
-  decider_id: string;
+  decider_id: string | null;
   food_option_id: string | null;
   custom_food: string | null;
   method: 'direct' | 'wheel' | null;
