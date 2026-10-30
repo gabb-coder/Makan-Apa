@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
+import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
+import { soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
 import { MEMBER_COLORS } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
@@ -35,6 +37,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
+  const theme = usePref(themePref);
+  const sound = usePref(soundPref);
+  const install = useInstallPrompt();
+  const installed = isStandalone();
 
   const attempt = async (fn: () => Promise<void>, ok?: string) => {
     try {
@@ -304,6 +310,75 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           </select>
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>Decides when “today” starts for the rotation.</span>
         </div>
+      </section>
+
+      <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.24s' }}>
+        <span className="section-label">This phone</span>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span id="appearance-label" style={{ fontSize: 15, fontWeight: 700 }}>Appearance</span>
+          <div className="segmented" role="group" aria-labelledby="appearance-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+            {(
+              [
+                ['system', 'System'],
+                ['light', 'Light'],
+                ['dark', 'Dark'],
+              ] as [ThemePref, string][]
+            ).map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={theme === value} onClick={() => themePref.set(value)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Wheel sounds</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>A tick per slice and a chime on landing</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={sound === 'on'}
+            onChange={(e) => soundPref.set(e.target.checked ? 'on' : 'off')}
+            className="switch"
+          />
+        </label>
+
+        {!installed && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4, borderTop: '1px solid var(--divider)' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, paddingTop: 10 }}>Add to Home Screen</span>
+            {install.available ? (
+              <>
+                <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>Open Makan apa? like an app, full screen.</span>
+                <button
+                  type="button"
+                  className="btn btn--primary press"
+                  onClick={async () => {
+                    if (await install.prompt()) onToast('Added. Look for Makan apa? on your home screen.');
+                  }}
+                >
+                  Install app
+                </button>
+              </>
+            ) : isIOS() ? (
+              <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+                In Safari, tap{' '}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Share" style={{ verticalAlign: '-2px' }}>
+                  <path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" />
+                  <path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
+                </svg>{' '}
+                Share, then <strong style={{ color: 'var(--ink)' }}>Add to Home Screen</strong>.
+              </span>
+            ) : (
+              <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+                Open your browser menu and choose <strong style={{ color: 'var(--ink)' }}>Install app</strong> or{' '}
+                <strong style={{ color: 'var(--ink)' }}>Add to Home screen</strong>.
+              </span>
+            )}
+          </div>
+        )}
       </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 8 }}>

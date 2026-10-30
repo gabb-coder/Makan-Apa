@@ -13,6 +13,8 @@ import {
   type Food,
 } from '../lib/foods';
 import { FOOD_COLORS, nextColor } from '../lib/palette';
+import { soundPref, usePref } from '../lib/prefs';
+import { playChime, playTick, unlockAudio } from '../lib/sound';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 
 const SHORTLIST_MAX = 3;
@@ -56,7 +58,42 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
     timers.current.forEach((t) => window.clearTimeout(t));
     timers.current = [];
   };
-  useEffect(() => clearTimers, []);
+  const rotor = useRef<HTMLDivElement>(null);
+  const tickLoop = useRef(0);
+  const sound = usePref(soundPref);
+
+  const stopTickLoop = () => cancelAnimationFrame(tickLoop.current);
+  useEffect(
+    () => () => {
+      clearTimers();
+      stopTickLoop();
+    },
+    [],
+  );
+
+  /** Click once per slice boundary the pointer passes, read from the disc's live angle. */
+  const startTickLoop = (seg: number) => {
+    stopTickLoop();
+    let last: number | null = null;
+    let total = 0;
+    let lastSlice = 0;
+    const frame = () => {
+      const el = rotor.current;
+      if (el) {
+        const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+        const angle = (Math.atan2(m.b, m.a) * 180) / Math.PI;
+        if (last !== null) total += ((angle - last + 540) % 360) - 180;
+        last = angle;
+        const slice = Math.floor(total / seg);
+        if (slice !== lastSlice) {
+          lastSlice = slice;
+          playTick();
+        }
+      }
+      tickLoop.current = requestAnimationFrame(frame);
+    };
+    tickLoop.current = requestAnimationFrame(frame);
+  };
 
   const tagChips = useMemo(() => popularTags(pool, 6), [pool]);
   const shortlistOptions = useMemo(() => [...pool, ...customFoods], [pool, customFoods]);
@@ -133,6 +170,8 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
       return;
     }
 
+    unlockAudio();
+    startTickLoop(seg);
     setRotation(base + 360 * 6 + landingAngle(k, n) + jitter);
     setSpinning(true);
     setTick('fast');
@@ -141,6 +180,8 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
       window.setTimeout(() => setTick('slow'), 2700),
       window.setTimeout(() => setTick('crawl'), 3500),
       window.setTimeout(() => {
+        stopTickLoop();
+        playChime();
         setTick(null);
         setSpinning(false);
         setResult(winner);
@@ -187,6 +228,19 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
           <span className="eyebrow">{turnLabel} · {shortDate(new Date(), timezone)}</span>
           <h1 className="title title--sm">Spin the wheel</h1>
         </div>
+        <button
+          type="button"
+          className="icon-btn press"
+          aria-label={sound === 'on' ? 'Mute wheel sounds' : 'Turn wheel sounds on'}
+          aria-pressed={sound === 'off'}
+          onClick={() => soundPref.set(sound === 'on' ? 'off' : 'on')}
+          style={{ marginLeft: 'auto' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4z" />
+            {sound === 'on' ? <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /> : <path d="M16 9.5l5 5M21 9.5l-5 5" />}
+          </svg>
+        </button>
       </header>
 
       <div className="segmented" role="group" aria-label="Wheel source">
@@ -277,6 +331,7 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
         sway={!reducedMotion && !spinning && !result}
         tick={tick}
         burstKey={reducedMotion ? null : burstKey}
+        rotorRef={rotor}
       />
 
       {result ? (

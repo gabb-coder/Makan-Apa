@@ -125,7 +125,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, onClose, onPick }: Prop
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
             />
-            {typedVetoed && <span style={{ fontSize: 13, color: '#b42318' }}>{typedName} was vetoed today.</span>}
+            {typedVetoed && <span style={{ fontSize: 13, color: 'var(--danger)' }}>{typedName} was vetoed today.</span>}
             <button type="submit" className="btn btn--primary press" style={{ height: 52 }} disabled={!typedName || typedVetoed || busy}>
               {sendTo ? `Send to ${sendTo}` : 'Lock it in'}
             </button>
@@ -133,7 +133,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, onClose, onPick }: Prop
         )}
 
         {error && (
-          <p role="alert" style={{ margin: 0, fontSize: 14, color: '#b42318' }}>
+          <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--danger)' }}>
             {error}
           </p>
         )}

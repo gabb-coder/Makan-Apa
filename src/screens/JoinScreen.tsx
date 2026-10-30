@@ -159,7 +159,7 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
         </div>
 
         {error && (
-          <p role="alert" style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: '#b42318' }}>
+          <p role="alert" style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--danger)' }}>
             {error}
           </p>
         )}

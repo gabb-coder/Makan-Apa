@@ -211,7 +211,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
         </form>
 
         {error && (
-          <p role="alert" style={{ margin: 0, fontSize: 14, color: '#b42318' }}>
+          <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--danger)' }}>
             {error}
           </p>
         )}

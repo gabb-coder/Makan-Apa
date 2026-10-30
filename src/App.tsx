@@ -33,6 +33,10 @@ export default function App() {
 
   const restore = () => {
     const gen = ++generation.current;
+    if (!navigator.onLine) {
+      setState({ status: 'error', message: 'offline' });
+      return;
+    }
     setState({ status: 'loading' });
     restoreSession().then(
       (session) => gen === generation.current && setState(session ? { status: 'ready', session } : { status: 'join' }),
@@ -40,6 +44,15 @@ export default function App() {
     );
   };
   useEffect(restore, []);
+
+  // Coming back online after an offline start: try again without a tap.
+  const status = useRef(state.status);
+  status.current = state.status;
+  useEffect(() => {
+    const onOnline = () => status.current === 'error' && restore();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -53,7 +66,11 @@ export default function App() {
   } else if (state.status === 'error') {
     body = (
       <Splash>
-        <p style={{ margin: 0, lineHeight: 1.5 }}>Couldn't reach the server. {state.message}</p>
+        <p style={{ margin: 0, lineHeight: 1.5 }}>
+          {state.message === 'offline'
+            ? 'You’re offline. Makan apa? needs a connection to sync with your room, and will reconnect when you’re back.'
+            : `Couldn't reach the server. ${state.message}`}
+        </p>
         <button type="button" className="btn btn--primary press" onClick={restore}>
           Try again
         </button>
@@ -120,7 +137,7 @@ function Toast({ message, raised }: { message: string; raised: boolean }) {
         padding: '12px 16px',
         borderRadius: 14,
         background: 'var(--ink)',
-        color: '#fff',
+        color: 'var(--on-ink)',
         fontSize: 14,
         fontWeight: 600,
         lineHeight: 1.4,

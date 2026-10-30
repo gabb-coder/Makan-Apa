@@ -51,9 +51,11 @@ interface Props {
   tick: TickSpeed;
   /** Changes on every landing to replay the ring and confetti; null hides them. */
   burstKey: number | null;
+  /** The rotating disc, so the screen can follow its live angle (tick sounds). */
+  rotorRef?: React.Ref<HTMLDivElement>;
 }
 
-export function Wheel({ foods, rotation, animate, sway, tick, burstKey }: Props) {
+export function Wheel({ foods, rotation, animate, sway, tick, burstKey, rotorRef }: Props) {
   const n = foods.length;
   const seg = 360 / Math.max(n, 1);
   const fontSize = n > 10 ? 11 : 13;
@@ -90,6 +92,7 @@ export function Wheel({ foods, rotation, animate, sway, tick, burstKey }: Props)
         }}
       >
         <div
+          ref={rotorRef}
           style={{
             width: SIZE,
             height: SIZE,

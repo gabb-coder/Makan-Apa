@@ -129,18 +129,18 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           <span style={statNumber}>{Math.round(mealsN * p)}</span>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isCurrent ? 'this month' : 'that month'}</span>
         </div>
-        <div style={{ background: '#FFF0C2', borderRadius: 18, padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#6B4600' }}>
+        <div style={{ background: 'var(--streak-bg)', borderRadius: 18, padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--streak-ink-2)' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ transformOrigin: '50% 90%', animation: 'flicker 1.1s ease-in-out infinite' }}>
               <path d="M12 2c.5 3.5 5 5.5 5 11a5 5 0 0 1-10 0c0-2.8 1.6-4.4 2.8-5.6.2 2.1 1.2 3.4 2.4 3.6-.6-3.2-.8-6 0-9z" fill="#CC3F17" />
             </svg>
             <span style={{ whiteSpace: 'nowrap' }}>No repeats</span>
           </span>
-          <span style={{ ...statNumber, color: '#4A3000', whiteSpace: 'nowrap' }}>
+          <span style={{ ...statNumber, color: 'var(--streak-ink)', whiteSpace: 'nowrap' }}>
             {Math.round(stats.bestStreak * p)}
             <span style={{ fontSize: 16, letterSpacing: '-0.01em' }}> {stats.bestStreak === 1 ? 'day' : 'days'}</span>
           </span>
-          <span style={{ fontSize: 12, color: '#6B4600' }}>best streak</span>
+          <span style={{ fontSize: 12, color: 'var(--streak-ink-2)' }}>best streak</span>
         </div>
         <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Vetoes</span>
@@ -163,7 +163,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           </span>
         </div>
         {stats.deciders.length === 0 ? (
-          <div style={{ height: 12, borderRadius: 999, background: '#F1F1ED' }} />
+          <div style={{ height: 12, borderRadius: 999, background: 'var(--bar-track)' }} />
         ) : (
           <div
             role="img"
@@ -259,7 +259,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                   {vetoed.length > 0 && (
                     <span
                       className="badge"
-                      style={{ flexShrink: 1, minWidth: 0, maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', background: '#F1F1ED', color: '#4A4A50' }}
+                      style={{ flexShrink: 1, minWidth: 0, maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', background: 'var(--bar-track)', color: 'var(--ink-2)' }}
                     >
                       {vetoed.length > 2 ? `${vetoed.length} vetoed` : `${vetoed.join(', ')} vetoed`}
                     </span>
@@ -308,7 +308,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                 <span style={{ fontSize: 15, fontWeight: 800 }}>Most vetoed</span>
                 <div style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr) 24px', alignItems: 'center', columnGap: 10, rowGap: 8, fontSize: 13 }}>
                   {stats.mostVetoed.slice(0, 3).map((r, i) => (
-                    <Bar key={r.key} name={r.name} count={r.count} pct={(r.count / stats.mostVetoed[0].count) * 100} color="#D9D9D4" delay={0.2 + i * 0.12} />
+                    <Bar key={r.key} name={r.name} count={r.count} pct={(r.count / stats.mostVetoed[0].count) * 100} color="var(--border-strong)" delay={0.2 + i * 0.12} />
                   ))}
                 </div>
               </div>
@@ -334,7 +334,7 @@ function Bar({ name, count, pct, color, delay }: { name: string; count: number; 
   return (
     <>
       <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-      <div style={{ height: 14, borderRadius: 999, background: '#F1F1ED' }}>
+      <div style={{ height: 14, borderRadius: 999, background: 'var(--bar-track)' }}>
         <div style={{ width: `${Math.max(pct, 8)}%`, height: 14, borderRadius: 999, background: color, ...grow(delay) }} />
       </div>
       <span style={{ fontWeight: 800, textAlign: 'right' }}>{count}</span>

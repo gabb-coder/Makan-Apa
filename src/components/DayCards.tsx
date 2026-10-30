@@ -122,7 +122,7 @@ export function YourTurnCard({ me, sub, onSpin, onPickList, onType }: YourTurnPr
           border: 'none',
           borderRadius: 16,
           background: '#FFFFFF',
-          color: 'var(--ink)',
+          color: '#18181B',
           fontSize: 16,
           fontWeight: 800,
           boxShadow: '0 6px 16px rgba(80, 20, 4, 0.25)',
@@ -177,7 +177,7 @@ export function SentCard({ me, food, method, waitingFor, busy, onChange, onRetra
           gap: 12,
           padding: 12,
           borderRadius: 16,
-          background: '#FFFFFF',
+          background: 'var(--surface)',
           color: 'var(--ink)',
         }}
       >
@@ -476,7 +476,7 @@ export function DecidedCard({ food, tomorrowText, busy, onUndo }: DecidedProps) 
           target="_blank"
           rel="noreferrer"
           className="btn press"
-          style={{ height: 52, borderRadius: 16, background: 'var(--ink)', color: '#FFFFFF', fontSize: 16 }}
+          style={{ height: 52, borderRadius: 16, background: 'var(--ink)', color: 'var(--on-ink)', fontSize: 16 }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
@@ -532,7 +532,7 @@ export function VetoedCard({ foodName, deciderName, vetoesLeft, busy, onUndo }: 
           width: 84,
           height: 84,
           borderRadius: 999,
-          background: '#EDEDE9',
+          background: 'var(--track)',
           color: 'var(--ink)',
           display: 'flex',
           alignItems: 'center',
