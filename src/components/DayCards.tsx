@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { formatTag, lastEatenLabel, mapsSearchUrl, type Food } from '../lib/foods';
+import { mapsNearUrl, type LatLng } from '../lib/geo';
 import { darken, FOOD_COLORS } from '../lib/palette';
 import type { MemberRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
@@ -388,13 +389,15 @@ const CONFETTI = [
 interface DecidedProps {
   food: Food;
   tomorrowText: string;
+  /** Where you are, when location is on: "Find one nearby" searches around it. */
+  here?: LatLng;
   /** Places nearby that serve it. */
   nearby?: ReactNode;
   busy: boolean;
   onUndo?: () => void;
 }
 
-export function DecidedCard({ food, tomorrowText, nearby, busy, onUndo }: DecidedProps) {
+export function DecidedCard({ food, tomorrowText, here, nearby, busy, onUndo }: DecidedProps) {
   const reduced = usePrefersReducedMotion();
   return (
     <section
@@ -476,7 +479,7 @@ export function DecidedCard({ food, tomorrowText, nearby, busy, onUndo }: Decide
       </p>
       <div style={{ position: 'relative', alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
         <a
-          href={mapsSearchUrl(food.name)}
+          href={here ? mapsNearUrl(food.name, here) : mapsSearchUrl(food.name)}
           target="_blank"
           rel="noreferrer"
           className="btn press"

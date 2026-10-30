@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { formatTag } from '../lib/foods';
-import { NEARBY_LABEL, priceLabel, spotMapsUrl, type Spot } from '../lib/nearby';
+import { distanceKm, formatDistance, mapsNearUrl, type LatLng } from '../lib/geo';
+import { turnOffLocation, turnOnLocation, type LocationState } from '../lib/location';
+import {
+  AREA_CENTRES,
+  byDistance,
+  isNearSunway,
+  NEAR_YOU_SEARCHES,
+  NEARBY_LABEL,
+  priceLabel,
+  spotDistanceKm,
+  spotMapsUrl,
+  SUNWAY_CENTRE,
+  type Spot,
+} from '../lib/nearby';
 import { FoodTile } from './FoodTile';
 
 function DietBadge({ diet }: { diet: Spot['diet'] }) {
@@ -16,7 +29,7 @@ function DietBadge({ diet }: { diet: Spot['diet'] }) {
 }
 
 /** Horizontal strip of spot cards for Today. */
-export function NearbyStrip({ spots, onOpen }: { spots: Spot[]; onOpen: (spot: Spot) => void }) {
+export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: LatLng; onOpen: (spot: Spot) => void }) {
   return (
     <div className="chip-row" style={{ gap: 10, paddingBottom: 4 }}>
       {spots.map((s) => (
@@ -40,7 +53,9 @@ export function NearbyStrip({ spots, onOpen }: { spots: Spot[]; onOpen: (spot: S
           <FoodTile food={s} size={36} />
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-            <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.area}</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {here ? `~${formatDistance(spotDistanceKm(s, here))} · ${s.area}` : s.area}
+            </span>
           </span>
           <span
             style={{
@@ -63,49 +78,136 @@ export function NearbyStrip({ spots, onOpen }: { spots: Spot[]; onOpen: (spot: S
   );
 }
 
-/** Compact list for the "It's decided" card: where to get today's food near campus. */
-export function NearbyList({ spots }: { spots: Spot[] }) {
-  if (!spots.length) return null;
+const ARROW = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+    <path d="M7 17L17 7M9 7h8v8" />
+  </svg>
+);
+
+const PIN = (size: number) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+    <circle cx="12" cy="9.5" r="2.5" />
+  </svg>
+);
+
+const listRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  minHeight: 44,
+  padding: '6px 10px',
+  borderRadius: 14,
+  background: 'var(--bg)',
+  color: 'var(--ink)',
+  textDecoration: 'none',
+} as const;
+
+/**
+ * Compact list for the "It's decided" card: where to get today's food near campus. With location
+ * on, sorted by distance, and left out when you're far from Sunway.
+ */
+export function NearbyList({ spots, here }: { spots: Spot[]; here?: LatLng }) {
+  const shown = !here ? spots : isNearSunway(here) ? byDistance(spots, here) : [];
+  if (!shown.length) return null;
   return (
     <div style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' }}>
-      <span className="section-label">Near {NEARBY_LABEL}</span>
-      {spots.map((s) => (
-        <a
-          key={s.id}
-          href={spotMapsUrl(s)}
-          target="_blank"
-          rel="noreferrer"
-          className="press"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            minHeight: 44,
-            padding: '6px 10px',
-            borderRadius: 14,
-            background: 'var(--bg)',
-            color: 'var(--ink)',
-            textDecoration: 'none',
-          }}
-        >
+      <span className="section-label">{here ? 'Near you' : `Near ${NEARBY_LABEL}`}</span>
+      {shown.map((s) => (
+        <a key={s.id} href={spotMapsUrl(s)} target="_blank" rel="noreferrer" className="press" style={listRow}>
           <FoodTile food={s} size={32} />
           <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>{s.name}</span>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {here ? `~${formatDistance(spotDistanceKm(s, here))} · ` : ''}
               {s.area} · {priceLabel(s.price)}
             </span>
           </span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--muted)', flexShrink: 0 }}>
-            <path d="M7 17L17 7M9 7h8v8" />
-          </svg>
+          {ARROW}
         </a>
       ))}
     </div>
   );
 }
 
+/** Google Maps searches around you, for when you're away from Sunway. */
+export function NearYouStrip({ here }: { here: LatLng }) {
+  return (
+    <div className="chip-row" style={{ gap: 10, paddingBottom: 4 }}>
+      {NEAR_YOU_SEARCHES.map((q) => (
+        <a
+          key={q.label}
+          href={mapsNearUrl(q.query, here)}
+          target="_blank"
+          rel="noreferrer"
+          className="card lift"
+          style={{
+            width: 132,
+            flexShrink: 0,
+            padding: 12,
+            borderRadius: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            color: 'inherit',
+            textDecoration: 'none',
+          }}
+        >
+          <FoodTile food={q} size={36} />
+          <span style={{ fontSize: 14, fontWeight: 800 }}>{q.label}</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {PIN(12)} Near you
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** The line under the Today ideas: turn location on, see that it's on, or why it can't be. */
+export function LocationLine({ location, nearSunway }: { location: LocationState; nearSunway: boolean }) {
+  const link = { padding: '10px 0', border: 'none', background: 'none', fontSize: 13, fontWeight: 700, color: 'var(--accent)' } as const;
+  const note = { fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' } as const;
+  if (location.status === 'off')
+    return (
+      <button type="button" className="press" onClick={() => void turnOnLocation()} style={{ ...link, display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
+        {PIN(15)} Use my location to find what's closest
+      </button>
+    );
+  if (location.status === 'locating') return <span style={{ ...note, padding: '10px 0' }}>Finding where you are…</span>;
+  if (location.status === 'denied')
+    return (
+      <span style={{ ...note, padding: '6px 0' }}>
+        Location is blocked for this app. To use it, allow location for this site in your browser or phone settings, then turn it on in Settings.
+      </span>
+    );
+  if (location.status === 'unavailable')
+    return (
+      <span style={{ ...note, padding: '6px 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0 8px' }}>
+        Couldn't get your location.
+        <button type="button" className="press" onClick={() => void turnOnLocation()} style={link}>
+          Try again
+        </button>
+      </span>
+    );
+  return (
+    <span style={{ ...note, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0 8px' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {PIN(13)}
+        {nearSunway
+          ? 'Closest to you first'
+          : `You're ${formatDistance(distanceKm(location.here, SUNWAY_CENTRE))} from ${NEARBY_LABEL}`}
+      </span>
+      <button type="button" className="press" onClick={turnOffLocation} style={link}>
+        Stop using location
+      </button>
+    </span>
+  );
+}
+
 interface SheetProps {
   spot: Spot;
+  here?: LatLng;
   inList: boolean;
   /** Present when it's my turn and today isn't decided. */
   pickLabel?: string;
@@ -114,7 +216,7 @@ interface SheetProps {
   onPick?: () => void;
 }
 
-export function SpotSheet({ spot, inList, pickLabel, onClose, onAdd, onPick }: SheetProps) {
+export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPick }: SheetProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -141,6 +243,11 @@ export function SpotSheet({ spot, inList, pickLabel, onClose, onAdd, onPick }: S
         </header>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{spot.knownFor}.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {here && (
+            <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
+              About {formatDistance(spotDistanceKm(spot, here))} away
+            </span>
+          )}
           <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
             {priceLabel(spot.price)}
           </span>
@@ -164,10 +271,7 @@ export function SpotSheet({ spot, inList, pickLabel, onClose, onAdd, onPick }: S
             className="btn press"
             style={{ height: 52, background: 'var(--ink)', color: 'var(--on-ink)' }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
-              <circle cx="12" cy="9.5" r="2.5" />
-            </svg>
+            {PIN(18)}
             Open in Google Maps
           </a>
           <button type="button" className="btn btn--secondary press" disabled={inList} onClick={onAdd}>
@@ -182,7 +286,6 @@ export function SpotSheet({ spot, inList, pickLabel, onClose, onAdd, onPick }: S
   );
 }
 
-/** Every spot, grouped by area. */
 const FILTERS: { label: string; test: (s: Spot) => boolean }[] = [
   { label: 'All', test: () => true },
   { label: 'Halal', test: (s) => s.diet === 'halal' },
@@ -194,7 +297,8 @@ const FILTERS: { label: string; test: (s: Spot) => boolean }[] = [
   { label: 'Dessert', test: (s) => s.tags.includes('dessert') },
 ];
 
-export function NearbyAllSheet({ spots: allSpots, onClose, onOpen }: { spots: Spot[]; onClose: () => void; onOpen: (spot: Spot) => void }) {
+/** Every spot, grouped by area (nearest area first when location is on). */
+export function NearbyAllSheet({ spots: allSpots, here, onClose, onOpen }: { spots: Spot[]; here?: LatLng; onClose: () => void; onOpen: (spot: Spot) => void }) {
   const [filter, setFilter] = useState('All');
   const spots = allSpots.filter((FILTERS.find((f) => f.label === filter) ?? FILTERS[0]).test);
   useEffect(() => {
@@ -203,7 +307,8 @@ export function NearbyAllSheet({ spots: allSpots, onClose, onOpen }: { spots: Sp
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const areas = [...new Set(spots.map((s) => s.area))];
+  const areaKm = (area: string) => (here ? distanceKm(here, AREA_CENTRES[area] ?? SUNWAY_CENTRE) : 0);
+  const areas = [...new Set(spots.map((s) => s.area))].sort((a, b) => areaKm(a) - areaKm(b));
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="nearby-title" onClick={(e) => e.stopPropagation()}>
@@ -235,7 +340,10 @@ export function NearbyAllSheet({ spots: allSpots, onClose, onOpen }: { spots: Sp
         )}
         {areas.map((area) => (
           <section key={area} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span className="section-label">{area}</span>
+            <span className="section-label">
+              {area}
+              {here && ` · ~${formatDistance(areaKm(area))}`}
+            </span>
             <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {spots
                 .filter((s) => s.area === area)

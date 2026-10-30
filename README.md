@@ -17,7 +17,7 @@ Then open the URL Vite prints (use your browser's phone emulation at 390×844 fo
 npm test
 ```
 
-Unit tests (Vitest) for the rotation, dates, wheel weighting, stats, Sunway spots and session helpers.
+Unit tests (Vitest) for the rotation, dates, wheel weighting, stats, Sunway spots, distances and session helpers.
 
 ```bash
 npm run test:e2e
@@ -51,6 +51,7 @@ The person who creates a room is its **host** (the first member, by join time). 
 
 - **People in the room:** the room chip on Today shows everyone's avatars, with a green dot for whoever has the app open (Supabase Realtime Presence). Tap it for the People sheet: who's deciding today, everyone's next turn, invite, and room settings.
 - **Food near Sunway University:** 41 spots around Bandar Sunway and SS15 Subang Jaya (`src/lib/nearby.ts`), from published food guides. Today shows a daily selection with "See all" (grouped by area, with Halal / Under RM15 / Late night / cuisine filters); each spot opens Google Maps, can be added to the food list, or sent as today's pick. Once a meal is decided, matching spots show under "Find one nearby". Can be turned off per phone in Settings.
+- **Use my location (opt-in, per phone):** sorts the Sunway spots nearest first (distances are to each spot's area, so approximate), and when you're more than 8 km from Sunway shows Google Maps searches around you instead (mamak, nasi lemak, noodles…). "Find one nearby" also searches around you. The position stays in the browser's memory: it's never stored or sent to Supabase, only to Google Maps when you open one of those links (`src/lib/location.ts`, `src/lib/geo.ts`).
 
 ## Build progress
 

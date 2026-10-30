@@ -14,12 +14,13 @@ import { FoodTile } from '../components/FoodTile';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
-import { NearbyAllSheet, NearbyList, NearbyStrip, SpotSheet } from '../components/Nearby';
+import { LocationLine, NearbyAllSheet, NearbyList, NearbyStrip, NearYouStrip, SpotSheet } from '../components/Nearby';
 import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
 import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
 import { shareInvite } from '../lib/invite';
 import { roomTitle } from '../lib/session';
-import { NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
+import { useLocation } from '../lib/location';
+import { byDistance, isNearSunway, NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
@@ -53,6 +54,9 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
   const showNearby = usePref(nearbyPref) === 'on';
+  const location = useLocation();
+  const here = location.status === 'ready' ? location.here : undefined;
+  const nearSunway = !here || isNearSunway(here);
   const [sheet, setSheet] = useState<'list' | 'type' | null>(null);
   const [justVetoed, setJustVetoed] = useState<JustVetoed | null>(null);
   const { busy, run } = useAction(onToast);
@@ -136,7 +140,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       <DecidedCard
         food={todayFood}
         tomorrowText={tomorrowText}
-        nearby={showNearby ? <NearbyList spots={spotsFor(todayFood)} /> : null}
+        here={here}
+        nearby={showNearby ? <NearbyList spots={spotsFor(todayFood)} here={here} /> : null}
         busy={busy}
         // A secret-picks result is everyone's, so it's final.
         onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
@@ -417,16 +422,21 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           {showNearby && (
             <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, animation: 'fadeUp 0.55s 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="section-label">Ideas near {NEARBY_LABEL}</span>
+                <span className="section-label">{!here ? `Ideas near ${NEARBY_LABEL}` : nearSunway ? 'Ideas closest to you' : 'Ideas near you'}</span>
                 <button
                   type="button"
                   onClick={() => setAllSpots(true)}
                   style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
                 >
-                  See all {SUNWAY_SPOTS.length}
+                  {nearSunway ? `See all ${SUNWAY_SPOTS.length}` : `Sunway picks`}
                 </button>
               </div>
-              <NearbyStrip spots={spotsOfTheDay(today).slice(0, 8)} onOpen={setSpot} />
+              {here && !nearSunway ? (
+                <NearYouStrip here={here} />
+              ) : (
+                <NearbyStrip spots={here ? byDistance(spotsOfTheDay(today), here).slice(0, 8) : spotsOfTheDay(today).slice(0, 8)} here={here} onOpen={setSpot} />
+              )}
+              <LocationLine location={location} nearSunway={nearSunway} />
             </section>
           )}
         </>
@@ -452,11 +462,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         />
       )}
 
-      {allSpots && !spot && <NearbyAllSheet spots={SUNWAY_SPOTS} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
+      {allSpots && !spot && <NearbyAllSheet spots={SUNWAY_SPOTS} here={here} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
 
       {spot && (
         <SpotSheet
           spot={spot}
+          here={here}
           inList={foods.some((f) => f.name.toLowerCase() === spot.name.toLowerCase())}
           pickLabel={spotPickLabel}
           onClose={() => setSpot(null)}

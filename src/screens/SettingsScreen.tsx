@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Avatar, HostBadge } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { shareInvite } from '../lib/invite';
+import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
 import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
@@ -57,6 +58,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const theme = usePref(themePref);
   const sound = usePref(soundPref);
   const nearby = usePref(nearbyPref);
+  const location = useLocation();
   const install = useInstallPrompt();
   const installed = isStandalone();
 
@@ -444,6 +446,28 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             onChange={(e) => nearbyPref.set(e.target.checked ? 'on' : 'off')}
           />
         </label>
+
+        {nearby === 'on' && (
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>Use my location</span>
+              <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+                {location.status === 'denied'
+                  ? 'Blocked by your browser. Allow location for this site in your phone settings, then turn this on.'
+                  : location.status === 'unavailable'
+                    ? "Couldn't get your location. Turn it off and on to try again."
+                    : 'Show the closest places first, and search near you when you’re away from Sunway. Stays on this phone; never shared with the room.'}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              checked={location.status !== 'off' && location.status !== 'denied'}
+              onChange={(e) => (e.target.checked ? void turnOnLocation() : turnOffLocation())}
+            />
+          </label>
+        )}
 
         <ReminderSetting room={room} me={me} onToast={onToast} />
 
