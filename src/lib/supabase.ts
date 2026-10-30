@@ -12,6 +12,8 @@ export const supabase = createClient(url, key);
 export interface RoomRow {
   id: string;
   code: string;
+  /** Optional, set by the host, e.g. "Sunway lunch gang". */
+  name: string | null;
   timezone: string;
   rotation_start: string;
   veto_limit: number;

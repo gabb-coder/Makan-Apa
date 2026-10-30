@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { disableReminders } from './lib/push';
-import { forgetSession, leaveRoom, restoreSession, type Session } from './lib/session';
+import { forgetSession, leaveRoom, restoreSession, roomTitle, type Session } from './lib/session';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
 import { useDays } from './lib/useDays';
@@ -254,7 +254,7 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
           onBack={() => go('today')}
           deleteRoom={async () => {
             await deleteRoom();
-            onToast(`Room ${room.code} deleted.`);
+            onToast(`${roomTitle(room)} deleted.`);
             void leaveRoom(room.id).catch(() => {});
             onLeave();
           }}

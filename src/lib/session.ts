@@ -114,13 +114,21 @@ export async function joinRoom(rawCode: string, rawName: string): Promise<Sessio
   return finish(data as JoinResult);
 }
 
-export async function createRoom(rawName: string): Promise<Session> {
+/** What to call a room: its name, or "Room K7M2QX" if it has none. */
+export function roomTitle(room: Pick<RoomRow, 'name' | 'code'>): string {
+  return room.name?.trim() || `Room ${room.code}`;
+}
+
+export const ROOM_NAME_MAX = 40;
+
+export async function createRoom(rawName: string, roomName = ''): Promise<Session> {
   const timezone = browserTimeZone();
   await ensureSignedIn();
   const { data, error } = await supabase.rpc('create_room', {
     p_name: rawName.trim(),
     p_timezone: timezone,
     p_rotation_start: todayIn(timezone),
+    p_room_name: roomName.trim() || null,
   });
   if (error) throw new Error(error.message);
   return finish(data as JoinResult);

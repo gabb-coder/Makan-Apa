@@ -4,7 +4,8 @@ import { createRoom, deleteRoom, joinRoom, newPhone } from './helpers';
 test('two phones: propose, veto, re-pick, accept, and it shows in History', async ({ browser }) => {
   const gabriel = await newPhone(browser);
   const alex = await newPhone(browser);
-  const code = await createRoom(gabriel, 'Gabriel');
+  const code = await createRoom(gabriel, 'Gabriel', 'Sunway lunch gang');
+  await expect(gabriel.locator('header .eyebrow')).toContainText('Sunway lunch gang');
 
   try {
     // Food list
@@ -16,6 +17,7 @@ test('two phones: propose, veto, re-pick, accept, and it shows in History', asyn
     // Alex joins with the invite link; Gabriel decides today
     await joinRoom(alex, code, 'Alex');
     await expect(alex.getByText('is choosing')).toBeVisible();
+    await expect(alex.locator('header .eyebrow')).toContainText('Sunway lunch gang');
     await expect(gabriel.getByText('Alex can veto once')).toBeVisible();
 
     // Gabriel picks Pizza; Alex vetoes it

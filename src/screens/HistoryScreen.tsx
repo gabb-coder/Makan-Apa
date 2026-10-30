@@ -3,6 +3,7 @@ import { FoodTile } from '../components/FoodTile';
 import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
 import { dayLabel } from '../lib/rotation';
+import { roomTitle } from '../lib/session';
 import { availableMonths, monthKey, monthLabel, monthStats } from '../lib/stats';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
@@ -79,7 +80,9 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
     <main className="screen" style={{ gap: 14 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="eyebrow">Room {room.code}</span>
+          <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {roomTitle(room)}
+          </span>
           <h1 className="title">History</h1>
         </div>
         <label

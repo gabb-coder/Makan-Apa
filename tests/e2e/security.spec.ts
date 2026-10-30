@@ -9,6 +9,7 @@ test('rooms are private to their members', async () => {
     p_name: 'Host',
     p_timezone: 'Asia/Kuala_Lumpur',
     p_rotation_start: '2026-10-30',
+    p_room_name: 'Test room',
   });
   expect(createError).toBeNull();
   const room = created.room as { id: string; code: string };
@@ -37,7 +38,11 @@ test('rooms are private to their members', async () => {
     expect(joined.error).toBeNull();
     expect((await outsider.from('rooms').select('id').eq('id', room.id)).data).toHaveLength(1);
 
-    // ...but only the host can remove people or delete the room.
+    // ...but only the host can rename the room, remove people or delete the room.
+    const rename = await outsider.from('rooms').update({ name: 'Hijacked' }).eq('id', room.id);
+    expect(rename.error).not.toBeNull();
+    const hostRename = await host.from('rooms').update({ name: 'Renamed' }).eq('id', room.id).select('name');
+    expect(hostRename.data?.[0]?.name).toBe('Renamed');
     const kick = await outsider.from('members').delete().eq('id', hostMember.id).select('id');
     expect(kick.data ?? []).toHaveLength(0);
     const drop = await outsider.from('rooms').delete().eq('id', room.id).select('id');

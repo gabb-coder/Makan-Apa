@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CODE_LENGTH, createRoom, joinRoom, normalizeCode, suggestedCode, type Session } from '../lib/session';
+import { CODE_LENGTH, createRoom, joinRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
 
 const SLICES = [
   ['M160 160L160 10A150 150 0 0 1 266.07 53.93Z', '#A8D8A0'],
@@ -18,6 +18,9 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
   const [name, setName] = useState('');
   const [code, setCode] = useState(suggestedCode);
   const [busy, setBusy] = useState<'join' | 'create' | null>(null);
+  // "Create a new room" first reveals an optional room name, then creates.
+  const [naming, setNaming] = useState(false);
+  const [roomName, setRoomName] = useState('');
   const [error, setError] = useState<string | null>(notice ?? null);
 
   const trimmed = name.trim();
@@ -38,10 +41,10 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
     try {
       if (kind === 'join') {
         const s = await joinRoom(code, trimmed);
-        onJoined(s, s.rejoined ? `Welcome back, ${s.me.name}.` : `You're in room ${s.room.code}.`);
+        onJoined(s, s.rejoined ? `Welcome back, ${s.me.name}.` : `You're in ${s.room.name ? `“${s.room.name}”` : `room ${s.room.code}`}.`);
       } else {
-        const s = await createRoom(trimmed);
-        onJoined(s, `Room ${s.room.code} created. Share the code with your kakis.`);
+        const s = await createRoom(trimmed, roomName);
+        onJoined(s, `${s.room.name ? `“${roomTitle(s.room)}”` : `Room ${s.room.code}`} created. Share code ${s.room.code} with your kakis.`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
@@ -178,14 +181,37 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
         >
           {busy === 'join' ? 'Joining…' : 'Join room'}
         </button>
+        {naming && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+            <label htmlFor="room-name" className="field-label">
+              Room name <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span>
+            </label>
+            <input
+              id="room-name"
+              className="input"
+              placeholder="e.g. Sunway lunch gang"
+              maxLength={ROOM_NAME_MAX}
+              autoFocus
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  run('create');
+                }
+              }}
+              style={{ height: 52 }}
+            />
+          </div>
+        )}
         <button
           type="button"
           className="btn btn--secondary press"
           disabled={busy !== null}
-          onClick={() => run('create')}
+          onClick={() => (naming ? run('create') : setNaming(true))}
           style={{ height: 50, borderRadius: 16 }}
         >
-          {busy === 'create' ? 'Creating…' : 'Create a new room'}
+          {busy === 'create' ? 'Creating…' : naming ? 'Create room' : 'Create a new room'}
         </button>
       </form>
 

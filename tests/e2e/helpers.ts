@@ -32,11 +32,13 @@ export async function newPhone(browser: Browser): Promise<Page> {
   return context.newPage();
 }
 
-/** Creates a room in the app and returns its code. */
-export async function createRoom(page: Page, name: string): Promise<string> {
+/** Creates a room in the app (optionally named) and returns its code. */
+export async function createRoom(page: Page, name: string, roomName = ''): Promise<string> {
   await page.goto('/');
   await page.fill('#join-name', name);
-  await page.click('text=Create a new room');
+  await page.click('text=Create a new room'); // reveals the optional room name
+  if (roomName) await page.fill('#room-name', roomName);
+  await page.click('button:text-is("Create room")');
   const chip = page.locator('button[aria-label^="Room "]');
   await expect(chip).toBeVisible();
   return (await chip.getAttribute('aria-label'))!.slice(5, 11);

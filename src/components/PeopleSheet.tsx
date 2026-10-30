@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
-import { hostOf } from '../lib/session';
+import { hostOf, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
 
@@ -63,7 +63,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span className="eyebrow">
-              Room {room.code} · {hereNow} here now
+              {roomTitle(room)} · {hereNow} here now
             </span>
             <h2 id="people-title" className="title title--sm" style={{ fontSize: 24 }}>
               {members.length} {members.length === 1 ? 'person' : 'people'} in this room
