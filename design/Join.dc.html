@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Join a room</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#CC3F17}a:hover{color:#A8330F}
+@keyframes rollIn{from{transform:translateX(280px) rotate(-280deg)}to{transform:translateX(0) rotate(-14deg)}}
+@keyframes spinJoin{from{transform:rotate(-14deg)}to{transform:rotate(346deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes popIn{0%{opacity:0;transform:scale(.5) rotate(-10deg)}60%{opacity:1;transform:scale(1.12) rotate(4deg)}100%{opacity:1;transform:none}}
+@keyframes wiggleLoop{0%,14%,100%{transform:rotate(0)}3%{transform:rotate(-8deg)}7%{transform:rotate(6deg)}11%{transform:rotate(-3deg)}}
+@keyframes glow{0%,100%{box-shadow:0 8px 18px rgba(204,63,23,.3)}50%{box-shadow:0 8px 30px rgba(204,63,23,.6)}}
+.press{transition:transform .15s ease}.press:active{transform:scale(.96)}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</helmet>
+<div style="position: relative; overflow: hidden; width: 390px; height: 844px; box-sizing: border-box; background: #F6F6F4; color: #18181B; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; justify-content: space-between; padding: 56px 24px 32px">
+
+  <svg width="280" height="280" viewBox="0 0 320 320" aria-hidden="true" style="position: absolute; right: -96px; top: -70px; transform: rotate(-14deg); pointer-events: none; animation: rollIn 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both, spinJoin 30s linear 1.1s infinite">
+    <g stroke="#FFFFFF" stroke-width="3">
+      <path d="M160 160L160 10A150 150 0 0 1 266.07 53.93Z" fill="#A8D8A0"></path>
+      <path d="M160 160L266.07 53.93A150 150 0 0 1 310 160Z" fill="#FFD966"></path>
+      <path d="M160 160L310 160A150 150 0 0 1 266.07 266.07Z" fill="#F6C59A"></path>
+      <path d="M160 160L266.07 266.07A150 150 0 0 1 160 310Z" fill="#FFB4A2"></path>
+      <path d="M160 160L160 310A150 150 0 0 1 53.93 266.07Z" fill="#A9CDF4"></path>
+      <path d="M160 160L53.93 266.07A150 150 0 0 1 10 160Z" fill="#DDBBE8"></path>
+      <path d="M160 160L10 160A150 150 0 0 1 53.93 53.93Z" fill="#E9CC9F"></path>
+      <path d="M160 160L53.93 53.93A150 150 0 0 1 160 10Z" fill="#93D7CC"></path>
+    </g>
+    <circle cx="160" cy="160" r="152" fill="none" stroke="#18181B" stroke-width="6"></circle>
+    <circle cx="160" cy="160" r="30" fill="#FFFFFF" stroke="#18181B" stroke-width="5"></circle>
+    <circle cx="160" cy="160" r="12" fill="#CC3F17"></circle>
+  </svg>
+
+  <div style="position: relative; display: flex; flex-direction: column; gap: 14px; margin-top: 150px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', sans-serif; font-size: 56px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.92; animation: fadeUp 0.6s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both">Makan<br><span style="display: inline-block; color: #CC3F17; transform-origin: 30% 90%; animation: popIn 0.65s 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both, wiggleLoop 4s 1.8s ease-in-out infinite">apa?</span></h1>
+    <p style="margin: 0; font-size: 17px; line-height: 1.5; color: #4A4A50; animation: fadeUp 0.6s 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both">Take turns deciding what to eat, or let the wheel settle it.</p>
+  </div>
+
+  <form style="animation: fadeUp 0.6s 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; position: relative; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 12px 30px rgba(24, 24, 27, 0.08)">
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="join-name" style="font-size: 13px; font-weight: 700">Your name</label>
+        <input id="join-name" type="text" placeholder="Gabriel" autocomplete="nickname" style="width: 100%; height: 52px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D9D9D4; background: #FFFFFF; color: #18181B; font-family: inherit; font-size: 16px">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="join-code" style="font-size: 13px; font-weight: 700">Room code</label>
+        <input id="join-code" type="text" placeholder="K7M2QX" maxlength="6" autocapitalize="characters" style="width: 100%; height: 52px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D9D9D4; background: #FFFFFF; color: #18181B; font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase">
+      </div>
+    </div>
+    <a href="Main.dc.html" class="press" style="display: flex; align-items: center; justify-content: center; height: 54px; border-radius: 16px; background: #CC3F17; color: #FFFFFF; font-size: 16px; font-weight: 800; text-decoration: none; box-shadow: 0 8px 18px rgba(204, 63, 23, 0.3); animation: glow 2.4s ease-in-out 1.4s infinite">Join room</a>
+    <a href="Main.dc.html" style="display: flex; align-items: center; justify-content: center; height: 50px; border-radius: 16px; background: #FFFFFF; border: 1px solid #D9D9D4; color: #18181B; font-size: 15px; font-weight: 700; text-decoration: none">Create a new room</a>
+  </form>
+
+  <p style="position: relative; margin: 0; text-align: center; font-size: 13px; line-height: 1.5; color: #66666D">No sign-up. Share the room code with your makan kakis.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
