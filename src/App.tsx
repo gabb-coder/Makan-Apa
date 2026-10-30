@@ -5,6 +5,7 @@ import { forgetSession, restoreSession, type Session } from './lib/session';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
 import { useDays } from './lib/useDays';
+import { usePresence } from './lib/usePresence';
 import { useToday } from './lib/useToday';
 import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
@@ -169,6 +170,7 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
   const today = useToday(room.timezone);
   const days = useDays(room, members, me.id, today);
   const foodsApi = useFoods(room, me.id, days.entries, today);
+  const online = usePresence(room.id, me.id);
   const { foods, active } = foodsApi;
 
   useEffect(() => {
@@ -230,6 +232,8 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
             foods={foods}
             pickable={pickable}
             days={days}
+            online={online}
+            onAddFood={foodsApi.addFood}
             onOpenSettings={() => go('settings')}
             onSpin={() => go('wheel')}
             onSeeAll={() => go('history')}

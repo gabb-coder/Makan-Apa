@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
-import { soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
+import { shareInvite } from '../lib/invite';
+import { NEARBY_LABEL } from '../lib/nearby';
+import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
 import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
 import { MEMBER_COLORS } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
@@ -42,6 +44,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
   const theme = usePref(themePref);
   const sound = usePref(soundPref);
+  const nearby = usePref(nearbyPref);
   const install = useInstallPrompt();
   const installed = isStandalone();
 
@@ -54,25 +57,16 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
     }
   };
 
-  const inviteUrl = `${window.location.origin}${window.location.pathname}?join=${room.code}`;
-
   const copy = (text: string, ok: string) =>
     attempt(async () => {
       await navigator.clipboard.writeText(text);
     }, ok);
 
-  const share = async () => {
-    const text = `Join my Makan apa? room. Code: ${room.code}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Makan apa?', text, url: inviteUrl });
-      } catch {
-        /* user closed the share sheet */
-      }
-    } else {
-      copy(`${text}\n${inviteUrl}`, 'Invite link copied.');
-    }
-  };
+  const share = () =>
+    attempt(async () => {
+      const message = await shareInvite(room.code);
+      if (message) onToast(message);
+    });
 
   const startEdit = (m: MemberRow) => {
     setEditingId(m.id);
@@ -389,6 +383,20 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             checked={sound === 'on'}
             onChange={(e) => soundPref.set(e.target.checked ? 'on' : 'off')}
             className="switch"
+          />
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Food ideas near {NEARBY_LABEL}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Places around Bandar Sunway on Today and with each result</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={nearby === 'on'}
+            onChange={(e) => nearbyPref.set(e.target.checked ? 'on' : 'off')}
           />
         </label>
 

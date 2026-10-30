@@ -14,7 +14,12 @@ import { FoodTile } from '../components/FoodTile';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
-import { customFood, entryFood, joinNames, timesWord, type Food } from '../lib/foods';
+import { NearbyAllSheet, NearbyList, NearbyStrip, SpotSheet } from '../components/Nearby';
+import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
+import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
+import { shareInvite } from '../lib/invite';
+import { NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
+import { nearbyPref, usePref } from '../lib/prefs';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
@@ -31,6 +36,9 @@ interface Props {
   /** Active foods minus today's vetoes: what the decider can pick from. */
   pickable: Food[];
   days: DaysApi;
+  /** Member ids with the app open right now. */
+  online: Set<string>;
+  onAddFood: (draft: FoodDraft) => Promise<void>;
   onOpenSettings: () => void;
   onSpin: () => void;
   onSeeAll: () => void;
@@ -39,7 +47,11 @@ interface Props {
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, onOpenSettings, onSpin, onSeeAll, onToast }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onToast }: Props) {
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [spot, setSpot] = useState<Spot | null>(null);
+  const [allSpots, setAllSpots] = useState(false);
+  const showNearby = usePref(nearbyPref) === 'on';
   const [sheet, setSheet] = useState<'list' | 'type' | null>(null);
   const [justVetoed, setJustVetoed] = useState<JustVetoed | null>(null);
   const { busy, run } = useAction(onToast);
@@ -123,6 +135,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       <DecidedCard
         food={todayFood}
         tomorrowText={tomorrowText}
+        nearby={showNearby ? <NearbyList spots={spotsFor(todayFood)} /> : null}
         busy={busy}
         // A secret-picks result is everyone's, so it's final.
         onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
@@ -217,6 +230,22 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     main = <ChoosingCard decider={decider} sub={sub} />;
   }
 
+  // What a Near Sunway spot can do for today: send it as the pick, or make it my secret pick.
+  const spotPickLabel =
+    todayEntry && todayEntry.status !== 'accepted'
+      ? secret
+        ? todayEntry.status === 'pending'
+          ? myPick
+            ? 'Make this my secret pick instead'
+            : 'Make this my secret pick'
+          : undefined
+        : isDecider && todayEntry.status === 'pending'
+          ? others.length === 0
+            ? 'Pick this for today'
+            : `Send to ${waitingFor}`
+          : undefined
+      : undefined;
+
   /* ----- Up next and Recently ----- */
 
   const upNext = [1, 2, 3].map((i) => {
@@ -253,15 +282,15 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           <button
             type="button"
             className="press"
-            aria-label={`Room ${room.code}, open settings`}
-            onClick={onOpenSettings}
+            aria-label={`Room ${room.code}: ${members.length} ${members.length === 1 ? 'person' : 'people'}, ${online.size} here now. Show people`}
+            onClick={() => setPeopleOpen(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 8,
               height: 44,
               flexShrink: 0,
-              padding: '0 14px',
+              padding: '0 14px 0 6px',
               borderRadius: 999,
               border: '1px solid var(--border)',
               background: 'var(--surface)',
@@ -271,11 +300,35 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               letterSpacing: '0.06em',
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="9" cy="8" r="3.5" />
-              <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
-              <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.2c2.1.7 3.5 2.8 3.5 5.8" />
-            </svg>
+            <span aria-hidden="true" style={{ display: 'flex' }}>
+              {members.slice(0, 3).map((m, i) => (
+                <span key={m.id} style={{ position: 'relative', marginLeft: i ? -8 : 0, zIndex: 3 - i }}>
+                  <Avatar name={m.name} color={m.color} size={30} style={{ boxShadow: '0 0 0 2px var(--surface)' }} />
+                  {online.has(m.id) && <OnlineDot size={9} />}
+                </span>
+              ))}
+              {members.length > 3 && (
+                <span
+                  style={{
+                    marginLeft: -8,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 999,
+                    background: 'var(--track)',
+                    color: 'var(--ink-2)',
+                    boxShadow: '0 0 0 2px var(--surface)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: 0,
+                  }}
+                >
+                  +{members.length - 3}
+                </span>
+              )}
+            </span>
             {room.code}
           </button>
         </header>
@@ -356,7 +409,76 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               </div>
             )}
           </section>
+
+          {showNearby && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, animation: 'fadeUp 0.55s 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="section-label">Ideas near {NEARBY_LABEL}</span>
+                <button
+                  type="button"
+                  onClick={() => setAllSpots(true)}
+                  style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
+                >
+                  See all {SUNWAY_SPOTS.length}
+                </button>
+              </div>
+              <NearbyStrip spots={spotsOfTheDay(today).slice(0, 8)} onOpen={setSpot} />
+            </section>
+          )}
         </>
+      )}
+
+      {peopleOpen && (
+        <PeopleSheet
+          room={room}
+          me={me}
+          members={members}
+          online={online}
+          todayDeciderId={todayEntry?.decider_id ?? decider.id}
+          today={today}
+          onClose={() => setPeopleOpen(false)}
+          onInvite={() => run(async () => {
+            const message = await shareInvite(room.code);
+            if (message) onToast(message);
+          })}
+          onSettings={() => {
+            setPeopleOpen(false);
+            onOpenSettings();
+          }}
+        />
+      )}
+
+      {allSpots && !spot && <NearbyAllSheet spots={SUNWAY_SPOTS} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
+
+      {spot && (
+        <SpotSheet
+          spot={spot}
+          inList={foods.some((f) => f.name.toLowerCase() === spot.name.toLowerCase())}
+          pickLabel={spotPickLabel}
+          onClose={() => setSpot(null)}
+          onAdd={() =>
+            run(async () => {
+              await onAddFood({ name: spot.name, tags: spot.tags.map(normalizeTag), icon: spot.icon, color: spot.color });
+              onToast(`${spot.name} added to your food list.`);
+            })
+          }
+          onPick={
+            spotPickLabel
+              ? () =>
+                  run(async () => {
+                    if (secret) {
+                      await days.submitSecretPick(spot.name);
+                      onToast(`Locked in. Only you can see ${spot.name} until the reveal.`);
+                    } else {
+                      await pickFromSheet({ name: spot.name });
+                      onToast(others.length === 0 ? `${spot.name} it is.` : `Sent ${spot.name} to ${waitingFor}.`);
+                    }
+                    setSpot(null);
+                    setAllSpots(false);
+                  })
+              : undefined
+          }
+        />
       )}
 
       {sheet && (
