@@ -422,6 +422,7 @@ a:hover {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
@@ -780,4 +781,28 @@ a:hover {
   background: rgba(24, 24, 27, 0.16);
   border-color: rgba(255, 255, 255, 0.35);
   color: #fff;
+}
+
+/* ---------- History ---------- */
+
+@keyframes growX {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(-3deg);
+  }
+  30% {
+    transform: scale(1.12, 0.94) rotate(3deg);
+  }
+  60% {
+    transform: scale(0.95, 1.1) rotate(-2deg);
+  }
 }

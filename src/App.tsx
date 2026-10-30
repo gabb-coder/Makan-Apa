@@ -7,6 +7,7 @@ import { useDays } from './lib/useDays';
 import { useToday } from './lib/useToday';
 import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { JoinScreen } from './screens/JoinScreen';
 import { PoolScreen } from './screens/PoolScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -236,18 +237,20 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
           loading
         ))}
       {route === 'pool' && (foods ? <PoolScreen foods={foods} api={foodsApi} onError={onToast} /> : loading)}
-      {route === 'history' && (
-        <main className="screen" style={{ gap: 18 }}>
-          <header style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">Room {room.code}</span>
-            <h1 className="title">History</h1>
-          </header>
-          <section className="card fade-up" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span className="section-label">Coming in Phase 5</span>
-            <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>Meals, streaks, vetoes and who decided.</p>
-          </section>
-        </main>
-      )}
+      {route === 'history' &&
+        (foods && days.entries ? (
+          <HistoryScreen
+            room={room}
+            me={me}
+            members={members}
+            today={today}
+            entries={days.entries}
+            vetoes={days.vetoes}
+            foods={foods}
+          />
+        ) : (
+          loading
+        ))}
 
       <TabBar active={route === 'settings' ? 'today' : route} onChange={go} />
     </div>

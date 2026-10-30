@@ -23,6 +23,6 @@ There are no accounts. A phone joins a room with a name and the room code, and r
 - [x] **Phase 2: food list + Supabase.** Schema with RLS and Realtime, add / edit / archive / delete foods (name, tags, icon, colour), search and tag filter, starter pack, live sync between phones. The wheel now spins the saved list.
 - [x] **Phase 3: rooms, members and live sync.** Join screen (create or join by code, invite links), identity in localStorage, Settings (share code, member names, colours and decider order, veto limit, rotation start, timezone, leave room), live sync of room settings and members.
 - [x] **Phase 4: daily rotation, propose, accept and veto.** Today screen with the decider card, Up next and Recently; pick from the list, type your own or spin; proposal with accept and veto (veto limit enforced, vetoed foods off the wheel for the day); "It's decided" with Find one nearby; undo for accept and veto.
-- [ ] Phase 5: history, stats and weighting from real data
+- [x] **Phase 5: history, stats and weighting.** History screen with a month picker, count-up stats (meals, best no-repeat streak, vetoes by person), who decided, most eaten (top 3, expandable to 10), the month's meals with veto badges, and a More section (haven't had in a while, most vetoed, by tag). The wheel's recently-eaten penalty uses the shared history.
 - [ ] Phase 6: polish
 - [ ] Phase 7: Phase 2 extras
