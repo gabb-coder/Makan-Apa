@@ -27,6 +27,11 @@ Push reminders need the app served over HTTPS (any static host works). On iPhone
 
 There are no accounts. A phone joins a room with a name and the room code, and remembers its `room_id` and `member_id` in `localStorage`. Joining again with the same name (on a new phone, or after leaving) continues as that member. Invite links look like `https://<host>/?join=K7M2QX`.
 
+## After the spec
+
+- **People in the room:** the room chip on Today shows everyone's avatars, with a green dot for whoever has the app open (Supabase Realtime Presence). Tap it for the People sheet: who's deciding today, everyone's next turn, invite, and room settings.
+- **Food near Sunway University:** 20 spots around Bandar Sunway (`src/lib/nearby.ts`), from published food guides. Today shows a daily selection with "See all"; each spot opens Google Maps, can be added to the food list, or sent as today's pick. Once a meal is decided, matching spots show under "Find one nearby". Can be turned off per phone in Settings.
+
 ## Build progress
 
 - [x] **Phase 1: design shell + wheel.** Fonts, colour tokens, tab bar, and the Wheel screen with a hard-coded starter list, weighted spin, pointer tick, confetti burst and result card.

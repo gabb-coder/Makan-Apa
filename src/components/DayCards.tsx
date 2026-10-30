@@ -388,11 +388,13 @@ const CONFETTI = [
 interface DecidedProps {
   food: Food;
   tomorrowText: string;
+  /** Places nearby that serve it. */
+  nearby?: ReactNode;
   busy: boolean;
   onUndo?: () => void;
 }
 
-export function DecidedCard({ food, tomorrowText, busy, onUndo }: DecidedProps) {
+export function DecidedCard({ food, tomorrowText, nearby, busy, onUndo }: DecidedProps) {
   const reduced = usePrefersReducedMotion();
   return (
     <section
@@ -486,6 +488,7 @@ export function DecidedCard({ food, tomorrowText, busy, onUndo }: DecidedProps) 
           </svg>
           Find one nearby
         </a>
+        {nearby}
         {onUndo && (
           <button
             type="button"

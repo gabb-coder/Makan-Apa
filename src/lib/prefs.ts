@@ -26,6 +26,7 @@ function pref<T extends string>(key: string, fallback: T, allowed: readonly T[])
 export type ThemePref = 'system' | 'light' | 'dark';
 export const themePref = pref<ThemePref>('makan.theme', 'system', ['system', 'light', 'dark']);
 export const soundPref = pref<'on' | 'off'>('makan.sound', 'on', ['on', 'off']);
+export const nearbyPref = pref<'on' | 'off'>('makan.nearby', 'on', ['on', 'off']);
 
 export function usePref<T extends string>(p: { get: () => T; subscribe: (l: () => void) => () => void }): T {
   return useSyncExternalStore(p.subscribe, p.get, p.get);
