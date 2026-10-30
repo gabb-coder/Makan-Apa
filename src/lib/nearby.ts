@@ -1,4 +1,5 @@
 import type { Food } from './foods';
+import { distanceKm, type LatLng } from './geo';
 import type { FoodColor, FoodIconName } from './palette';
 
 /**
@@ -487,6 +488,54 @@ export const SUNWAY_SPOTS: Spot[] = [
     icon: 'cup',
     color: 'sky',
   },
+];
+
+/**
+ * Rough middle of each area (from map pins), so spots can be sorted by how far away they are.
+ * Spots are placed at their area, so distances are approximate to a few hundred metres.
+ */
+export const AREA_CENTRES: Record<string, LatLng> = {
+  'On campus': { lat: 3.0672, lng: 101.6036 },
+  'Bandar Sunway': { lat: 3.0672, lng: 101.6036 },
+  'Sunway Pyramid': { lat: 3.0725, lng: 101.6072 },
+  'Sunway Square': { lat: 3.0664, lng: 101.6082 },
+  'Sunway Geo Avenue': { lat: 3.0652, lng: 101.6096 },
+  'Sunway Mentari (PJS 8)': { lat: 3.0799, lng: 101.6138 },
+  'Sunway Metro (PJS 11)': { lat: 3.0768, lng: 101.6109 },
+  'SS15 Subang Jaya': { lat: 3.0768, lng: 101.5875 },
+};
+
+export const SUNWAY_CENTRE = AREA_CENTRES['On campus'];
+
+/** Beyond this, the Sunway picks aren't "near you" and the app searches around you instead. */
+export const NEAR_SUNWAY_KM = 8;
+
+export function spotDistanceKm(spot: Spot, here: LatLng): number {
+  return distanceKm(here, AREA_CENTRES[spot.area] ?? SUNWAY_CENTRE);
+}
+
+export function isNearSunway(here: LatLng): boolean {
+  return distanceKm(here, SUNWAY_CENTRE) <= NEAR_SUNWAY_KM;
+}
+
+/** Nearest first; ties keep their order (so the day's shuffle still varies equal areas). */
+export function byDistance(spots: Spot[], here: LatLng): Spot[] {
+  return spots
+    .map((spot, i) => ({ spot, i, km: spotDistanceKm(spot, here) }))
+    .sort((a, b) => a.km - b.km || a.i - b.i)
+    .map((x) => x.spot);
+}
+
+/** Quick Google Maps searches around you, for anywhere the Sunway list doesn't cover. */
+export const NEAR_YOU_SEARCHES: { label: string; query: string; icon: FoodIconName; color: FoodColor }[] = [
+  { label: 'Anything good', query: 'restaurants', icon: 'bowl', color: 'tomato' },
+  { label: 'Mamak', query: 'mamak', icon: 'cup', color: 'mustard' },
+  { label: 'Nasi lemak', query: 'nasi lemak', icon: 'rice', color: 'leaf' },
+  { label: 'Chicken rice', query: 'chicken rice', icon: 'rice', color: 'mustard' },
+  { label: 'Noodles', query: 'noodles', icon: 'bowl', color: 'sand' },
+  { label: 'Korean', query: 'korean food', icon: 'bowl', color: 'plum' },
+  { label: 'Cafe', query: 'cafe', icon: 'cup', color: 'teal' },
+  { label: 'Dessert', query: 'dessert', icon: 'cup', color: 'peach' },
 ];
 
 export function spotMapsUrl(spot: Spot): string {
