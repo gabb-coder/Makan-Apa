@@ -45,9 +45,12 @@ export async function enableReminders(memberId: string, hour: number): Promise<v
   const { data: key, error: keyError } = await supabase.rpc('vapid_public_key');
   if (keyError) throw new Error(keyError.message);
   if (!key) throw new Error('Reminders are still being set up on the server. Try again in a few minutes.');
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key as string) }));
+  let sub = await reg.pushManager.getSubscription();
+  try {
+    sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key as string) });
+  } catch (e) {
+    throw new Error(`This browser couldn’t sign up for notifications (${e instanceof Error ? e.message : e}).`);
+  }
   const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };
   const { error } = await supabase.rpc('subscribe_push', {
     p_member_id: memberId,
