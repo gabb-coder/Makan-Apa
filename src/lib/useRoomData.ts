@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { hostOf } from './session';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
 
 export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode'>>;
@@ -10,7 +11,7 @@ function upsert(rows: MemberRow[], row: MemberRow): MemberRow[] {
 }
 
 /** The room row and its members, kept live with Supabase Realtime. */
-export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[]) {
+export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[], meId: string) {
   const roomId = initialRoom.id;
   const [room, setRoom] = useState(initialRoom);
   const [members, setMembers] = useState<MemberRow[]>(initialMembers);
@@ -84,6 +85,8 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[]) {
 
   /** Remove someone who joined by mistake. Members with any history can't be removed yet. */
   const removeMember = async (id: string) => {
+    if (hostOf(members)?.id !== meId) throw new Error('Only the host can remove people from the room.');
+    if (id === meId) throw new Error('To leave, use “Leave room on this phone”.');
     const name = members.find((m) => m.id === id)?.name ?? 'They';
     const { error } = await supabase.from('members').delete().eq('id', id);
     if (error?.code === '23503') throw new Error(`${name} already has meals or vetoes in this room, so they can’t be removed.`);

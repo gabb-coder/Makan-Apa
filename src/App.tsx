@@ -156,7 +156,7 @@ function Toast({ message, raised }: { message: string; raised: boolean }) {
 
 function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m: string) => void; onLeave: () => void }) {
   const [route, setRoute] = useState<Route>(routeFromHash);
-  const { room, members, updateRoom, updateMember, moveMember, removeMember } = useRoomData(session.room, session.members);
+  const { room, members, updateRoom, updateMember, moveMember, removeMember } = useRoomData(session.room, session.members, session.me.id);
   const me = members.find((m) => m.id === session.me.id) ?? session.me;
   const removed = !members.some((m) => m.id === session.me.id);
 

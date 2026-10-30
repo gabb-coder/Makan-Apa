@@ -125,3 +125,14 @@ export async function createRoom(rawName: string): Promise<Session> {
   remember(session);
   return session;
 }
+
+/**
+ * The room's host: whoever created it, i.e. the first member to join. Only the host can
+ * remove people. (No accounts, so this is enforced in the app, not the database.)
+ */
+export function hostOf(members: MemberRow[]): MemberRow | null {
+  return members.reduce<MemberRow | null>(
+    (first, m) => (!first || m.created_at < first.created_at || (m.created_at === first.created_at && m.id < first.id) ? m : first),
+    null,
+  );
+}
