@@ -30,7 +30,7 @@ There are no accounts. A phone joins a room with a name and the room code, and r
 ## After the spec
 
 - **People in the room:** the room chip on Today shows everyone's avatars, with a green dot for whoever has the app open (Supabase Realtime Presence). Tap it for the People sheet: who's deciding today, everyone's next turn, invite, and room settings.
-- **Food near Sunway University:** 20 spots around Bandar Sunway (`src/lib/nearby.ts`), from published food guides. Today shows a daily selection with "See all"; each spot opens Google Maps, can be added to the food list, or sent as today's pick. Once a meal is decided, matching spots show under "Find one nearby". Can be turned off per phone in Settings.
+- **Food near Sunway University:** 41 spots around Bandar Sunway and SS15 Subang Jaya (`src/lib/nearby.ts`), from published food guides. Today shows a daily selection with "See all" (grouped by area, with Halal / Under RM15 / Late night / cuisine filters); each spot opens Google Maps, can be added to the food list, or sent as today's pick. Once a meal is decided, matching spots show under "Find one nearby". Can be turned off per phone in Settings.
 
 ## Build progress
 

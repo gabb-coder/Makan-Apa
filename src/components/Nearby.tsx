@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { formatTag } from '../lib/foods';
 import { NEARBY_LABEL, priceLabel, spotMapsUrl, type Spot } from '../lib/nearby';
 import { FoodTile } from './FoodTile';
@@ -183,7 +183,20 @@ export function SpotSheet({ spot, inList, pickLabel, onClose, onAdd, onPick }: S
 }
 
 /** Every spot, grouped by area. */
-export function NearbyAllSheet({ spots, onClose, onOpen }: { spots: Spot[]; onClose: () => void; onOpen: (spot: Spot) => void }) {
+const FILTERS: { label: string; test: (s: Spot) => boolean }[] = [
+  { label: 'All', test: () => true },
+  { label: 'Halal', test: (s) => s.diet === 'halal' },
+  { label: 'Under RM15', test: (s) => s.price === 1 },
+  { label: 'Late night', test: (s) => s.tags.includes('late night') },
+  { label: 'Rice', test: (s) => s.tags.includes('rice') },
+  { label: 'Noodles', test: (s) => s.tags.includes('noodles') },
+  { label: 'Korean', test: (s) => s.tags.includes('korean') },
+  { label: 'Dessert', test: (s) => s.tags.includes('dessert') },
+];
+
+export function NearbyAllSheet({ spots: allSpots, onClose, onOpen }: { spots: Spot[]; onClose: () => void; onOpen: (spot: Spot) => void }) {
+  const [filter, setFilter] = useState('All');
+  const spots = allSpots.filter((FILTERS.find((f) => f.label === filter) ?? FILTERS[0]).test);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -197,7 +210,7 @@ export function NearbyAllSheet({ spots, onClose, onOpen }: { spots: Spot[]; onCl
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">{spots.length} places from local food guides</span>
+            <span className="eyebrow">{allSpots.length} places from local food guides</span>
             <h2 id="nearby-title" className="title title--sm" style={{ fontSize: 24 }}>
               Near {NEARBY_LABEL}
             </h2>
@@ -208,6 +221,18 @@ export function NearbyAllSheet({ spots, onClose, onOpen }: { spots: Spot[]; onCl
             </svg>
           </button>
         </header>
+        <div className="chip-row" role="group" aria-label="Filter places" style={{ flexShrink: 0 }}>
+          {FILTERS.map((f) => (
+            <button key={f.label} type="button" className="chip press" aria-pressed={filter === f.label} onClick={() => setFilter(f.label)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {filter === 'Halal' && (
+          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
+            Only places a source describes as halal. Others may be halal too; check before you go.
+          </p>
+        )}
         {areas.map((area) => (
           <section key={area} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span className="section-label">{area}</span>
