@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Food list</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#CC3F17}a:hover{color:#A8330F}
+@keyframes slideIn{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes softPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}50%{transform:rotate(9deg)}75%{transform:rotate(-4deg)}}
+.press{transition:transform .15s ease,background .2s ease,color .2s ease}.press:active{transform:scale(.94)}
+.add-btn svg{transition:transform .3s cubic-bezier(.2,.8,.2,1)}.add-btn:hover svg{transform:rotate(90deg)}
+.row{transition:background .15s ease}.row:hover{background:#FAFAF8}.row:hover .tile{animation:wiggle .6s ease}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F6F4; color: #18181B; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+  <main style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px; padding: 24px 20px 16px; overflow: hidden">
+
+    <header style="display: flex; justify-content: space-between; align-items: flex-end">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 13px; font-weight: 600; color: #66666D">{{countText}}</span>
+        <h1 style="margin: 0; font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', sans-serif; font-size: 32px; font-weight: 800; letter-spacing: -0.03em">Food list</h1>
+      </div>
+      <button type="button" class="press add-btn" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border: none; border-radius: 999px; background: #CC3F17; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 800; box-shadow: 0 6px 14px rgba(204, 63, 23, 0.28); cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        Add
+      </button>
+    </header>
+
+    <div style="position: relative">
+      <label for="food-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Search food</label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#66666D" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="position: absolute; left: 16px; top: 15px"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+      <input id="food-search" type="search" placeholder="Search food or places" style="width: 100%; height: 48px; box-sizing: border-box; padding: 0 16px 0 44px; border-radius: 14px; border: 1px solid #D9D9D4; background: #FFFFFF; color: #18181B; font-family: inherit; font-size: 15px">
+    </div>
+
+    <div style="display: flex; gap: 8px; overflow-x: auto; flex-shrink: 0">
+      <sc-for list="{{chips}}" as="chip" hint-placeholder-count="6">
+        <button type="button" class="press" onClick="{{chip.pick}}" aria-pressed="{{chip.selected}}" style="height: 40px; flex-shrink: 0; padding: 0 16px; border-radius: 999px; border: 1px solid {{chip.border}}; background: {{chip.bg}}; color: {{chip.fg}}; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">{{chip.label}}</button>
+      </sc-for>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 18px; display: flex; flex-direction: column; overflow: hidden">
+      <sc-for list="{{items}}" as="item" hint-placeholder-count="8">
+        <div class="row" style="display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-bottom: {{item.divider}}; animation: slideIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: {{item.delay}}">
+          <div class="tile" aria-hidden="true" style="width: 42px; height: 42px; flex-shrink: 0; border-radius: 13px; background: {{item.bg}}; color: {{item.fg}}; display: flex; align-items: center; justify-content: center">
+            <sc-if value="{{item.isRice}}" hint-placeholder-val="{{true}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 14a7 7 0 0 1 14 0"></path><path d="M2.5 14h19"></path><path d="M5 17.5h14"></path><path d="M10 8.5v.01M13 10v.01M9 11.5v.01"></path></svg></sc-if>
+            <sc-if value="{{item.isBowl}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18a9 9 0 0 1-18 0z"></path><path d="M9 20h6"></path><path d="M13 3l-3 8M18 4l-5 7"></path></svg></sc-if>
+            <sc-if value="{{item.isPizza}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21L3.5 6.5a15 15 0 0 1 17 0z"></path><path d="M5 9a13 13 0 0 1 14 0"></path><path d="M10 12v.01M14 11v.01M12 16v.01"></path></svg></sc-if>
+            <sc-if value="{{item.isSushi}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="5"></rect><circle cx="12" cy="12" r="2.5"></circle></svg></sc-if>
+            <sc-if value="{{item.isBurger}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a8 6 0 0 1 16 0z"></path><path d="M3 13.5h18"></path><path d="M4 17h16v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path></svg></sc-if>
+            <sc-if value="{{item.isCup}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"></path><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"></path><path d="M8 3.5v2.5M12 3.5v2.5"></path></svg></sc-if>
+          </div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+            <span style="font-size: 16px; font-weight: 700">{{item.name}}</span>
+            <span style="font-size: 13px; color: #66666D">{{item.tagText}}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0">
+            <sc-if value="{{item.recent}}" hint-placeholder-val="{{false}}">
+              <span style="padding: 3px 8px; border-radius: 999px; background: #FBEDE8; color: #A8330F; font-size: 11px; font-weight: 700; animation: softPulse 1.8s ease-in-out infinite">Recent</span>
+            </sc-if>
+            <span style="font-size: 12px; color: #66666D">{{item.last}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+
+  <nav aria-label="Main" style="height: 76px; flex-shrink: 0; box-sizing: border-box; background: #FFFFFF; border-top: 1px solid #E6E6E2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 8px 14px">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 600; color: #66666D; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>
+      Today
+    </a>
+    <a href="Wheel.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 600; color: #66666D; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8"></path></svg>
+      Wheel
+    </a>
+    <a href="Pool.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 700; color: #CC3F17; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg>
+      Food list
+    </a>
+    <a href="History.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 600; color: #66666D; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+      History
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const all = [
+      { name: 'Nasi Lemak', tags: ['Rice', 'Cheap', 'Malay'], last: '4 days ago', recent: false, icon: 'rice', bg: '#DDEFD8', fg: '#2F6B2A' },
+      { name: 'Ramen', tags: ['Noodles', 'Japanese'], last: '2 days ago', recent: true, icon: 'bowl', bg: '#FFF0C2', fg: '#8A5A00' },
+      { name: 'Chicken Rice', tags: ['Rice', 'Cheap'], last: 'Yesterday', recent: true, icon: 'rice', bg: '#FDE3CF', fg: '#9A4A12' },
+      { name: 'Pizza', tags: ['Western', 'Sharing'], last: '1 week ago', recent: false, icon: 'pizza', bg: '#FDDAD0', fg: '#A8330F' },
+      { name: 'Mixed Rice', tags: ['Rice', 'Cheap'], last: '3 days ago', recent: true, icon: 'rice', bg: '#DCEAFB', fg: '#1F5596' },
+      { name: 'Sushi', tags: ['Japanese'], last: 'Not yet', recent: false, icon: 'sushi', bg: '#F1E1F5', fg: '#7A3483' },
+      { name: 'Burger', tags: ['Western', 'Takeaway'], last: '6 days ago', recent: false, icon: 'burger', bg: '#F5E6D0', fg: '#7A5222' },
+      { name: 'Mamak', tags: ['Cheap', 'Late night'], last: '5 days ago', recent: false, icon: 'cup', bg: '#D6F0EB', fg: '#1E6B62' }
+    ];
+    const tag = (this.state || {}).tag || 'All';
+    const chips = ['All', 'Rice', 'Noodles', 'Cheap', 'Western', 'Japanese'].map((label) => {
+      const selected = label === tag;
+      return {
+        label: label,
+        selected: selected,
+        pick: () => this.setState({ tag: label }),
+        bg: selected ? '#18181B' : '#FFFFFF',
+        fg: selected ? '#FFFFFF' : '#18181B',
+        border: selected ? '#18181B' : '#D9D9D4'
+      };
+    });
+    const shown = tag === 'All' ? all : all.filter((f) => f.tags.indexOf(tag) !== -1);
+    const items = shown.map((f, i) => ({
+      name: f.name,
+      tagText: f.tags.join(' · '),
+      last: f.last,
+      recent: f.recent,
+      bg: f.bg,
+      fg: f.fg,
+      isRice: f.icon === 'rice',
+      isBowl: f.icon === 'bowl',
+      isPizza: f.icon === 'pizza',
+      isSushi: f.icon === 'sushi',
+      isBurger: f.icon === 'burger',
+      isCup: f.icon === 'cup',
+      delay: (i * 0.05).toFixed(2) + 's',
+      divider: i < shown.length - 1 ? '1px solid #EFEFEB' : 'none'
+    }));
+    return {
+      chips: chips,
+      items: items,
+      countText: tag === 'All' ? all.length + ' options · Recent = less likely on the wheel' : shown.length + ' of ' + all.length + ' · ' + tag
+    };
+  }
+}
+</script>
+</body>
+</html>
