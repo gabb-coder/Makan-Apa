@@ -1,5 +1,5 @@
 import { COLOR_KEYS, ICONS, type FoodColor, type FoodIconName } from './palette';
-import type { FoodOptionRow } from './supabase';
+import type { DayEntryRow, FoodOptionRow } from './supabase';
 
 export interface Food {
   id: string;
@@ -103,4 +103,38 @@ export function filterByTags(foods: Food[], tags: string[], mode: 'and' | 'or'):
   return foods.filter((f) =>
     mode === 'and' ? tags.every((t) => f.tags.includes(t)) : tags.some((t) => f.tags.includes(t)),
   );
+}
+
+/** Display stand-in for a typed-in food that isn't in the pool. */
+export function customFood(name: string): Food {
+  let hash = 0;
+  for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return {
+    id: `custom:${name.toLowerCase()}`,
+    name,
+    tags: [],
+    icon: 'bowl',
+    color: COLOR_KEYS[hash % COLOR_KEYS.length],
+    isActive: true,
+    daysSinceEaten: null,
+  };
+}
+
+/** The food a day entry points at, or null if it has none. */
+export function entryFood(entry: DayEntryRow, foodsById: Map<string, Food>): Food | null {
+  if (entry.food_option_id) return foodsById.get(entry.food_option_id) ?? customFood('A deleted food');
+  if (entry.custom_food) {
+    const lower = entry.custom_food.toLowerCase();
+    return [...foodsById.values()].find((f) => f.name.toLowerCase() === lower) ?? customFood(entry.custom_food);
+  }
+  return null;
+}
+
+/** "once", "twice", "3 times". */
+export function timesWord(n: number): string {
+  return n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`;
+}
+
+export function mapsSearchUrl(food: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${food} near me`)}`;
 }

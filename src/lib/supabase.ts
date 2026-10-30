@@ -39,3 +39,25 @@ export interface MemberRow {
   sort_order: number;
   created_at: string;
 }
+
+export type DayStatus = 'pending' | 'proposed' | 'accepted';
+
+export interface DayEntryRow {
+  id: string;
+  room_id: string;
+  entry_date: string;
+  decider_id: string;
+  food_option_id: string | null;
+  custom_food: string | null;
+  method: 'direct' | 'wheel' | null;
+  status: DayStatus;
+  created_at: string;
+}
+
+export interface VetoRow {
+  id: string;
+  day_entry_id: string;
+  member_id: string;
+  rejected_food: string;
+  created_at: string;
+}

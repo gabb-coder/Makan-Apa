@@ -22,7 +22,7 @@ There are no accounts. A phone joins a room with a name and the room code, and r
 - [x] **Phase 1: design shell + wheel.** Fonts, colour tokens, tab bar, and the Wheel screen with a hard-coded starter list, weighted spin, pointer tick, confetti burst and result card.
 - [x] **Phase 2: food list + Supabase.** Schema with RLS and Realtime, add / edit / archive / delete foods (name, tags, icon, colour), search and tag filter, starter pack, live sync between phones. The wheel now spins the saved list.
 - [x] **Phase 3: rooms, members and live sync.** Join screen (create or join by code, invite links), identity in localStorage, Settings (share code, member names, colours and decider order, veto limit, rotation start, timezone, leave room), live sync of room settings and members.
-- [ ] Phase 4: daily rotation, propose, accept and veto
+- [x] **Phase 4: daily rotation, propose, accept and veto.** Today screen with the decider card, Up next and Recently; pick from the list, type your own or spin; proposal with accept and veto (veto limit enforced, vetoed foods off the wheel for the day); "It's decided" with Find one nearby; undo for accept and veto.
 - [ ] Phase 5: history, stats and weighting from real data
 - [ ] Phase 6: polish
 - [ ] Phase 7: Phase 2 extras

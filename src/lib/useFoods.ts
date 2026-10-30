@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { daysBetween, todayIn } from './dates';
+import { daysBetween } from './dates';
 import { rowToFood, STARTER_PACK, type Food, type FoodDraft } from './foods';
-import { supabase, type FoodOptionRow, type RoomRow } from './supabase';
+import { supabase, type DayEntryRow, type FoodOptionRow, type RoomRow } from './supabase';
 
 function upsert(rows: FoodOptionRow[], row: FoodOptionRow): FoodOptionRow[] {
   const i = rows.findIndex((r) => r.id === row.id);
@@ -12,34 +12,35 @@ function upsert(rows: FoodOptionRow[], row: FoodOptionRow): FoodOptionRow[] {
 }
 
 /** The room's food list, kept live with Supabase Realtime. */
-export function useFoods(room: RoomRow, memberId: string) {
+export function useFoods(room: RoomRow, memberId: string, entries: DayEntryRow[] | null, today: string) {
   const [rows, setRows] = useState<FoodOptionRow[] | null>(null);
-  const [lastEaten, setLastEaten] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [foods, eaten] = await Promise.all([
-      supabase.from('food_options').select('*').eq('room_id', room.id).order('created_at').order('name'),
-      supabase
-        .from('day_entries')
-        .select('food_option_id, entry_date')
-        .eq('room_id', room.id)
-        .eq('status', 'accepted')
-        .not('food_option_id', 'is', null),
-    ]);
-    if (foods.error || eaten.error) {
-      setError((foods.error ?? eaten.error)!.message);
+    const { data, error: err } = await supabase
+      .from('food_options')
+      .select('*')
+      .eq('room_id', room.id)
+      .order('created_at')
+      .order('name');
+    if (err) {
+      setError(err.message);
       return;
     }
+    setError(null);
+    setRows(data as FoodOptionRow[]);
+  }, [room.id]);
+
+  // Most recent accepted date per food, from the day entries.
+  const lastEaten = useMemo(() => {
     const latest = new Map<string, string>();
-    for (const e of eaten.data as { food_option_id: string; entry_date: string }[]) {
+    for (const e of entries ?? []) {
+      if (e.status !== 'accepted' || !e.food_option_id) continue;
       const prev = latest.get(e.food_option_id);
       if (!prev || e.entry_date > prev) latest.set(e.food_option_id, e.entry_date);
     }
-    setError(null);
-    setLastEaten(latest);
-    setRows(foods.data as FoodOptionRow[]);
-  }, [room.id]);
+    return latest;
+  }, [entries]);
 
   useEffect(() => {
     load();
@@ -71,12 +72,11 @@ export function useFoods(room: RoomRow, memberId: string) {
 
   const all = useMemo<Food[] | null>(() => {
     if (!rows) return null;
-    const today = todayIn(room.timezone);
     return rows.map((r) => {
       const d = lastEaten.get(r.id);
       return rowToFood(r, d ? daysBetween(d, today) : null);
     });
-  }, [rows, lastEaten, room.timezone]);
+  }, [rows, lastEaten, today]);
 
   const run = async <T,>(q: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> => {
     const { data, error: err } = await q;

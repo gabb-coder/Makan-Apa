@@ -45,7 +45,24 @@ const PATHS: Record<FoodIconName, React.ReactNode> = {
   ),
 };
 
-export function FoodIcon({ icon, size = 22, strokeWidth = 1.8 }: { icon: FoodIconName; size?: number; strokeWidth?: number }) {
+const STEAMING_CUP = (
+  <>
+    <path d="M4 9h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" />
+    <path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16" />
+    <path d="M8 3.5v2.5" style={{ animation: 'steam 1.6s ease-in-out infinite' }} />
+    <path d="M12 3.5v2.5" style={{ animation: 'steam 1.6s 0.5s ease-in-out infinite' }} />
+  </>
+);
+
+interface Props {
+  icon: FoodIconName;
+  size?: number;
+  strokeWidth?: number;
+  /** Animate the cup's steam (Proposal card). */
+  steam?: boolean;
+}
+
+export function FoodIcon({ icon, size = 22, strokeWidth = 1.8, steam = false }: Props) {
   return (
     <svg
       width={size}
@@ -58,7 +75,7 @@ export function FoodIcon({ icon, size = 22, strokeWidth = 1.8 }: { icon: FoodIco
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {PATHS[icon]}
+      {steam && icon === 'cup' ? STEAMING_CUP : PATHS[icon]}
     </svg>
   );
 }

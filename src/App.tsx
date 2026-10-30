@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { forgetSession, restoreSession, type Session } from './lib/session';
-import type { Food } from './lib/foods';
+import { entryFood, type Food } from './lib/foods';
+import { deciderFor } from './lib/rotation';
+import { useDays } from './lib/useDays';
+import { useToday } from './lib/useToday';
 import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
 import { JoinScreen } from './screens/JoinScreen';
 import { PoolScreen } from './screens/PoolScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TodayScreen } from './screens/TodayScreen';
-import { WheelScreen } from './screens/WheelScreen';
+import { WheelScreen, type WheelSend } from './screens/WheelScreen';
 
 type Route = Tab | 'settings';
 const ROUTES: Route[] = ['today', 'wheel', 'pool', 'history', 'settings'];
@@ -134,7 +137,9 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
   const [route, setRoute] = useState<Route>(routeFromHash);
   const { room, members, updateRoom, updateMember, moveMember } = useRoomData(session.room, session.members);
   const me = members.find((m) => m.id === session.me.id) ?? session.me;
-  const foodsApi = useFoods(room, me.id);
+  const today = useToday(room.timezone);
+  const days = useDays(room, members, me.id, today);
+  const foodsApi = useFoods(room, me.id, days.entries, today);
   const { foods, active } = foodsApi;
 
   useEffect(() => {
@@ -148,9 +153,34 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
     setRoute(next);
   };
 
-  const others = members.filter((m) => m.id !== me.id);
-  const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? 'your kaki' : 'everyone';
-  const send = (food: Food) => onToast(`${food.name} is ready to send. Proposals arrive in Phase 4.`);
+  // Today's decider and what the wheel may do about it.
+  const memberById = new Map(members.map((m) => [m.id, m]));
+  const entry = days.todayEntry;
+  const decider = (entry && memberById.get(entry.decider_id)) || deciderFor(members, room.rotation_start, today);
+  const isDecider = decider?.id === me.id;
+  const others = members.filter((m) => m.id !== decider?.id);
+  const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : 'everyone';
+  const vetoedNames = days.todayVetoes.map((v) => v.rejected_food);
+  const vetoed = new Set(vetoedNames.map((n) => n.toLowerCase()));
+  const pickable = active?.filter((f) => !vetoed.has(f.name.toLowerCase())) ?? null;
+  const decidedFood = entry?.status === 'accepted' ? entryFood(entry, new Map((foods ?? []).map((f) => [f.id, f]))) : null;
+
+  let wheelSend: WheelSend;
+  if (decidedFood) wheelSend = { kind: 'note', text: `Today's already decided: ${decidedFood.name}. Spin for fun.` };
+  else if (!isDecider) wheelSend = { kind: 'note', text: `It's ${decider?.name ?? 'someone else'}'s turn, so only they can send today's pick.` };
+  else if (!sendTo) wheelSend = { kind: 'send', label: 'Lock it in' };
+  else wheelSend = { kind: 'send', label: entry?.status === 'proposed' ? `Send instead` : `Send to ${sendTo}` };
+
+  const sendFromWheel = async (food: Food) => {
+    try {
+      const inPool = !food.id.startsWith('custom');
+      await days.propose(inPool ? { foodId: food.id, name: food.name } : { foodId: null, name: food.name }, 'wheel');
+      onToast(sendTo ? `Sent ${food.name} to ${sendTo}.` : `${food.name} it is.`);
+      go('today');
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : 'Could not send that.');
+    }
+  };
 
   const loading = (
     <main className="screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--muted)', textAlign: 'center' }}>
@@ -160,9 +190,24 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
 
   return (
     <div className="app">
-      {route === 'today' && (
-        <TodayScreen room={room} me={me} members={members} onOpenSettings={() => go('settings')} onSpin={() => go('wheel')} />
-      )}
+      {route === 'today' &&
+        (foods && pickable ? (
+          <TodayScreen
+            room={room}
+            me={me}
+            members={members}
+            today={today}
+            foods={foods}
+            pickable={pickable}
+            days={days}
+            onOpenSettings={() => go('settings')}
+            onSpin={() => go('wheel')}
+            onSeeAll={() => go('history')}
+            onToast={onToast}
+          />
+        ) : (
+          loading
+        ))}
       {route === 'settings' && (
         <SettingsScreen
           room={room}
@@ -177,7 +222,19 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
         />
       )}
       {route === 'wheel' &&
-        (active ? <WheelScreen pool={active} timezone={room.timezone} otherMemberName={sendTo} onBack={() => go('today')} onSend={send} /> : loading)}
+        (pickable ? (
+          <WheelScreen
+            pool={pickable}
+            vetoedNames={vetoedNames}
+            timezone={room.timezone}
+            turnLabel={isDecider ? 'Your turn' : `${decider?.name ?? 'Someone'}'s turn`}
+            send={wheelSend}
+            onBack={() => go('today')}
+            onSend={sendFromWheel}
+          />
+        ) : (
+          loading
+        ))}
       {route === 'pool' && (foods ? <PoolScreen foods={foods} api={foodsApi} onError={onToast} /> : loading)}
       {route === 'history' && (
         <main className="screen" style={{ gap: 18 }}>

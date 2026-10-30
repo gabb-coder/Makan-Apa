@@ -21,3 +21,10 @@ export function nextColor(existingCount: number): FoodColor {
 export const ICONS = ['rice', 'bowl', 'pizza', 'sushi', 'burger', 'cup'] as const;
 
 export type FoodIconName = (typeof ICONS)[number];
+
+/** Darken a #RRGGBB colour by `amount` (0..1), for text on a food's tile colour. */
+export function darken(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) * (1 - amount));
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('')}`;
+}

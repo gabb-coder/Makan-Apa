@@ -17,16 +17,25 @@ import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 
 const SHORTLIST_MAX = 3;
 
+/** What the result card offers: sending today's pick, or just a note (not your turn, already decided). */
+export type WheelSend = { kind: 'send'; label: string } | { kind: 'note'; text: string };
+
 interface Props {
+  /** Active foods, minus anything vetoed today. */
   pool: Food[];
+  /** Foods vetoed today, mentioned in the note. */
+  vetoedNames: string[];
   timezone: string;
-  otherMemberName: string;
+  /** e.g. "Your turn" or "Alex's turn". */
+  turnLabel: string;
+  send: WheelSend;
   onBack: () => void;
-  onSend: (food: Food) => void;
+  onSend: (food: Food) => Promise<void>;
 }
 
-export function WheelScreen({ pool, timezone, otherMemberName, onBack, onSend }: Props) {
+export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBack, onSend }: Props) {
   const reducedMotion = usePrefersReducedMotion();
+  const [sending, setSending] = useState(false);
 
   const [mode, setMode] = useState<'all' | 'shortlist'>('all');
   const [tags, setTags] = useState<string[]>([]);
@@ -146,6 +155,9 @@ export function WheelScreen({ pool, timezone, otherMemberName, onBack, onSend }:
     setMode(next);
   };
 
+  const vetoNote = vetoedNames.length
+    ? ` ${joinNames(vetoedNames)} ${vetoedNames.length === 1 ? 'is' : 'are'} off the wheel today.`
+    : '';
   let note: string;
   if (mode === 'shortlist' && wheelFoods.length < 2) {
     note = `Pick 2–${SHORTLIST_MAX} foods for your shortlist, or type your own.`;
@@ -172,7 +184,7 @@ export function WheelScreen({ pool, timezone, otherMemberName, onBack, onSend }:
           </svg>
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="eyebrow">Your turn · {shortDate(new Date(), timezone)}</span>
+          <span className="eyebrow">{turnLabel} · {shortDate(new Date(), timezone)}</span>
           <h1 className="title title--sm">Spin the wheel</h1>
         </div>
       </header>
@@ -299,18 +311,39 @@ export function WheelScreen({ pool, timezone, otherMemberName, onBack, onSend }:
               </span>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-            <button type="button" className="btn btn--secondary press" onClick={spin}>
-              Spin again
-            </button>
-            <button type="button" className="btn btn--primary press" onClick={() => onSend(result)}>
-              Send to {otherMemberName}
-            </button>
-          </div>
+          {send.kind === 'send' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+              <button type="button" className="btn btn--secondary press" disabled={sending} onClick={spin}>
+                Spin again
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary press"
+                disabled={sending}
+                onClick={async () => {
+                  setSending(true);
+                  try {
+                    await onSend(result);
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              >
+                {sending ? 'Sending…' : send.label}
+              </button>
+            </div>
+          ) : (
+            <>
+              <button type="button" className="btn btn--secondary press" onClick={spin}>
+                Spin again
+              </button>
+              <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{send.text}</p>
+            </>
+          )}
         </section>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{note}</p>
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{note}{vetoNote}</p>
           <button
             type="button"
             className="press"
