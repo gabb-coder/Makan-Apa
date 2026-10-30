@@ -5,7 +5,7 @@ import { shareInvite } from '../lib/invite';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
 import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
-import { hostOf, MEMBER_COLORS } from '../lib/session';
+import { hostOf, MEMBER_COLORS, ROOM_NAME_MAX, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
 
@@ -17,6 +17,7 @@ interface Props {
   updateMember: (id: string, patch: MemberPatch) => Promise<void>;
   moveMember: (id: string, delta: -1 | 1) => Promise<void>;
   removeMember: (id: string) => Promise<void>;
+  deleteRoom: () => Promise<void>;
   onBack: () => void;
   onLeave: () => void;
   onToast: (message: string) => void;
@@ -36,13 +37,22 @@ function timeZones(current: string): string[] {
 
 const cardStyle = { padding: 16, display: 'flex', flexDirection: 'column', gap: 14 } as const;
 
-export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, onBack, onLeave, onToast }: Props) {
+export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom, onBack, onLeave, onToast }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const host = hostOf(members);
   const iAmHost = host?.id === me.id;
+
+  // Host renames the room; saved when the field loses focus.
+  const [roomNameDraft, setRoomNameDraft] = useState(room.name ?? '');
+  useEffect(() => setRoomNameDraft(room.name ?? ''), [room.name]);
+  const saveRoomName = () => {
+    const next = roomNameDraft.trim() || null;
+    if (next !== (room.name ?? null)) attempt(() => updateRoom({ name: next }), next ? 'Room renamed.' : 'Room name removed.');
+  };
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
   const theme = usePref(themePref);
   const sound = usePref(soundPref);
@@ -66,7 +76,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
   const share = () =>
     attempt(async () => {
-      const message = await shareInvite(room.code);
+      const message = await shareInvite(room.code, room.name);
       if (message) onToast(message);
     });
 
@@ -90,13 +100,37 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           </svg>
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="eyebrow">Room {room.code}</span>
+          <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {roomTitle(room)}
+          </span>
           <h1 className="title title--sm">Settings</h1>
         </div>
       </header>
 
       <section className="card fade-up" style={cardStyle}>
-        <span className="section-label">Room code</span>
+        <span className="section-label">Room</span>
+        {iAmHost ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="room-name-setting" className="field-label">
+              Room name
+            </label>
+            <input
+              id="room-name-setting"
+              className="input"
+              placeholder="e.g. Sunway lunch gang"
+              maxLength={ROOM_NAME_MAX}
+              value={roomNameDraft}
+              onChange={(e) => setRoomNameDraft(e.target.value)}
+              onBlur={saveRoomName}
+              onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+            />
+          </div>
+        ) : (
+          room.name && <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, overflowWrap: 'anywhere' }}>{room.name}</span>
+        )}
+        <span className="field-label" style={{ marginBottom: -6 }}>
+          Code
+        </span>
         <span
           style={{
             fontFamily: 'var(--font-display)',
@@ -460,6 +494,22 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
           You stay in the rotation. Rejoin any time with code {room.code} and the same name.
         </p>
+        {iAmHost && (
+          <>
+            <button
+              type="button"
+              className="btn btn--danger press"
+              data-armed={confirmDelete}
+              style={{ marginTop: 8 }}
+              onClick={() => (confirmDelete ? attempt(deleteRoom) : setConfirmDelete(true))}
+            >
+              {confirmDelete ? 'Tap again to delete everything' : 'Delete this room for everyone'}
+            </button>
+            <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+              Host only. Removes the food list, history and members for good.
+            </p>
+          </>
+        )}
       </section>
     </main>
   );

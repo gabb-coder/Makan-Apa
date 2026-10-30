@@ -6,11 +6,9 @@ const ROOM_KEY = 'makan.roomId';
 const MEMBER_KEY = 'makan.memberId';
 const LAST_CODE_KEY = 'makan.lastCode';
 
-// No 0/O or 1/I/L, so codes are easy to read out loud.
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const CODE_LENGTH = 6;
 
-/** Avatar colours, handed out in join order. The first two match the mockups. */
+/** Avatar colours, handed out in join order (the database uses the same list). */
 export const MEMBER_COLORS = ['#CC3F17', '#2F6FD6', '#2F8F5B', '#8A3FC4', '#B7791F', '#1E8C8C', '#C2185B', '#4A4A50'];
 
 export interface Session {
@@ -18,11 +16,6 @@ export interface Session {
   me: MemberRow;
   /** Everyone in the room at join time, so the first render isn't just you. */
   members: MemberRow[];
-}
-
-export function randomRoomCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
-  return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
 export function normalizeCode(raw: string): string {
@@ -37,6 +30,17 @@ function browserTimeZone(): string {
   }
 }
 
+/**
+ * Every phone has a Supabase anonymous account (no sign-up, nothing to remember). Room data is
+ * only visible to accounts that are members of that room (see the room_membership migration).
+ */
+export async function ensureSignedIn(): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return;
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) throw new Error(error.message);
+}
+
 function remember({ room, me }: Pick<Session, 'room' | 'me'>) {
   storage.set(ROOM_KEY, room.id);
   storage.set(MEMBER_KEY, me.id);
@@ -49,86 +53,90 @@ export function forgetSession() {
   storage.remove(MEMBER_KEY);
 }
 
+/** Leave on this phone: drop this account's access to the room, then forget it. */
+export async function leaveRoom(roomId: string): Promise<void> {
+  forgetSession();
+  await supabase.rpc('leave_room', { p_room_id: roomId });
+}
+
 /** Code to prefill on the Join screen: a ?join= link first, then the last room used here. */
 export function suggestedCode(): string {
   const fromLink = new URLSearchParams(window.location.search).get('join');
   return normalizeCode(fromLink ?? storage.get(LAST_CODE_KEY) ?? '');
 }
 
-export async function restoreSession(): Promise<Session | null> {
-  const roomId = storage.get(ROOM_KEY);
-  const memberId = storage.get(MEMBER_KEY);
-  if (!roomId || !memberId) return null;
+async function loadSession(roomId: string, memberId: string): Promise<Session | null> {
   const [room, members] = await Promise.all([
     supabase.from('rooms').select('*').eq('id', roomId).maybeSingle(),
     supabase.from('members').select('*').eq('room_id', roomId).order('sort_order').order('created_at'),
   ]);
   if (room.error || members.error) throw new Error((room.error ?? members.error)!.message);
   const me = (members.data as MemberRow[]).find((m) => m.id === memberId);
-  if (!room.data || !me) {
-    forgetSession();
-    return null;
-  }
+  if (!room.data || !me) return null;
   return { room: room.data as RoomRow, me, members: members.data as MemberRow[] };
 }
 
-async function addMember(room: RoomRow, name: string): Promise<{ me: MemberRow; members: MemberRow[]; rejoined: boolean }> {
-  const { data, error } = await supabase.from('members').select('*').eq('room_id', room.id).order('sort_order').order('created_at');
-  if (error) throw new Error(error.message);
-  const members = data as MemberRow[];
+export async function restoreSession(): Promise<Session | null> {
+  const roomId = storage.get(ROOM_KEY);
+  const memberId = storage.get(MEMBER_KEY);
+  if (!roomId || !memberId) return null;
+  await ensureSignedIn();
+  let session = await loadSession(roomId, memberId);
+  if (!session) {
+    // A phone from before accounts (or a fresh sign-in): its saved ids prove who it is.
+    const { data: claimed } = await supabase.rpc('claim_member', { p_room_id: roomId, p_member_id: memberId });
+    if (claimed) session = await loadSession(roomId, memberId);
+  }
+  if (!session) forgetSession();
+  return session;
+}
 
-  // Same name on a new phone: carry on as that member rather than adding a twin.
-  const existing = members.find((m) => m.name.trim().toLowerCase() === name.toLowerCase());
-  if (existing) return { me: existing, members, rejoined: true };
+interface JoinResult {
+  room: RoomRow;
+  member: MemberRow;
+  rejoined: boolean;
+}
 
-  const used = new Set(members.map((m) => m.color.toUpperCase()));
-  const color = MEMBER_COLORS.find((c) => !used.has(c.toUpperCase())) ?? MEMBER_COLORS[members.length % MEMBER_COLORS.length];
-  const sortOrder = members.reduce((max, m) => Math.max(max, m.sort_order + 1), 0);
-  const inserted = await supabase
-    .from('members')
-    .insert({ room_id: room.id, name, color, sort_order: sortOrder })
-    .select()
-    .single();
-  if (inserted.error) throw new Error(inserted.error.message);
-  const me = inserted.data as MemberRow;
-  return { me, members: [...members, me], rejoined: false };
+async function finish(result: JoinResult): Promise<Session & { rejoined: boolean }> {
+  const session = await loadSession(result.room.id, result.member.id);
+  if (!session) throw new Error('Could not open the room. Try again.');
+  remember(session);
+  return { ...session, rejoined: result.rejoined };
 }
 
 export async function joinRoom(rawCode: string, rawName: string): Promise<Session & { rejoined: boolean }> {
   const code = normalizeCode(rawCode);
-  const name = rawName.trim();
-  const { data, error } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle();
+  await ensureSignedIn();
+  const { data, error } = await supabase.rpc('join_room', { p_code: code, p_name: rawName.trim() });
   if (error) throw new Error(error.message);
+  // Same name as someone already there continues as that member rather than adding a twin.
   if (!data) throw new Error(`No room with code ${code}. Check it with your kaki.`);
-  const room = data as RoomRow;
-  const { me, members, rejoined } = await addMember(room, name);
-  const session = { room, me, members };
-  remember(session);
-  return { ...session, rejoined };
+  return finish(data as JoinResult);
 }
 
-export async function createRoom(rawName: string): Promise<Session> {
+/** What to call a room: its name, or "Room K7M2QX" if it has none. */
+export function roomTitle(room: Pick<RoomRow, 'name' | 'code'>): string {
+  return room.name?.trim() || `Room ${room.code}`;
+}
+
+export const ROOM_NAME_MAX = 40;
+
+export async function createRoom(rawName: string, roomName = ''): Promise<Session> {
   const timezone = browserTimeZone();
-  let room: RoomRow | null = null;
-  for (let attempt = 0; attempt < 5 && !room; attempt++) {
-    const { data, error } = await supabase
-      .from('rooms')
-      .insert({ code: randomRoomCode(), timezone, rotation_start: todayIn(timezone) })
-      .select()
-      .single();
-    if (!error) room = data as RoomRow;
-    else if (error.code !== '23505') throw new Error(error.message); // anything but a code collision
-  }
-  if (!room) throw new Error('Could not find a free room code. Try again.');
-  const { me, members } = await addMember(room, rawName.trim());
-  const session = { room, me, members };
-  remember(session);
-  return session;
+  await ensureSignedIn();
+  const { data, error } = await supabase.rpc('create_room', {
+    p_name: rawName.trim(),
+    p_timezone: timezone,
+    p_rotation_start: todayIn(timezone),
+    p_room_name: roomName.trim() || null,
+  });
+  if (error) throw new Error(error.message);
+  return finish(data as JoinResult);
 }
 
 /**
  * The room's host: whoever created it, i.e. the first member to join. Only the host can
- * remove people. (No accounts, so this is enforced in the app, not the database.)
+ * remove people or delete the room (enforced by the database's row-level security).
  */
 export function hostOf(members: MemberRow[]): MemberRow | null {
   return members.reduce<MemberRow | null>(

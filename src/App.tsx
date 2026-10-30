@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { disableReminders } from './lib/push';
-import { forgetSession, restoreSession, type Session } from './lib/session';
+import { forgetSession, leaveRoom, restoreSession, roomTitle, type Session } from './lib/session';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
 import { useDays } from './lib/useDays';
@@ -156,14 +156,14 @@ function Toast({ message, raised }: { message: string; raised: boolean }) {
 
 function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m: string) => void; onLeave: () => void }) {
   const [route, setRoute] = useState<Route>(routeFromHash);
-  const { room, members, updateRoom, updateMember, moveMember, removeMember } = useRoomData(session.room, session.members, session.me.id);
+  const { room, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom } = useRoomData(session.room, session.members, session.me.id);
   const me = members.find((m) => m.id === session.me.id) ?? session.me;
   const removed = !members.some((m) => m.id === session.me.id);
 
   // Someone removed this phone's member from the room.
   useEffect(() => {
     if (removed) {
-      onToast(`You were removed from room ${room.code}. Join again with the code.`);
+      onToast(`You’re no longer in room ${room.code}.`);
       onLeave();
     }
   }, [removed]);
@@ -252,7 +252,16 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
           moveMember={moveMember}
           removeMember={removeMember}
           onBack={() => go('today')}
-          onLeave={onLeave}
+          deleteRoom={async () => {
+            await deleteRoom();
+            onToast(`${roomTitle(room)} deleted.`);
+            void leaveRoom(room.id).catch(() => {});
+            onLeave();
+          }}
+          onLeave={() => {
+            void leaveRoom(room.id).catch(() => {});
+            onLeave();
+          }}
           onToast={onToast}
         />
       )}

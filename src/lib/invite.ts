@@ -4,8 +4,8 @@ export function inviteUrl(code: string): string {
 }
 
 /** Share sheet where the phone has one, otherwise copy. Returns a message for a toast, or null. */
-export async function shareInvite(code: string): Promise<string | null> {
-  const text = `Join my Makan apa? room. Code: ${code}`;
+export async function shareInvite(code: string, roomName?: string | null): Promise<string | null> {
+  const text = roomName ? `Join “${roomName}” on Makan apa? Code: ${code}` : `Join my Makan apa? room. Code: ${code}`;
   if (navigator.share) {
     try {
       await navigator.share({ title: 'Makan apa?', text, url: inviteUrl(code) });

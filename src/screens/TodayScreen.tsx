@@ -18,6 +18,7 @@ import { NearbyAllSheet, NearbyList, NearbyStrip, SpotSheet } from '../component
 import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
 import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
 import { shareInvite } from '../lib/invite';
+import { roomTitle } from '../lib/session';
 import { NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
@@ -261,7 +262,9 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Avatar name={decider.name} color={decider.color} size={44} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-            <span className="eyebrow">{dayMonthLabel(today)} · Room {room.code}</span>
+            <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {dayMonthLabel(today)} · {roomTitle(room)}
+            </span>
             <h1 className="title title--sm" style={{ overflowWrap: 'anywhere' }}>
               {decider.name}’s pick
             </h1>
@@ -269,11 +272,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         </header>
       ) : (
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
                 new Date(`${today}T00:00:00Z`),
               )}
+              {room.name ? ` · ${room.name}` : ''}
             </span>
             <h1 className="title">
               Makan <span style={{ color: 'var(--accent)' }}>apa?</span>
@@ -282,7 +286,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           <button
             type="button"
             className="press"
-            aria-label={`Room ${room.code}: ${members.length} ${members.length === 1 ? 'person' : 'people'}, ${online.size} here now. Show people`}
+            aria-label={`${roomTitle(room)}, code ${room.code}: ${members.length} ${members.length === 1 ? 'person' : 'people'}, ${online.size} here now. Show people`}
             onClick={() => setPeopleOpen(true)}
             style={{
               display: 'flex',
@@ -438,7 +442,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           today={today}
           onClose={() => setPeopleOpen(false)}
           onInvite={() => run(async () => {
-            const message = await shareInvite(room.code);
+            const message = await shareInvite(room.code, room.name);
             if (message) onToast(message);
           })}
           onSettings={() => {
