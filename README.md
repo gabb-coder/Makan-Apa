@@ -11,6 +11,22 @@ npm run dev
 
 Then open the URL Vite prints (use your browser's phone emulation at 390×844 for the intended layout). `npm run build` type-checks and builds to `dist/`.
 
+## Tests
+
+```bash
+npm test
+```
+
+Unit tests (Vitest) for the rotation, dates, wheel weighting, stats, Sunway spots and session helpers.
+
+```bash
+npm run test:e2e
+```
+
+End-to-end tests (Playwright) build the app and run against the live Supabase project: a two-phone propose / veto / accept flow and row-level security checks. Each test creates its own room and deletes it. They use a few anonymous sign-ins per run (Supabase allows 30 per hour per IP). Run `npx playwright install chromium` once first.
+
+GitHub Actions runs the unit tests and build on every pull request and push to `main`, then the end-to-end suite.
+
 ## Backend
 
 Supabase project `makan-apa` (Singapore). The public URL and publishable key live in [`.env`](.env); they are meant to ship to browsers, so they are committed. Put anything secret in `.env.local`. The schema is in [`supabase/migrations/`](supabase/migrations/).
@@ -25,9 +41,11 @@ Push reminders need the app served over HTTPS (any static host works). On iPhone
 
 ### Rooms and identity
 
-The person who creates a room is its host (the first member, by join time). Only the host can remove people, from Settings; everyone else can rename, recolour and reorder.
+No sign-up: each phone gets a Supabase **anonymous account** behind the scenes (Authentication → Sign In / Providers → "Allow anonymous sign-ins" must stay on). A phone joins a room with a name and the room code; `room_access` links its account to that member, and it also remembers `room_id` and `member_id` in `localStorage`. Joining again with the same name (on a new phone, or after leaving) continues as that member. Invite links look like `https://<host>/?join=K7M2QX`.
 
-There are no accounts. A phone joins a room with a name and the room code, and remembers its `room_id` and `member_id` in `localStorage`. Joining again with the same name (on a new phone, or after leaving) continues as that member. Invite links look like `https://<host>/?join=K7M2QX`.
+Row-level security keeps each room private to its members: the publishable key alone can't read or list anything, joining and creating go through `join_room` / `create_room`, and vetoes and secret picks can only be made as yourself. Phones from before accounts reclaim their member automatically via `claim_member`.
+
+The person who creates a room is its **host** (the first member, by join time). Only the host can rename the room, remove people, or delete the room; the database enforces this. Everyone else can change the other settings and rename, recolour and reorder members.
 
 ## After the spec
 
