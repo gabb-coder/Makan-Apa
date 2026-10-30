@@ -569,3 +569,92 @@ a:hover {
 .add-btn:hover svg {
   transform: rotate(90deg);
 }
+
+/* ---------- Join ---------- */
+
+@keyframes rollIn {
+  from {
+    transform: translateX(280px) rotate(-280deg);
+  }
+  to {
+    transform: translateX(0) rotate(-14deg);
+  }
+}
+
+@keyframes spinJoin {
+  from {
+    transform: rotate(-14deg);
+  }
+  to {
+    transform: rotate(346deg);
+  }
+}
+
+@keyframes fadeUpJoin {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes popInTilt {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-10deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes wiggleSoft {
+  0%,
+  14%,
+  100% {
+    transform: rotate(0);
+  }
+  3% {
+    transform: rotate(-8deg);
+  }
+  7% {
+    transform: rotate(6deg);
+  }
+  11% {
+    transform: rotate(-3deg);
+  }
+}
+
+@keyframes glowSoft {
+  0%,
+  100% {
+    box-shadow: 0 8px 18px rgba(204, 63, 23, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 30px rgba(204, 63, 23, 0.6);
+  }
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-4px) rotate(-5deg);
+  }
+}
+
+@keyframes spinSlow {
+  to {
+    transform: rotate(360deg);
+  }
+}

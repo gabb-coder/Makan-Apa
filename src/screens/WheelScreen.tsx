@@ -19,12 +19,13 @@ const SHORTLIST_MAX = 3;
 
 interface Props {
   pool: Food[];
+  timezone: string;
   otherMemberName: string;
   onBack: () => void;
   onSend: (food: Food) => void;
 }
 
-export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
+export function WheelScreen({ pool, timezone, otherMemberName, onBack, onSend }: Props) {
   const reducedMotion = usePrefersReducedMotion();
 
   const [mode, setMode] = useState<'all' | 'shortlist'>('all');
@@ -171,7 +172,7 @@ export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
           </svg>
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="eyebrow">Your turn · {shortDate(new Date())}</span>
+          <span className="eyebrow">Your turn · {shortDate(new Date(), timezone)}</span>
           <h1 className="title title--sm">Spin the wheel</h1>
         </div>
       </header>

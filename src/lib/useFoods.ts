@@ -12,7 +12,7 @@ function upsert(rows: FoodOptionRow[], row: FoodOptionRow): FoodOptionRow[] {
 }
 
 /** The room's food list, kept live with Supabase Realtime. */
-export function useFoods(room: RoomRow) {
+export function useFoods(room: RoomRow, memberId: string) {
   const [rows, setRows] = useState<FoodOptionRow[] | null>(null);
   const [lastEaten, setLastEaten] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function useFoods(room: RoomRow) {
   };
 
   const addFood = async (draft: FoodDraft) => {
-    const row = await run(supabase.from('food_options').insert({ ...draft, room_id: room.id }).select().single());
+    const row = await run(supabase.from('food_options').insert({ ...draft, room_id: room.id, added_by: memberId }).select().single());
     setRows((cur) => upsert(cur ?? [], row as FoodOptionRow));
   };
 
@@ -104,7 +104,7 @@ export function useFoods(room: RoomRow) {
     const missing = STARTER_PACK.filter((f) => !have.has(f.name.toLowerCase()));
     if (missing.length === 0) return;
     const inserted = await run(
-      supabase.from('food_options').insert(missing.map((f) => ({ ...f, room_id: room.id }))).select(),
+      supabase.from('food_options').insert(missing.map((f) => ({ ...f, room_id: room.id, added_by: memberId }))).select(),
     );
     setRows((cur) => (inserted as FoodOptionRow[]).reduce(upsert, cur ?? []));
   };

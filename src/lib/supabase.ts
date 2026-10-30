@@ -30,3 +30,12 @@ export interface FoodOptionRow {
   is_active: boolean;
   created_at: string;
 }
+
+export interface MemberRow {
+  id: string;
+  room_id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+}

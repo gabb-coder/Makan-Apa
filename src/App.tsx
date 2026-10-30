@@ -1,36 +1,94 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
-import { shortDate } from './lib/dates';
+import { forgetSession, restoreSession, type Session } from './lib/session';
 import type { Food } from './lib/foods';
 import { useFoods } from './lib/useFoods';
-import { useRoom } from './lib/useRoom';
-import type { RoomRow } from './lib/supabase';
-import { PlaceholderScreen } from './screens/PlaceholderScreen';
+import { useRoomData } from './lib/useRoomData';
+import { JoinScreen } from './screens/JoinScreen';
 import { PoolScreen } from './screens/PoolScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { TodayScreen } from './screens/TodayScreen';
 import { WheelScreen } from './screens/WheelScreen';
 
-const TABS: Tab[] = ['today', 'wheel', 'pool', 'history'];
+type Route = Tab | 'settings';
+const ROUTES: Route[] = ['today', 'wheel', 'pool', 'history', 'settings'];
 
-function tabFromHash(): Tab {
-  const h = window.location.hash.replace('#', '') as Tab;
-  return TABS.includes(h) ? h : 'pool';
+function routeFromHash(): Route {
+  const h = window.location.hash.replace('#', '') as Route;
+  return ROUTES.includes(h) ? h : 'today';
 }
 
-export default function App() {
-  const { room, error, retry } = useRoom();
+type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'join'; notice?: string } | { status: 'ready'; session: Session };
 
-  if (error) {
-    return (
+export default function App() {
+  const [state, setState] = useState<State>({ status: 'loading' });
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Bumped on every restore, join and leave so a slow, stale restore can't land afterwards.
+  const generation = useRef(0);
+
+  const restore = () => {
+    const gen = ++generation.current;
+    setState({ status: 'loading' });
+    restoreSession().then(
+      (session) => gen === generation.current && setState(session ? { status: 'ready', session } : { status: 'join' }),
+      (e: unknown) => gen === generation.current && setState({ status: 'error', message: e instanceof Error ? e.message : String(e) }),
+    );
+  };
+  useEffect(restore, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  let body: React.ReactNode;
+  if (state.status === 'loading') {
+    body = <Splash>Loading…</Splash>;
+  } else if (state.status === 'error') {
+    body = (
       <Splash>
-        <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>Couldn't reach the server. {error}</p>
-        <button type="button" className="btn btn--primary press" onClick={retry}>
+        <p style={{ margin: 0, lineHeight: 1.5 }}>Couldn't reach the server. {state.message}</p>
+        <button type="button" className="btn btn--primary press" onClick={restore}>
           Try again
         </button>
       </Splash>
     );
+  } else if (state.status === 'join') {
+    body = (
+      <JoinScreen
+        notice={state.notice}
+        onJoined={(session, message) => {
+          generation.current++;
+          // Drop any ?join= invite code from the address bar now it's been used.
+          window.history.replaceState(null, '', `${window.location.pathname}#today`);
+          setState({ status: 'ready', session });
+          if (message) setToast(message);
+        }}
+      />
+    );
+  } else {
+    body = (
+      <RoomApp
+        key={state.session.me.id}
+        session={state.session}
+        onToast={setToast}
+        onLeave={() => {
+          generation.current++;
+          forgetSession();
+          setState({ status: 'join' });
+        }}
+      />
+    );
   }
-  if (!room) return <Splash>Loading…</Splash>;
-  return <RoomApp room={room} />;
+
+  return (
+    <>
+      {body}
+      {toast && <Toast message={toast} raised={state.status === 'ready'} />}
+    </>
+  );
 }
 
 function Splash({ children }: { children: React.ReactNode }) {
@@ -44,30 +102,55 @@ function Splash({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RoomApp({ room }: { room: RoomRow }) {
-  const [tab, setTab] = useState<Tab>(tabFromHash);
-  const [toast, setToast] = useState<string | null>(null);
-  const foodsApi = useFoods(room);
+function Toast({ message, raised }: { message: string; raised: boolean }) {
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'fixed',
+        left: '50%',
+        bottom: raised ? 'calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom))' : 'calc(24px + env(safe-area-inset-bottom))',
+        transform: 'translateX(-50%)',
+        width: 'calc(100% - 40px)',
+        maxWidth: 360,
+        padding: '12px 16px',
+        borderRadius: 14,
+        background: 'var(--ink)',
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: 600,
+        lineHeight: 1.4,
+        boxShadow: '0 10px 24px rgba(24, 24, 27, 0.25)',
+        animation: 'toastIn 0.3s var(--ease-out) both',
+        zIndex: 30,
+      }}
+    >
+      {message}
+    </div>
+  );
+}
+
+function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m: string) => void; onLeave: () => void }) {
+  const [route, setRoute] = useState<Route>(routeFromHash);
+  const { room, members, updateRoom, updateMember, moveMember } = useRoomData(session.room, session.members);
+  const me = members.find((m) => m.id === session.me.id) ?? session.me;
+  const foodsApi = useFoods(room, me.id);
   const { foods, active } = foodsApi;
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => setRoute(routeFromHash());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(t);
-  }, [toast]);
-
-  const go = (next: Tab) => {
+  const go = (next: Route) => {
     window.location.hash = next;
-    setTab(next);
+    setRoute(next);
   };
 
-  const send = (food: Food) => setToast(`${food.name} is ready to send. Proposals arrive in Phase 4.`);
+  const others = members.filter((m) => m.id !== me.id);
+  const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? 'your kaki' : 'everyone';
+  const send = (food: Food) => onToast(`${food.name} is ready to send. Proposals arrive in Phase 4.`);
 
   const loading = (
     <main className="screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--muted)', textAlign: 'center' }}>
@@ -77,53 +160,39 @@ function RoomApp({ room }: { room: RoomRow }) {
 
   return (
     <div className="app">
-      {tab === 'today' && (
-        <PlaceholderScreen eyebrow={`${shortDate(new Date(), room.timezone)} · Room ${room.code}`} title="Makan apa?" phase="Phase 4">
-          <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>
-            The decider card, “Up next” rotation and recent meals.
-          </p>
-          <button type="button" className="btn btn--primary press" onClick={() => go('wheel')}>
-            Spin the wheel
-          </button>
-        </PlaceholderScreen>
+      {route === 'today' && (
+        <TodayScreen room={room} me={me} members={members} onOpenSettings={() => go('settings')} onSpin={() => go('wheel')} />
       )}
-      {tab === 'wheel' &&
-        (active ? <WheelScreen pool={active} otherMemberName="Alex" onBack={() => go('today')} onSend={send} /> : loading)}
-      {tab === 'pool' &&
-        (foods ? <PoolScreen foods={foods} api={foodsApi} onError={setToast} /> : loading)}
-      {tab === 'history' && (
-        <PlaceholderScreen eyebrow={`Room ${room.code}`} title="History" phase="Phase 5">
-          <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>Meals, streaks, vetoes and who decided.</p>
-        </PlaceholderScreen>
+      {route === 'settings' && (
+        <SettingsScreen
+          room={room}
+          me={me}
+          members={members}
+          updateRoom={updateRoom}
+          updateMember={updateMember}
+          moveMember={moveMember}
+          onBack={() => go('today')}
+          onLeave={onLeave}
+          onToast={onToast}
+        />
       )}
-
-      {toast && (
-        <div
-          role="status"
-          style={{
-            position: 'absolute',
-            left: '50%',
-            bottom: 'calc(var(--tabbar-h) + 16px)',
-            transform: 'translateX(-50%)',
-            width: 'calc(100% - 40px)',
-            maxWidth: 360,
-            padding: '12px 16px',
-            borderRadius: 14,
-            background: 'var(--ink)',
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 600,
-            lineHeight: 1.4,
-            boxShadow: '0 10px 24px rgba(24, 24, 27, 0.25)',
-            animation: 'toastIn 0.3s var(--ease-out) both',
-            zIndex: 30,
-          }}
-        >
-          {toast}
-        </div>
+      {route === 'wheel' &&
+        (active ? <WheelScreen pool={active} timezone={room.timezone} otherMemberName={sendTo} onBack={() => go('today')} onSend={send} /> : loading)}
+      {route === 'pool' && (foods ? <PoolScreen foods={foods} api={foodsApi} onError={onToast} /> : loading)}
+      {route === 'history' && (
+        <main className="screen" style={{ gap: 18 }}>
+          <header style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span className="eyebrow">Room {room.code}</span>
+            <h1 className="title">History</h1>
+          </header>
+          <section className="card fade-up" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <span className="section-label">Coming in Phase 5</span>
+            <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>Meals, streaks, vetoes and who decided.</p>
+          </section>
+        </main>
       )}
 
-      <TabBar active={tab} onChange={go} />
+      <TabBar active={route === 'settings' ? 'today' : route} onChange={go} />
     </div>
   );
 }
