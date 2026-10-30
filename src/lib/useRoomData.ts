@@ -87,12 +87,19 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[], m
   const removeMember = async (id: string) => {
     if (hostOf(members)?.id !== meId) throw new Error('Only the host can remove people from the room.');
     if (id === meId) throw new Error('To leave, use “Leave room on this phone”.');
-    const name = members.find((m) => m.id === id)?.name ?? 'They';
-    const { error } = await supabase.from('members').delete().eq('id', id);
-    if (error?.code === '23503') throw new Error(`${name} already has meals or vetoes in this room, so they can’t be removed.`);
+    // Row-level security only lets the host delete, so an empty result means "not allowed".
+    const { data, error } = await supabase.from('members').delete().eq('id', id).select('id');
     if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error('Only the host can remove people from the room.');
     setMembers((cur) => cur.filter((m) => m.id !== id));
   };
 
-  return { room, members, updateRoom, updateMember, moveMember, removeMember };
+  /** Host only: delete the room and everything in it, for everyone. */
+  const deleteRoom = async () => {
+    const { data, error } = await supabase.from('rooms').delete().eq('id', roomId).select('id');
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error('Only the host can delete the room.');
+  };
+
+  return { room, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom };
 }

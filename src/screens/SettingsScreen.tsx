@@ -17,6 +17,7 @@ interface Props {
   updateMember: (id: string, patch: MemberPatch) => Promise<void>;
   moveMember: (id: string, delta: -1 | 1) => Promise<void>;
   removeMember: (id: string) => Promise<void>;
+  deleteRoom: () => Promise<void>;
   onBack: () => void;
   onLeave: () => void;
   onToast: (message: string) => void;
@@ -36,10 +37,11 @@ function timeZones(current: string): string[] {
 
 const cardStyle = { padding: 16, display: 'flex', flexDirection: 'column', gap: 14 } as const;
 
-export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, onBack, onLeave, onToast }: Props) {
+export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom, onBack, onLeave, onToast }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const host = hostOf(members);
   const iAmHost = host?.id === me.id;
@@ -460,6 +462,22 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
           You stay in the rotation. Rejoin any time with code {room.code} and the same name.
         </p>
+        {iAmHost && (
+          <>
+            <button
+              type="button"
+              className="btn btn--danger press"
+              data-armed={confirmDelete}
+              style={{ marginTop: 8 }}
+              onClick={() => (confirmDelete ? attempt(deleteRoom) : setConfirmDelete(true))}
+            >
+              {confirmDelete ? 'Tap again to delete everything' : 'Delete this room for everyone'}
+            </button>
+            <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+              Host only. Removes the food list, history and members for good.
+            </p>
+          </>
+        )}
       </section>
     </main>
   );
