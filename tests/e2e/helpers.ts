@@ -39,9 +39,10 @@ export async function createRoom(page: Page, name: string, roomName = ''): Promi
   await page.click('text=Create a new room'); // reveals the optional room name
   if (roomName) await page.fill('#room-name', roomName);
   await page.click('button:text-is("Create room")');
-  const chip = page.locator('button[aria-label^="Room "]');
+  // The room chip on Today: "<room name or Room CODE>, code CODE: …".
+  const chip = page.locator('button[aria-label*=", code "]');
   await expect(chip).toBeVisible();
-  return (await chip.getAttribute('aria-label'))!.slice(5, 11);
+  return (await chip.getAttribute('aria-label'))!.match(/code ([A-Z0-9]{6})/)![1];
 }
 
 export async function joinRoom(page: Page, code: string, name: string): Promise<void> {
