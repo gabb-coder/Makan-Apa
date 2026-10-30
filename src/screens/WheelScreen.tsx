@@ -7,6 +7,7 @@ import {
   formatTag,
   isRecent,
   joinNames,
+  popularTags,
   weightedPick,
   wheelWeight,
   type Food,
@@ -15,7 +16,6 @@ import { FOOD_COLORS, nextColor } from '../lib/palette';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 
 const SHORTLIST_MAX = 3;
-const TAG_CHIPS = ['cheap', 'rice', 'noodles', 'western', 'japanese'];
 
 interface Props {
   pool: Food[];
@@ -48,6 +48,7 @@ export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
   };
   useEffect(() => clearTimers, []);
 
+  const tagChips = useMemo(() => popularTags(pool, 6), [pool]);
   const shortlistOptions = useMemo(() => [...pool, ...customFoods], [pool, customFoods]);
 
   const wheelFoods = useMemo(() => {
@@ -88,6 +89,7 @@ export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
       tags: [],
       icon: 'bowl',
       color: nextColor(pool.length + customFoods.length),
+      isActive: true,
       daysSinceEaten: null,
     };
     setCustomFoods((cur) => [...cur, food]);
@@ -99,8 +101,7 @@ export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
     setTyping(false);
   };
 
-  const minFoods = mode === 'shortlist' ? 2 : 1;
-  const canSpin = !spinning && wheelFoods.length >= minFoods;
+  const canSpin = !spinning && wheelFoods.length >= 2;
 
   const spin = () => {
     if (!canSpin) return;
@@ -147,8 +148,12 @@ export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
   let note: string;
   if (mode === 'shortlist' && wheelFoods.length < 2) {
     note = `Pick 2–${SHORTLIST_MAX} foods for your shortlist, or type your own.`;
-  } else if (wheelFoods.length === 0) {
-    note = 'Nothing matches those tags. Try fewer, or switch to “any”.';
+  } else if (pool.length < 2) {
+    note = 'Add at least 2 foods in the Food list to spin.';
+  } else if (wheelFoods.length < 2) {
+    note = wheelFoods.length === 0
+      ? 'Nothing matches those tags. Try fewer, or switch to “any”.'
+      : `Only ${wheelFoods[0].name} matches. Pick fewer tags to give the wheel a choice.`;
   } else if (recentNames.length === 1) {
     note = `${recentNames[0]} was eaten recently, so it's less likely to come up.`;
   } else if (recentNames.length > 1) {
@@ -185,7 +190,7 @@ export function WheelScreen({ pool, otherMemberName, onBack, onSend }: Props) {
           <button type="button" className="chip press" aria-pressed={tags.length === 0} disabled={spinning} onClick={() => { resetResult(); setTags([]); }}>
             Anything
           </button>
-          {TAG_CHIPS.map((tag) => (
+          {tagChips.map((tag) => (
             <button key={tag} type="button" className="chip press" aria-pressed={tags.includes(tag)} disabled={spinning} onClick={() => toggleTag(tag)}>
               {formatTag(tag)}
             </button>
