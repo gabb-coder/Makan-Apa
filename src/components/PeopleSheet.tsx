@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
 import { needsLabel } from '../lib/diet';
 import { t } from '../lib/i18n';
-import { hostOf, knownRooms, roomTitle } from '../lib/session';
+import { hostOf, knownRooms, knownRoomTitle, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
 
@@ -134,7 +134,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
           {otherRooms.map((r) => (
             <button key={r.roomId} type="button" className="row press" onClick={() => onSwitchRoom(r.roomId)} style={{ borderRadius: 14, background: 'var(--bg)' }}>
               <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{knownRoomTitle(r)}</span>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                   {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
                 </span>

@@ -391,7 +391,7 @@ interface AllProps {
 }
 
 export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, here, members = [], onClose, onOpen }: AllProps) {
-  const needs = members.some((m) => m.diet.length > 0 || m.budget);
+  const needs = members.some((m) => (m.diet?.length ?? 0) > 0 || m.budget);
   const filters = needs ? [FILTERS[0], { label: tk('Suits everyone'), test: (s: Spot) => suitsEveryone(spotSuitability(s), members) }, ...FILTERS.slice(1)] : FILTERS;
   const [filter, setFilter] = useState(needs ? 'Suits everyone' : 'All');
   const test = (filters.find((f) => f.label === filter) ?? filters[0]).test;

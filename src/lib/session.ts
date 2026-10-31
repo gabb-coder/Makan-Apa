@@ -48,9 +48,16 @@ export interface KnownRoom {
   roomId: string;
   memberId: string;
   code: string;
-  title: string;
+  /** The room's own name, if it has one (shown via knownRoomTitle, in the current language). */
+  roomName?: string | null;
+  /** Saved by older versions; only used if roomName is missing. */
+  title?: string;
   /** Your name in that room. */
   name: string;
+}
+
+export function knownRoomTitle(r: KnownRoom): string {
+  return r.roomName !== undefined ? roomTitle({ name: r.roomName, code: r.code }) : (r.title ?? roomTitle({ name: null, code: r.code }));
 }
 
 export function knownRooms(): KnownRoom[] {
@@ -70,7 +77,7 @@ function remember({ room, me }: Pick<Session, 'room' | 'me'>) {
   storage.set(ROOM_KEY, room.id);
   storage.set(MEMBER_KEY, me.id);
   storage.set(LAST_CODE_KEY, room.code);
-  const entry: KnownRoom = { roomId: room.id, memberId: me.id, code: room.code, title: roomTitle(room), name: me.name };
+  const entry: KnownRoom = { roomId: room.id, memberId: me.id, code: room.code, roomName: room.name, name: me.name };
   saveKnownRooms([entry, ...knownRooms().filter((r) => r.roomId !== room.id)]);
 }
 

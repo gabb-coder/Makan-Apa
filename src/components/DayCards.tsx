@@ -172,18 +172,20 @@ interface SentProps {
   waitingFor: string;
   /** Who can answer, e.g. "Alex" or "Alex or Sam". */
   answerers: string;
+  /** More than one person can answer (the wording differs). */
+  several?: boolean;
   busy: boolean;
   onChange: () => void;
   onRetract: () => void;
 }
 
-export function SentCard({ me, food, method, waitingFor, answerers, busy, onChange, onRetract }: SentProps) {
+export function SentCard({ me, food, method, waitingFor, answerers, several = false, busy, onChange, onRetract }: SentProps) {
   return (
     <DeciderShell decider={me} label={t("Today's decider")}>
       <DeciderHeading
         decider={me}
         title={t('Sent to {name}', { name: waitingFor })}
-        sub={answerers.includes(' or ') ? t('Waiting for a yes from {names}…', { names: answerers }) : t('Waiting for {name} to say yes…', { name: answerers })}
+        sub={several ? t('Waiting for a yes from {names}…', { names: answerers }) : t('Waiting for {name} to say yes…', { name: answerers })}
       />
       <div
         style={{

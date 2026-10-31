@@ -29,7 +29,7 @@ export const translations: Translations = {
     SPIN: 'PUSING',
     '{names} is off the wheel today.': '{names} tiada dalam roda hari ini.',
     '{names} are off the wheel today.': '{names} tiada dalam roda hari ini.',
-    'Pick 2–{max} foods for your shortlist, or type your own.': 'Pilih 2–{max} makanan untuk pilihan awak, atau taip sendiri.',
+    'Pick 2–{max} foods for your shortlist, or type your own.': 'Pilih 2–{max} makanan untuk pilihan kamu, atau taip sendiri.',
     'Add at least 2 foods in the Food list to spin.': 'Tambah sekurang-kurangnya 2 makanan dalam Senarai makanan untuk pusing.',
     'Nothing matches those tags. Try fewer, or switch to “any”.': 'Tiada yang padan dengan tag tu. Kurangkan tag, atau tukar ke “mana-mana”.',
     'Only {name} matches. Pick fewer tags to give the wheel a choice.': 'Hanya {name} yang padan. Pilih kurang tag supaya roda ada pilihan.',
@@ -133,7 +133,7 @@ export const translations: Translations = {
 
     // Day errors
     'Today isn’t ready yet. Try again in a moment.': 'Hari ini belum sedia. Cuba lagi sekejap lagi.',
-    'It’s not your turn right now, or today’s already decided.': 'Bukan giliran awak sekarang, atau hari ini dah diputuskan.',
+    'It’s not your turn right now, or today’s already decided.': 'Bukan giliran kamu sekarang, atau hari ini dah diputuskan.',
     'That pick changed. Have another look.': 'Pilihan tu dah berubah. Tengok sekali lagi.',
     'Today isn’t ready yet.': 'Hari ini belum sedia.',
     'No vetoes left today, so this pick stands.': 'Veto hari ini dah habis, jadi pilihan ni kekal.',

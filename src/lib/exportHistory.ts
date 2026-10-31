@@ -34,7 +34,9 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
     .filter((e) => e.status === 'accepted')
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.meal ?? 'lunch').localeCompare(b.meal ?? 'lunch'))
     .map((e) => {
-      const food = entryFood(e, foodsById) ?? customFood('Unknown');
+      // The export stays in English whatever the app's language.
+      const food =
+        e.food_option_id && !foodsById.has(e.food_option_id) ? customFood('A deleted food') : (entryFood(e, foodsById) ?? customFood('Unknown'));
       const dayPicks = picksFor.get(e.id) ?? [];
       const secret = dayPicks.length > 0;
       const suggestedBy = dayPicks.filter((p) => p.food_text.trim().toLowerCase() === food.name.trim().toLowerCase()).map((p) => who(p.member_id));
@@ -45,7 +47,7 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
         .join('; ');
       return [
         { date: e.entry_date },
-        dayLabel(e.entry_date).split(' ')[0],
+        dayLabel(e.entry_date, 'en-GB').split(' ')[0],
         e.meal === 'dinner' ? 'Dinner' : 'Lunch',
         food.name,
         AREA_BY_NAME.get(food.name.toLowerCase()) ?? '',

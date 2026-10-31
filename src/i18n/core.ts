@@ -5,10 +5,12 @@ export const translations: Translations = {
   ms: {
     Today: 'Hari ini',
     Wheel: 'Roda',
-    'Food list': 'Senarai makanan',
+    'Food list': 'Makanan',
     History: 'Sejarah',
     Main: 'Utama',
     Language: 'Bahasa',
+    Host: 'Hos',
+    'You · Host': 'Kamu · Hos',
   },
   zh: {
     Today: '今天',
@@ -17,5 +19,7 @@ export const translations: Translations = {
     History: '记录',
     Main: '主菜单',
     Language: '语言',
+    Host: '房主',
+    'You · Host': '你 · 房主',
   },
 };

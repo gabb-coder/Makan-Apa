@@ -357,14 +357,15 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         </div>
         <div className="chip-row" role="group" aria-label={t('Diet')} style={{ flexWrap: 'wrap' }}>
           {MEMBER_NEEDS.map((n) => {
-            const on = me.diet.includes(n.key);
+            const myDiet = me.diet ?? [];
+            const on = myDiet.includes(n.key);
             return (
               <button
                 key={n.key}
                 type="button"
                 className="chip press"
                 aria-pressed={on}
-                onClick={() => attempt(() => updateMember(me.id, { diet: on ? me.diet.filter((d) => d !== n.key) : [...me.diet, n.key] }))}
+                onClick={() => attempt(() => updateMember(me.id, { diet: on ? myDiet.filter((d) => d !== n.key) : [...myDiet, n.key] }))}
               >
                 {t(n.label)}
               </button>

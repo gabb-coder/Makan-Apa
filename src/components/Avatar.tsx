@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n';
 import type { CSSProperties } from 'react';
 
 interface Props {
@@ -16,7 +17,7 @@ export function HostBadge({ you = false }: { you?: boolean }) {
       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" />
       </svg>
-      {you ? 'You · Host' : 'Host'}
+      {you ? t('You · Host') : t('Host')}
     </span>
   );
 }

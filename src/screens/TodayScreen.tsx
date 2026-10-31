@@ -202,6 +202,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           method={todayEntry.method}
           waitingFor={waitingFor}
           answerers={joinNames(others.map((m) => m.name), 'or')}
+          several={others.length > 1}
           busy={busy}
           onChange={() => setSheet('list')}
           onRetract={() => run(days.retract)}

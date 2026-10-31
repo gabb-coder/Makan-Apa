@@ -51,10 +51,13 @@ export interface Suitability {
 /** Why a food doesn't suit someone, or [] if it does. */
 export function clashes(food: Suitability, person: Needs): string[] {
   const reasons: string[] = [];
-  const has = (m: FoodMark) => food.diet.includes(m);
-  if ((person.diet.includes('halal') || person.diet.includes('no-pork')) && has('pork')) reasons.push(person.diet.includes('halal') ? tk('halal') : tk('no pork'));
-  if (person.diet.includes('no-beef') && has('beef')) reasons.push(tk('no beef'));
-  if (person.diet.includes('vegetarian') && !has('vegetarian')) reasons.push(tk('vegetarian'));
+  // Missing (rather than empty) lists come from rows saved before diets existed.
+  const marks = food.diet ?? [];
+  const needs = person.diet ?? [];
+  const has = (m: FoodMark) => marks.includes(m);
+  if ((needs.includes('halal') || needs.includes('no-pork')) && has('pork')) reasons.push(needs.includes('halal') ? tk('halal') : tk('no pork'));
+  if (needs.includes('no-beef') && has('beef')) reasons.push(tk('no beef'));
+  if (needs.includes('vegetarian') && !has('vegetarian')) reasons.push(tk('vegetarian'));
   if (person.budget && food.price && food.price > person.budget) reasons.push(tk('budget'));
   return reasons;
 }
@@ -80,7 +83,7 @@ export function clashText(found: { member: { name: string }; reasons: string[] }
 
 /** "Halal · Under RM15" for someone's needs, or null if they have none. */
 export function needsLabel(person: Needs): string | null {
-  const parts = MEMBER_NEEDS.filter((n) => person.diet.includes(n.key)).map((n) => t(n.label));
+  const parts = MEMBER_NEEDS.filter((n) => (person.diet ?? []).includes(n.key)).map((n) => t(n.label));
   const budget = BUDGETS.find((b) => b.value === person.budget && b.value !== null);
   if (budget) parts.push(t(budget.label));
   return parts.length ? parts.join(' · ') : null;

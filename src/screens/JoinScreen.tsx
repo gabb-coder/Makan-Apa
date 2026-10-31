@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { t } from '../lib/i18n';
-import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
+import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, knownRoomTitle, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
 
 const SLICES = [
   ['M160 160L160 10A150 150 0 0 1 266.07 53.93Z', '#A8D8A0'],
@@ -272,7 +272,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
             {rooms.map((r) => (
               <button key={r.roomId} type="button" className="row" onClick={() => onOpenRoom(r.roomId)}>
                 <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{knownRoomTitle(r)}</span>
                   <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                     {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
                   </span>
