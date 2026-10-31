@@ -26,7 +26,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await host.click('text=Pick from list');
       await scan(host, 'pick sheet');
       await host.click('.sheet button.row:has-text("Nasi Lemak")');
-      await guest.click('button:has-text("Let\\'s go")');
+      await guest.click('button:has-text("Let\'s go")');
       await expect(host.getByText("It's decided")).toBeVisible();
       await host.waitForTimeout(800);
       await scan(host, 'today');
