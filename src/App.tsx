@@ -290,6 +290,7 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
             entries={days.entries}
             vetoes={days.vetoes}
             foods={foods}
+            onToast={onToast}
           />
         ) : (
           loading
