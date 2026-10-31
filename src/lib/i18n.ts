@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { createElement, Fragment, useSyncExternalStore, type ReactNode } from 'react';
 import { storage } from './storage';
 
 /**
@@ -91,6 +91,18 @@ export function tk<S extends string>(en: S): S {
 export function t(en: string, vars?: Record<string, string | number>): string {
   const text = current === 'en' ? en : (DICTS[current][en] ?? en);
   return vars ? text.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : text;
+}
+
+/**
+ * Like t(), for sentences with markup inside: tNodes('Share code {code} so your kaki can join.',
+ * { code: <strong>{room.code}</strong> }) keeps the bold code wherever the language puts it.
+ */
+export function tNodes(en: string, nodes: Record<string, ReactNode>): ReactNode[] {
+  const text = t(en);
+  return text.split(/(\{\w+\})/).map((part, i) => {
+    const key = /^\{(\w+)\}$/.exec(part)?.[1];
+    return createElement(Fragment, { key: i }, key && key in nodes ? nodes[key] : part);
+  });
 }
 
 /** Keys with no translation yet, for the test that keeps dictionaries complete. */
