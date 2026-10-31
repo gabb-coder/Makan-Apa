@@ -57,3 +57,4 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
   } finally {
     await deleteRoom(wei);
   }
+});
