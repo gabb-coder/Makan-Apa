@@ -3,7 +3,7 @@ import { STARTER_PACK } from './foods';
 import { ICONS, COLOR_KEYS } from './palette';
 import { distanceKm, formatDistance, mapsNearUrl } from './geo';
 import { clockIn, dayHoursLabel, openLabel, openState, timeLabel } from './hours';
-import { AREA_CENTRES, SUNWAY_SPOTS, byDistance, isNearSunway, spotDetails, spotOpenNow, priceLabel, spotMapsUrl, spotsFor, spotsOfTheDay } from './nearby';
+import { AREA_CENTRES, SUNWAY_SPOTS, byDistance, isNearSunway, roomSpot, spotDetails, spotOpenNow, priceLabel, spotMapsUrl, spotsFor, spotsOfTheDay } from './nearby';
 
 describe('Sunway spots data', () => {
   it('has unique ids and only icons and colours the food list accepts', () => {
@@ -139,5 +139,23 @@ describe('opening hours', () => {
       }
     }
     expect(spotOpenNow(SUNWAY_SPOTS.find((s) => s.id === 'q-bistro')!, new Date('2026-10-31T04:30:00Z'))?.open).toBe(true);
+  });
+});
+
+describe('room spots', () => {
+  const row = { id: 'abc', room_id: 'r', name: 'Restoran Yong', area: 'SS15', note: 'Claypot chicken rice', price: 1, diet: 'pork' as const, lat: 3.0768, lng: 101.5875, added_by: 'wei', created_at: '' };
+
+  it('look like Sunway spots, with their own pin and maps link', () => {
+    const s = roomSpot(row);
+    expect(s).toMatchObject({ id: 'room:abc', name: 'Restoran Yong', area: 'SS15', knownFor: 'Claypot chicken rice', price: 1, diet: 'pork', room: { id: 'abc', addedBy: 'wei' } });
+    expect(spotMapsUrl(s)).toBe('https://www.google.com/maps/search/?api=1&query=3.0768%2C101.5875');
+    expect(spotsFor({ name: 'Restoran Yong', tags: [] }, 3, [s, ...SUNWAY_SPOTS])[0].id).toBe('room:abc');
+  });
+
+  it('fill in what was left out', () => {
+    const s = roomSpot({ ...row, area: null, note: null, price: null, diet: null, lat: null, lng: null });
+    expect(s.area).toBe('Added by your room');
+    expect(priceLabel(s.price)).toBe('Price not set');
+    expect(spotMapsUrl(s)).toBe('https://www.google.com/maps/search/?api=1&query=Restoran%20Yong');
   });
 });

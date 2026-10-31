@@ -1,4 +1,5 @@
 import type { Food } from './foods';
+import type { RoomSpotRow } from './supabase';
 import { distanceKm, type LatLng } from './geo';
 import { clockIn, openLabel, openState } from './hours';
 import { SPOT_DETAILS, type SpotDetails } from './spotDetails';
@@ -17,8 +18,8 @@ export interface Spot {
   name: string;
   area: string;
   knownFor: string;
-  /** 1 = under ~RM15, 2 = ~RM15–50, 3 = more. */
-  price: 1 | 2 | 3;
+  /** 1 = under ~RM15, 2 = ~RM15–50, 3 = more; null if a room spot didn't say. */
+  price: 1 | 2 | 3 | null;
   tags: string[];
   /** Words that tie the spot to a food on the list, e.g. "nasi lemak". */
   matches: string[];
@@ -26,6 +27,30 @@ export interface Spot {
   color: FoodColor;
   /** Only stated where a source does: on-campus halal, or a pork dish. */
   diet?: 'halal' | 'pork';
+  /** A place someone in the room added (see room_spots), with its pin if they set one. */
+  room?: { id: string; addedBy: string | null };
+  details?: SpotDetails;
+}
+
+/** A room's own spot, shaped like the Sunway ones. */
+export function roomSpot(row: RoomSpotRow): Spot {
+  let hash = 0;
+  for (const ch of row.name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const colors: FoodColor[] = ['leaf', 'mustard', 'peach', 'tomato', 'sky', 'plum', 'sand', 'teal'];
+  return {
+    id: `room:${row.id}`,
+    name: row.name,
+    area: row.area?.trim() || 'Added by your room',
+    knownFor: row.note?.trim() || 'A place someone in your room added',
+    price: (row.price as 1 | 2 | 3 | null) ?? null,
+    tags: [],
+    matches: [row.name.toLowerCase()],
+    icon: 'bowl',
+    color: colors[hash % colors.length],
+    diet: row.diet ?? undefined,
+    room: { id: row.id, addedBy: row.added_by },
+    details: row.lat !== null && row.lng !== null ? { at: { lat: row.lat, lng: row.lng }, pin: 'exact' } : undefined,
+  };
 }
 
 export const SUNWAY_SPOTS: Spot[] = [
@@ -492,8 +517,8 @@ export const SUNWAY_CENTRE = AREA_CENTRES['On campus'];
 /** Beyond this, the Sunway picks aren't "near you" and the app searches around you instead. */
 export const NEAR_SUNWAY_KM = 8;
 
-export function spotDetails(spot: Pick<Spot, 'id'>): SpotDetails {
-  return SPOT_DETAILS[spot.id] ?? {};
+export function spotDetails(spot: Pick<Spot, 'id' | 'details'>): SpotDetails {
+  return spot.details ?? SPOT_DETAILS[spot.id] ?? {};
 }
 
 /** The spot's own pin, or the middle of its area. */
@@ -547,18 +572,24 @@ export const NEAR_YOU_SEARCHES: { label: string; query: string; icon: FoodIconNa
 ];
 
 export function spotMapsUrl(spot: Spot): string {
+  if (spot.room) {
+    const at = spot.details?.at;
+    const query = at ? `${at.lat},${at.lng}` : `${spot.name} ${spot.area === 'Added by your room' ? '' : spot.area}`.trim();
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
   const where = spot.area === 'On campus' ? 'Sunway University' : /sunway|subang/i.test(spot.area) ? spot.area : `${spot.area} Bandar Sunway`;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${spot.name} ${where}`)}`;
 }
 
 export function priceLabel(price: Spot['price']): string {
+  if (price === null) return 'Price not set';
   return price === 1 ? 'Under RM15' : price === 2 ? 'RM15–50' : 'RM50+';
 }
 
 /** Spots that fit a food: the longest dish-name match counts most, then shared tags. */
-export function spotsFor(food: Pick<Food, 'name' | 'tags'>, limit = 3): Spot[] {
+export function spotsFor(food: Pick<Food, 'name' | 'tags'>, limit = 3, pool: Spot[] = SUNWAY_SPOTS): Spot[] {
   const name = food.name.toLowerCase();
-  return SUNWAY_SPOTS.map((spot) => {
+  return pool.map((spot) => {
     const nameHit = Math.max(0, ...spot.matches.filter((m) => name.includes(m) || m.includes(name)).map((m) => m.length));
     const tagHits = spot.tags.filter((t) => food.tags.includes(t)).length;
     const exact = spot.name.toLowerCase() === name ? 10_000 : 0; // picked straight from Near Sunway

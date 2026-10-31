@@ -15,13 +15,13 @@ import { BillLine, BillSheet, RatingRow } from '../components/MealExtras';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
-import { LocationLine, NearbyAllSheet, NearbyList, NearbyStrip, NearYouStrip, SpotSheet } from '../components/Nearby';
+import { AddSpotSheet, LocationLine, NearbyAllSheet, NearbyList, NearbyStrip, NearYouStrip, SpotSheet } from '../components/Nearby';
 import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
 import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
 import { shareInvite } from '../lib/invite';
 import { roomTitle } from '../lib/session';
 import { useLocation } from '../lib/location';
-import { byDistance, isNearSunway, NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
+import { byDistance, isNearSunway, NEARBY_LABEL, roomSpot, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
@@ -65,6 +65,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [allSpots, setAllSpots] = useState(false);
   const showNearby = usePref(nearbyPref) === 'on';
   const [billOpen, setBillOpen] = useState(false);
+  const [addingSpot, setAddingSpot] = useState(false);
+  const roomSpots = useMemo(() => extras.spots.map(roomSpot), [extras.spots]);
   const location = useLocation();
   const here = location.status === 'ready' ? location.here : undefined;
   const nearSunway = !here || isNearSunway(here);
@@ -166,7 +168,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         food={todayFood}
         tomorrowText={tomorrowText}
         here={here}
-        nearby={showNearby ? <NearbyList spots={suiting(spotsFor(todayFood, 6)).slice(0, 3)} here={here} /> : null}
+        nearby={showNearby ? <NearbyList spots={suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).slice(0, 3)} here={here} /> : null}
         extras={
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 8 }}>
             <RatingRow entryId={todayEntry.id} ratings={extras.ratings} meId={me.id} onRate={(r) => run(() => extras.rate(todayEntry.id, r))} />
@@ -481,13 +483,17 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                   onClick={() => setAllSpots(true)}
                   style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
                 >
-                  {nearSunway ? `See all ${SUNWAY_SPOTS.length}` : `Sunway picks`}
+                  {nearSunway ? `See all ${SUNWAY_SPOTS.length + roomSpots.length}` : `Sunway picks`}
                 </button>
               </div>
               {here && !nearSunway ? (
                 <NearYouStrip here={here} />
               ) : (
-                <NearbyStrip spots={suiting(here ? byDistance(spotsOfTheDay(today), here) : spotsOfTheDay(today)).slice(0, 8)} here={here} onOpen={setSpot} />
+                <NearbyStrip
+                  spots={suiting(here ? byDistance([...roomSpots, ...spotsOfTheDay(today)], here) : [...roomSpots, ...spotsOfTheDay(today)]).slice(0, 8 + Math.min(roomSpots.length, 4))}
+                  here={here}
+                  onOpen={setSpot}
+                />
               )}
               <LocationLine location={location} nearSunway={nearSunway} />
             </section>
@@ -532,12 +538,34 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         />
       )}
 
-      {allSpots && !spot && <NearbyAllSheet spots={SUNWAY_SPOTS} here={here} members={members} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
+      {addingSpot && (
+        <AddSpotSheet
+          here={here}
+          onSave={async (row) => {
+            await extras.addSpot(row);
+            onToast(`${row.name} added to your room's spots.`);
+          }}
+          onClose={() => setAddingSpot(false)}
+        />
+      )}
+
+      {allSpots && !spot && !addingSpot && <NearbyAllSheet spots={SUNWAY_SPOTS} roomSpots={roomSpots} onAddSpot={() => setAddingSpot(true)} here={here} members={members} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
 
       {spot && (
         <SpotSheet
           spot={spot}
           here={here}
+          addedBy={spot.room?.addedBy ? (spot.room.addedBy === me.id ? 'you' : memberById.get(spot.room.addedBy)?.name) : undefined}
+          onRemove={
+            spot.room
+              ? () =>
+                  run(async () => {
+                    await extras.removeSpot(spot.room!.id);
+                    setSpot(null);
+                    onToast(`${spot.name} removed.`);
+                  })
+              : undefined
+          }
           inList={foods.some((f) => f.name.toLowerCase() === spot.name.toLowerCase())}
           pickLabel={spotPickLabel}
           onClose={() => setSpot(null)}

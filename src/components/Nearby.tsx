@@ -233,6 +233,9 @@ export function LocationLine({ location, nearSunway }: { location: LocationState
 interface SheetProps {
   spot: Spot;
   here?: LatLng;
+  /** Who added a room spot, and removing it. */
+  addedBy?: string;
+  onRemove?: () => void;
   inList: boolean;
   /** Present when it's my turn and today isn't decided. */
   pickLabel?: string;
@@ -241,7 +244,7 @@ interface SheetProps {
   onPick?: () => void;
 }
 
-export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPick }: SheetProps) {
+export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, onClose, onAdd, onPick }: SheetProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -255,7 +258,7 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
         <header style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <FoodTile food={spot} size={56} style={{ borderRadius: 16 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flexGrow: 1 }}>
-            <span className="eyebrow">Near {NEARBY_LABEL} · {spot.area}</span>
+            <span className="eyebrow">{spot.room ? `Your room's spot${addedBy ? ` · added by ${addedBy}` : ''}` : `Near ${NEARBY_LABEL} · ${spot.area}`}</span>
             <h2 id="spot-title" className="title title--sm" style={{ fontSize: 24, overflowWrap: 'anywhere' }}>
               {spot.name}
             </h2>
@@ -284,7 +287,7 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
             </span>
           ))}
         </div>
-        <SpotHours spot={spot} />
+        {spot.room ? <span style={{ fontSize: 13, color: 'var(--muted)' }}>{spot.area}</span> : <SpotHours spot={spot} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {onPick && pickLabel && (
             <button type="button" className="btn btn--primary press" style={{ height: 52 }} onClick={onPick}>
@@ -306,8 +309,13 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
           </button>
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-          From local food guides and map listings. Hours change, so check Google Maps before a special trip.
+          {spot.room ? 'Added by someone in your room.' : 'From local food guides and map listings. Hours change, so check Google Maps before a special trip.'}
         </p>
+        {onRemove && (
+          <button type="button" className="btn btn--danger press" onClick={onRemove} style={{ height: 44 }}>
+            Remove from your room's spots
+          </button>
+        )}
       </div>
     </div>
   );
@@ -361,6 +369,9 @@ function SpotHours({ spot }: { spot: Spot }) {
 /** Every spot, grouped by area (nearest area first when location is on). */
 interface AllProps {
   spots: Spot[];
+  /** Places the room added, listed first. */
+  roomSpots?: Spot[];
+  onAddSpot?: () => void;
   here?: LatLng;
   /** People in the room: with any diet or budget needs, "Suits everyone" is offered first. */
   members?: Needs[];
@@ -368,11 +379,13 @@ interface AllProps {
   onOpen: (spot: Spot) => void;
 }
 
-export function NearbyAllSheet({ spots: allSpots, here, members = [], onClose, onOpen }: AllProps) {
+export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, here, members = [], onClose, onOpen }: AllProps) {
   const needs = members.some((m) => m.diet.length > 0 || m.budget);
   const filters = needs ? [FILTERS[0], { label: 'Suits everyone', test: (s: Spot) => suitsEveryone(spotSuitability(s), members) }, ...FILTERS.slice(1)] : FILTERS;
   const [filter, setFilter] = useState(needs ? 'Suits everyone' : 'All');
-  const spots = allSpots.filter((filters.find((f) => f.label === filter) ?? filters[0]).test);
+  const test = (filters.find((f) => f.label === filter) ?? filters[0]).test;
+  const spots = allSpots.filter(test);
+  const ours = roomSpots.filter((s) => test(s) || filter === 'Open now');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -410,6 +423,36 @@ export function NearbyAllSheet({ spots: allSpots, here, members = [], onClose, o
             Only places a source describes as halal. Others may be halal too; check before you go.
           </p>
         )}
+        {(ours.length > 0 || onAddSpot) && (
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="section-label">Your room's spots</span>
+            {ours.length > 0 && (
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {ours.map((s) => (
+                  <button key={s.id} type="button" className="row" onClick={() => onOpen(s)}>
+                    <FoodTile food={s} size={40} />
+                    <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>{s.name}</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {here && s.details?.at ? `${distanceText(s, here)} · ` : ''}
+                        {s.knownFor}
+                      </span>
+                    </span>
+                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                      <DietBadge diet={s.diet} />
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{priceLabel(s.price)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {onAddSpot && (
+              <button type="button" className="btn btn--secondary press" onClick={onAddSpot}>
+                Add a place
+              </button>
+            )}
+          </section>
+        )}
         {areas.map((area) => (
           <section key={area} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span className="section-label">
@@ -437,6 +480,124 @@ export function NearbyAllSheet({ spots: allSpots, here, members = [], onClose, o
           </section>
         ))}
       </div>
+    </div>
+  );
+}
+
+interface AddSpotProps {
+  here?: LatLng;
+  onSave: (spot: { name: string; area: string | null; note: string | null; price: number | null; diet: 'halal' | 'pork' | null; lat: number | null; lng: number | null }) => Promise<void>;
+  onClose: () => void;
+}
+
+/** Add a place for the whole room: name, where, what it's known for, price, and optionally a pin. */
+export function AddSpotSheet({ here, onSave, onClose }: AddSpotProps) {
+  const [name, setName] = useState('');
+  const [area, setArea] = useState('');
+  const [note, setNote] = useState('');
+  const [price, setPrice] = useState<number | null>(null);
+  const [diet, setDiet] = useState<'halal' | 'pork' | null>(null);
+  const [pinHere, setPinHere] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const save = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        area: area.trim() || null,
+        note: note.trim() || null,
+        price,
+        diet,
+        lat: pinHere && here ? here.lat : null,
+        lng: pinHere && here ? here.lng : null,
+      });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add that place.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <form
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-spot-title"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h2 id="add-spot-title" className="title title--sm" style={{ fontSize: 24 }}>
+            Add a place
+          </h2>
+          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="spot-name" className="field-label">Name</label>
+          <input id="spot-name" className="input" maxLength={60} autoFocus placeholder="e.g. Restoran Yong" value={name} onChange={(e) => setName(e.target.value)} style={{ height: 50 }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="spot-area" className="field-label">Where <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span></label>
+          <input id="spot-area" className="input" maxLength={60} placeholder="e.g. SS15, or Sunway Pyramid LG2" value={area} onChange={(e) => setArea(e.target.value)} style={{ height: 50 }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="spot-note" className="field-label">Known for <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span></label>
+          <input id="spot-note" className="input" maxLength={200} placeholder="e.g. Claypot chicken rice, closed Mondays" value={note} onChange={(e) => setNote(e.target.value)} style={{ height: 50 }} />
+        </div>
+        <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Price per person</legend>
+          <div className="segmented" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+            {([[null, 'Not sure'], [1, 'Under RM15'], [2, 'RM15–50'], [3, 'RM50+']] as const).map(([v, label]) => (
+              <button key={label} type="button" aria-pressed={price === v} onClick={() => setPrice(v)} style={{ fontSize: 13 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Diet</legend>
+          <div className="segmented" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+            {([[null, 'Not sure'], ['halal', 'Halal'], ['pork', 'Serves pork']] as const).map(([v, label]) => (
+              <button key={label} type="button" aria-pressed={diet === v} onClick={() => setDiet(v)} style={{ fontSize: 13 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        {here && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, cursor: 'pointer' }}>
+            <input type="checkbox" checked={pinHere} onChange={(e) => setPinHere(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--accent)' }} />
+            <span style={{ fontSize: 14 }}>I'm there now: pin it where I am</span>
+          </label>
+        )}
+        {error && (
+          <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--danger)' }}>
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn btn--primary press" disabled={busy || !name.trim()} style={{ height: 52 }}>
+          {busy ? 'Adding…' : 'Add for the whole room'}
+        </button>
+      </form>
     </div>
   );
 }
