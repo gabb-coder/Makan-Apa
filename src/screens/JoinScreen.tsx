@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CODE_LENGTH, createRoom, JoinError, joinRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
+import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
 
 const SLICES = [
   ['M160 160L160 10A150 150 0 0 1 266.07 53.93Z', '#A8D8A0'],
@@ -14,7 +14,15 @@ const SLICES = [
 
 const fadeUp = (delay: number) => `fadeUpJoin 0.6s ${delay}s cubic-bezier(0.2, 0.8, 0.2, 1) both`;
 
-export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, message?: string) => void; notice?: string }) {
+interface Props {
+  onJoined: (s: Session, message?: string) => void;
+  notice?: string;
+  /** Rooms this phone is already in, to go back to. */
+  rooms?: KnownRoom[];
+  onOpenRoom?: (roomId: string) => void;
+}
+
+export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) {
   const [name, setName] = useState('');
   const [code, setCode] = useState(suggestedCode);
   const [busy, setBusy] = useState<'join' | 'create' | null>(null);
@@ -243,6 +251,25 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
           {busy === 'create' ? 'Creating…' : naming ? 'Create room' : 'Create a new room'}
         </button>
       </form>
+
+      {rooms.length > 0 && onOpenRoom && (
+        <section style={{ position: 'relative', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, animation: fadeUp(0.7) }}>
+          <span className="section-label">Your rooms on this phone</span>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {rooms.map((r) => (
+              <button key={r.roomId} type="button" className="row" onClick={() => onOpenRoom(r.roomId)}>
+                <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    Code {r.code} · you're {r.name}
+                  </span>
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Open</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <p style={{ position: 'relative', margin: '24px 0 0', textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
         No sign-up. Share the room code with your makan kakis.

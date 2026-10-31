@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { disableReminders } from './lib/push';
-import { forgetSession, leaveRoom, restoreSession, roomTitle, type Session } from './lib/session';
+import { closeCurrentRoom, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
 import { useDays } from './lib/useDays';
@@ -82,6 +82,10 @@ export default function App() {
     body = (
       <JoinScreen
         notice={state.notice}
+        rooms={knownRooms()}
+        onOpenRoom={(roomId) => {
+          if (selectRoom(roomId)) restore();
+        }}
         onJoined={(session, message) => {
           generation.current++;
           // Drop any ?join= invite code from the address bar now it's been used.
@@ -101,6 +105,16 @@ export default function App() {
           generation.current++;
           void disableReminders().catch(() => {});
           forgetSession();
+          // Open another room on this phone if there is one.
+          if (knownRooms().length) restore();
+          else setState({ status: 'join' });
+        }}
+        onSwitchRoom={(roomId) => {
+          if (selectRoom(roomId)) restore();
+        }}
+        onAddRoom={() => {
+          generation.current++;
+          closeCurrentRoom();
           setState({ status: 'join' });
         }}
       />
@@ -154,7 +168,15 @@ function Toast({ message, raised }: { message: string; raised: boolean }) {
   );
 }
 
-function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m: string) => void; onLeave: () => void }) {
+interface RoomAppProps {
+  session: Session;
+  onToast: (m: string) => void;
+  onLeave: () => void;
+  onSwitchRoom: (roomId: string) => void;
+  onAddRoom: () => void;
+}
+
+function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomAppProps) {
   const [route, setRoute] = useState<Route>(routeFromHash);
   const { room, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom } = useRoomData(session.room, session.members, session.me.id);
   const me = members.find((m) => m.id === session.me.id) ?? session.me;
@@ -237,6 +259,8 @@ function RoomApp({ session, onToast, onLeave }: { session: Session; onToast: (m:
             onOpenSettings={() => go('settings')}
             onSpin={() => go('wheel')}
             onSeeAll={() => go('history')}
+            onSwitchRoom={onSwitchRoom}
+            onAddRoom={onAddRoom}
             onToast={onToast}
           />
         ) : (

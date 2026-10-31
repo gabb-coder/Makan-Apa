@@ -44,12 +44,14 @@ interface Props {
   onOpenSettings: () => void;
   onSpin: () => void;
   onSeeAll: () => void;
+  onSwitchRoom: (roomId: string) => void;
+  onAddRoom: () => void;
   onToast: (message: string) => void;
 }
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onToast }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
@@ -459,6 +461,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             setPeopleOpen(false);
             onOpenSettings();
           }}
+          onSwitchRoom={onSwitchRoom}
+          onAddRoom={onAddRoom}
         />
       )}
 
