@@ -139,7 +139,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
                   {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
                 </span>
               </span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>{t('Switch')}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-text)', flexShrink: 0 }}>{t('Switch')}</span>
             </button>
           ))}
           <button type="button" className="btn btn--secondary press" onClick={onAddRoom}>

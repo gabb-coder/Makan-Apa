@@ -223,7 +223,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
             <button
               type="button"
               onClick={() => setShowAllEaten((s) => !s)}
-              style={{ minHeight: 32, padding: 0, border: 'none', background: 'none', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}
+              style={{ minHeight: 32, padding: 0, border: 'none', background: 'none', fontSize: 13, fontWeight: 700, color: 'var(--accent-text)' }}
             >
               {showAllEaten ? t('Show top 3') : t('See top {n}', { n: Math.min(10, stats.mostEaten.length) })}
             </button>

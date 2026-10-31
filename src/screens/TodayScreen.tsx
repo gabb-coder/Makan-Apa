@@ -323,7 +323,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               {room.name ? ` · ${room.name}` : ''}
             </span>
             <h1 className="title">
-              Makan <span style={{ color: 'var(--accent)' }}>apa?</span>
+              Makan <span style={{ color: 'var(--accent-text)' }}>apa?</span>
             </h1>
           </div>
           <button
@@ -459,7 +459,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               <button
                 type="button"
                 onClick={onSeeAll}
-                style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
+                style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent-text)' }}
               >
                 {t('See all')}
               </button>
@@ -497,7 +497,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                 <button
                   type="button"
                   onClick={() => setAllSpots(true)}
-                  style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
+                  style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent-text)' }}
                 >
                   {nearSunway ? t('See all {n}', { n: SUNWAY_SPOTS.length + roomSpots.length }) : t('Sunway picks')}
                 </button>

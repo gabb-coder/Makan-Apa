@@ -277,7 +277,7 @@ export function MoneyCard({
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void act(s.id, () => onUndo(s.id))}
-                  style={{ minHeight: 36, border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 700, fontSize: 13 }}
+                  style={{ minHeight: 36, border: 'none', background: 'none', color: 'var(--accent-text)', fontWeight: 700, fontSize: 13 }}
                 >
                   {t('Undo')}
                 </button>

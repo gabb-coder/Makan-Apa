@@ -153,7 +153,7 @@ function Splash({ children }: { children: React.ReactNode }) {
   return (
     <div className="app" style={{ justifyContent: 'center', padding: 24, gap: 16 }}>
       <h1 className="title" style={{ fontSize: 44, lineHeight: 0.95 }}>
-        Makan <span style={{ color: 'var(--accent)' }}>apa?</span>
+        Makan <span style={{ color: 'var(--accent-text)' }}>apa?</span>
       </h1>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--muted)' }}>{children}</div>
     </div>

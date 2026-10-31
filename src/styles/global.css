@@ -10,6 +10,8 @@
   --muted: #66666d;
   --on-ink: #ffffff;
   --accent: #cc3f17;
+  /* The accent as text: same in light, lighter on dark backgrounds to stay readable. */
+  --accent-text: #cc3f17;
   --accent-ink: #a8330f;
   --accent-tint: #fbede8;
   --member-2: #2f6fd6;
@@ -42,7 +44,8 @@
   --ink-2: #c8c8cd;
   --muted: #9b9ba3;
   --on-ink: #121214;
-  --accent: #d4471d;
+  --accent: #cc3f17;
+  --accent-text: #ff8a63;
   --accent-ink: #ff9d7d;
   --accent-tint: #3b1c12;
   --track: #2a2a2f;
@@ -68,7 +71,8 @@
     --ink-2: #c8c8cd;
     --muted: #9b9ba3;
     --on-ink: #121214;
-    --accent: #d4471d;
+    --accent: #cc3f17;
+    --accent-text: #ff8a63;
     --accent-ink: #ff9d7d;
     --accent-tint: #3b1c12;
     --track: #2a2a2f;
@@ -118,7 +122,7 @@ button:disabled {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 a:hover {
@@ -362,7 +366,7 @@ input[type='date'].input::-webkit-date-and-time-value {
 
 .tabbar button[aria-current='page'] {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Motion ---------- */

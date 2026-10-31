@@ -127,7 +127,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
           <span
             style={{
               display: 'inline-block',
-              color: 'var(--accent)',
+              color: 'var(--accent-text)',
               transformOrigin: '30% 90%',
               animation: 'popInTilt 0.65s 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both, wiggleSoft 4s 1.8s ease-in-out infinite',
             }}
@@ -277,7 +277,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
                     {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
                   </span>
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>{t('Open')}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-text)', flexShrink: 0 }}>{t('Open')}</span>
               </button>
             ))}
           </div>

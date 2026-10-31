@@ -194,7 +194,7 @@ export function NearYouStrip({ here }: { here: LatLng }) {
 
 /** The line under the Today ideas: turn location on, see that it's on, or why it can't be. */
 export function LocationLine({ location, nearSunway }: { location: LocationState; nearSunway: boolean }) {
-  const link = { padding: '10px 0', border: 'none', background: 'none', fontSize: 13, fontWeight: 700, color: 'var(--accent)' } as const;
+  const link = { padding: '10px 0', border: 'none', background: 'none', fontSize: 13, fontWeight: 700, color: 'var(--accent-text)' } as const;
   const note = { fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' } as const;
   if (location.status === 'off')
     return (
@@ -361,7 +361,7 @@ function SpotHours({ spot }: { spot: Spot }) {
           <OpenText spot={spot} />
         </span>
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{mallHours ? t('(mall hours)') : ''}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{open ? t('Hide hours') : t('All hours')}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--accent-text)' }}>{open ? t('Hide hours') : t('All hours')}</span>
       </button>
       {open && (
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '48px 1fr', rowGap: 4, fontSize: 13 }}>

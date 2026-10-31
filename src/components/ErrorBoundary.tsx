@@ -19,7 +19,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { crashed:
     return (
       <div className="app" style={{ justifyContent: 'center', padding: 24, gap: 16 }}>
         <h1 className="title" style={{ fontSize: 40, lineHeight: 0.95 }}>
-          Makan <span style={{ color: 'var(--accent)' }}>apa?</span>
+          Makan <span style={{ color: 'var(--accent-text)' }}>apa?</span>
         </h1>
         <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--muted)' }}>{t("Something went wrong on this screen. We've noted it. Reloading usually fixes it.")}</p>
         <button type="button" className="btn btn--primary press" onClick={() => location.reload()}>
