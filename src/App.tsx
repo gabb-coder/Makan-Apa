@@ -5,6 +5,8 @@ import { closeCurrentRoom, forgetSession, knownRooms, leaveRoom, restoreSession,
 import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
+import type { Meal } from './lib/supabase';
+import { localHour } from './lib/dates';
 import { useDays } from './lib/useDays';
 import { usePresence } from './lib/usePresence';
 import { useToday } from './lib/useToday';
@@ -192,7 +194,10 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
     }
   }, [removed]);
   const today = useToday(room.timezone);
-  const days = useDays(room, members, me.id, today);
+  // Lunch or dinner, for rooms that decide both: dinner from 3pm in the room's timezone.
+  const [mealChoice, setMeal] = useState<Meal>(() => (localHour(room.timezone) >= 15 ? 'dinner' : 'lunch'));
+  const meal: Meal = room.meals === 'both' ? mealChoice : 'lunch';
+  const days = useDays(room, members, me.id, today, meal);
   const extras = useRoomExtras(room.id, me.id);
   const foodsApi = useFoods(room, me.id, days.entries, today, extras.ratings);
   const online = usePresence(room.id, me.id);
@@ -212,7 +217,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   // Today's decider and what the wheel may do about it.
   const memberById = new Map(members.map((m) => [m.id, m]));
   const entry = days.todayEntry;
-  const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today);
+  const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal);
   const isDecider = decider?.id === me.id;
   const others = members.filter((m) => m.id !== decider?.id);
   const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : 'everyone';
@@ -275,6 +280,8 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
             onSwitchRoom={onSwitchRoom}
             onAddRoom={onAddRoom}
             extras={extras}
+            meal={meal}
+            onMealChange={room.meals === 'both' ? setMeal : undefined}
             onToast={onToast}
           />
         ) : (

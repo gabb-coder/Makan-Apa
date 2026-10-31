@@ -6,7 +6,7 @@ import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
 import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
-import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
+import { disableReminders, enableReminders, pushSupport, reminderStatus, setWeeklyRecap } from '../lib/push';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
@@ -716,7 +716,7 @@ function hourLabel(h: number): string {
 /** Daily push reminder for this phone (sent by the send-reminders Edge Function). */
 function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; onToast: (m: string) => void }) {
   const support = pushSupport();
-  const [status, setStatus] = useState<{ hour: number } | null | 'loading'>('loading');
+  const [status, setStatus] = useState<{ hour: number; recap?: boolean } | null | 'loading'>('loading');
   const [hour, setHour] = useState(11);
   const [busy, setBusy] = useState(false);
 
@@ -755,7 +755,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
       async () => {
         if (next) {
           await enableReminders(me.id, hour);
-          setStatus({ hour });
+          setStatus({ hour, recap: true });
         } else {
           await disableReminders();
           setStatus(null);
@@ -801,7 +801,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
               setHour(h);
               run(async () => {
                 await enableReminders(me.id, h);
-                setStatus({ hour: h });
+                setStatus((s) => ({ hour: h, recap: s !== 'loading' && s ? s.recap : true }));
               }, `Reminder moved to ${hourLabel(h)}.`);
             }}
             style={{ width: 'auto', height: 44 }}
@@ -813,6 +813,28 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
             ))}
           </select>
         </div>
+      )}
+      {on && status !== 'loading' && status && (
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Weekly recap</span>
+            <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>Sunday at 8pm: the week's meals, favourite, vetoes and who paid most.</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={status.recap !== false}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.checked;
+              run(async () => {
+                await setWeeklyRecap(next);
+                setStatus({ ...status, recap: next });
+              }, next ? 'Weekly recap on.' : 'Weekly recap off.');
+            }}
+          />
+        </label>
       )}
       {on && (
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>Times are in the room’s timezone ({room.timezone.replace(/_/g, ' ')}).</span>

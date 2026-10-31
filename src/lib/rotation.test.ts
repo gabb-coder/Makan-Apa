@@ -47,3 +47,12 @@ describe('date helpers', () => {
     expect(dayMonthLabel('2026-10-30')).toBe('Fri 30 Oct');
   });
 });
+
+describe('dinner rotation', () => {
+  it('gives dinner to the next person, so nobody decides both', () => {
+    const ms = [member('a', 0), member('b', 1), member('c', 2)];
+    expect(deciderFor(ms, '2026-10-01', '2026-10-01')?.id).toBe('a');
+    expect(deciderFor(ms, '2026-10-01', '2026-10-01', 'dinner')?.id).toBe('b');
+    expect(deciderFor(ms, '2026-10-01', '2026-10-03', 'dinner')?.id).toBe('a');
+  });
+});

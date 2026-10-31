@@ -32,7 +32,7 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
 
   const rows = entries
     .filter((e) => e.status === 'accepted')
-    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+    .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.meal ?? 'lunch').localeCompare(b.meal ?? 'lunch'))
     .map((e) => {
       const food = entryFood(e, foodsById) ?? customFood('Unknown');
       const dayPicks = picksFor.get(e.id) ?? [];
@@ -46,6 +46,7 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
       return [
         { date: e.entry_date },
         dayLabel(e.entry_date).split(' ')[0],
+        e.meal === 'dinner' ? 'Dinner' : 'Lunch',
         food.name,
         AREA_BY_NAME.get(food.name.toLowerCase()) ?? '',
         secret ? 'Everyone' : who(e.decider_id),
@@ -70,6 +71,7 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
     columns: [
       { header: 'Date', width: 12 },
       { header: 'Day', width: 6 },
+      { header: 'Meal', width: 8 },
       { header: 'Food / place', width: 28 },
       { header: 'Area', width: 22 },
       { header: 'Chosen by', width: 16 },

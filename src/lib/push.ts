@@ -25,14 +25,23 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
 }
 
 /** This browser's reminder for `memberId`, if it has one. */
-export async function reminderStatus(memberId: string): Promise<{ hour: number } | null> {
+export async function reminderStatus(memberId: string): Promise<{ hour: number; recap: boolean } | null> {
   if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return null;
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return null;
   const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
-  const row = (data as { member_id: string; remind_hour: number }[] | null)?.[0];
-  return row && row.member_id === memberId ? { hour: row.remind_hour } : null;
+  const row = (data as { member_id: string; remind_hour: number; weekly_recap?: boolean }[] | null)?.[0];
+  return row && row.member_id === memberId ? { hour: row.remind_hour, recap: row.weekly_recap ?? true } : null;
+}
+
+/** Turn the Sunday-evening weekly recap on or off for this browser. */
+export async function setWeeklyRecap(on: boolean): Promise<void> {
+  const reg = await navigator.serviceWorker?.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return;
+  const { error } = await supabase.rpc('set_weekly_recap', { p_endpoint: sub.endpoint, p_on: on });
+  if (error) throw new Error(error.message);
 }
 
 /** Ask for permission (needs a tap), subscribe this browser and save it for `memberId`. */

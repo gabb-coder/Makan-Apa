@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deciderFor } from './rotation';
-import { supabase, type DayEntryRow, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
+import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
 
 /** What the decider is proposing: a pool food, or a name typed in. */
 export type Pick = { foodId: string; name: string } | { foodId: null; name: string };
@@ -22,7 +22,7 @@ function stripJoin({ day_entries: _, ...veto }: VetoWithEntry): VetoRow {
  * The room's day entries and vetoes, kept live, plus the propose / accept / veto actions
  * for today (SPEC.md section 6, day entry lifecycle).
  */
-export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string) {
+export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string, meal: Meal = 'lunch') {
   const [entries, setEntries] = useState<DayEntryRow[] | null>(null);
   const [vetoes, setVetoes] = useState<VetoRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -75,12 +75,12 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     };
   }, [room.id, load]);
 
-  const todayEntry = entries?.find((e) => e.entry_date === today) ?? null;
+  const todayEntry = entries?.find((e) => e.entry_date === today && (e.meal ?? 'lunch') === meal) ?? null;
   const todayVetoes = useMemo(
     () => (todayEntry ? vetoes.filter((v) => v.day_entry_id === todayEntry.id) : []),
     [vetoes, todayEntry],
   );
-  const computedDecider = deciderFor(members, room.rotation_start, today);
+  const computedDecider = deciderFor(members, room.rotation_start, today, meal);
 
   // Secret picks for today, live. Every phone holds them all, but the UI only shows
   // other people's picks once everyone is in (the room code is the only lock).
@@ -115,17 +115,17 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   }, [todayId]);
 
   // Step 1: the first visit of the day creates the entry. Both phones may race; the unique
-  // (room_id, entry_date) constraint keeps one row.
+  // (room_id, entry_date, meal) constraint keeps one row.
   useEffect(() => {
     if (!entries || todayEntry || !computedDecider) return;
     supabase
       .from('day_entries')
       .upsert(
-        { room_id: room.id, entry_date: today, decider_id: computedDecider.id, status: 'pending' },
-        { onConflict: 'room_id,entry_date', ignoreDuplicates: true },
+        { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'pending' },
+        { onConflict: 'room_id,entry_date,meal', ignoreDuplicates: true },
       )
       .then(({ error: err }) => (err ? setError(err.message) : load()));
-  }, [entries, todayEntry, computedDecider, room.id, today, load]);
+  }, [entries, todayEntry, computedDecider, room.id, today, meal, load]);
 
   // Until the day has a pick or a veto, follow changes to the member order or rotation start.
   useEffect(() => {

@@ -45,17 +45,17 @@ describe('historySheet', () => {
   });
 
   it('says who chose, how, and what was vetoed', () => {
-    expect(sheet.rows[0]).toEqual([{ date: '2026-10-28' }, 'Wed', 'Nasi Lemak', '', 'Wei', 'Picked from the list', '', 'Pizza (Alex)', 'Rice, Malay', null, null, null, null, null]);
-    expect(sheet.rows[1].slice(2, 6)).toEqual(['Gold Chilli', 'SS15 Subang Jaya', 'Removed member', 'Picked from the list']);
-    expect(sheet.rows[2].slice(2, 6)).toEqual(['Mamak', '', 'Alex', 'Spun the wheel']);
+    expect(sheet.rows[0]).toEqual([{ date: '2026-10-28' }, 'Wed', 'Lunch', 'Nasi Lemak', '', 'Wei', 'Picked from the list', '', 'Pizza (Alex)', 'Rice, Malay', null, null, null, null, null]);
+    expect(sheet.rows[1].slice(3, 7)).toEqual(['Gold Chilli', 'SS15 Subang Jaya', 'Removed member', 'Picked from the list']);
+    expect(sheet.rows[2].slice(3, 7)).toEqual(['Mamak', '', 'Alex', 'Spun the wheel']);
   });
 
   it('includes ratings and who paid', () => {
-    expect(sheet.rows[2].slice(9)).toEqual([1, 1, 'Alex', 42.5, 'Wei, Alex']);
+    expect(sheet.rows[2].slice(10)).toEqual([1, 1, 'Alex', 42.5, 'Wei, Alex']);
   });
 
   it('credits whoever suggested the winning secret pick', () => {
-    expect(sheet.rows[3].slice(4, 7)).toEqual(['Everyone', 'Secret picks, then the wheel', 'Alex']);
+    expect(sheet.rows[3].slice(5, 8)).toEqual(['Everyone', 'Secret picks, then the wheel', 'Alex']);
   });
 });
 

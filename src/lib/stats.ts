@@ -72,7 +72,9 @@ export function bestNoRepeatStreak(meals: Pick<Meal, 'key' | 'entry'>[]): number
   let start = 0;
   const lastSeen = new Map<string, number>();
   for (let i = 0; i < meals.length; i++) {
-    if (i > 0 && daysBetween(meals[i - 1].entry.entry_date, meals[i].entry.entry_date) !== 1) start = i;
+    // Lunch and dinner on the same day count as back to back too.
+    const gap = i > 0 ? daysBetween(meals[i - 1].entry.entry_date, meals[i].entry.entry_date) : 1;
+    if (gap !== 1 && gap !== 0) start = i;
     const seen = lastSeen.get(meals[i].key);
     if (seen !== undefined && seen >= start) start = seen + 1;
     lastSeen.set(meals[i].key, i);

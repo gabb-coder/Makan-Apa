@@ -25,7 +25,7 @@ import { byDistance, isNearSunway, NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOf
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
-import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
+import type { DayEntryRow, Meal, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
 import type { RoomExtras } from '../lib/useRoomExtras';
 
@@ -52,11 +52,14 @@ interface Props {
   onToast: (message: string) => void;
   /** Ratings, bills and the room's own spots. */
   extras: RoomExtras;
+  /** Which meal this is about; rooms deciding both get a lunch/dinner switch. */
+  meal: Meal;
+  onMealChange?: (meal: Meal) => void;
 }
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast, extras }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast, extras, meal, onMealChange }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
@@ -79,14 +82,17 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const nameFor = (id: string | null, you = 'You') => (id === me.id ? you : (id && memberById.get(id)?.name) || 'Someone');
 
-  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today) || me;
+  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal) || me;
   const isDecider = decider.id === me.id;
   const others = members.filter((m) => m.id !== decider.id);
   const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? 'nobody yet' : 'everyone';
   const todayFood = todayEntry ? entryFood(todayEntry, foodsById) : null;
   const vetoedNames = todayVetoes.map((v) => v.rejected_food);
   // The last meal before today, if it was in the past couple of days and you haven't rated it.
-  const lastEntry = entries?.find((e) => e.entry_date < today && e.status === 'accepted') ?? null;
+  const lastEntry =
+    entries?.find(
+      (e) => e.status === 'accepted' && (e.entry_date < today || (meal === 'dinner' && e.entry_date === today && e.meal === 'lunch')),
+    ) ?? null;
   const lastMeal =
     lastEntry && lastEntry.entry_date >= addDays(today, -2) && !extras.ratings.some((r) => r.day_entry_id === lastEntry.id && r.member_id === me.id)
       ? { entry: lastEntry, food: entryFood(lastEntry, foodsById) ?? customFood('Lunch') }
@@ -119,7 +125,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     }
   }, [todayEntry, justVetoed]);
 
-  const tomorrow = deciderFor(members, room.rotation_start, addDays(today, 1));
+  const tomorrow = deciderFor(members, room.rotation_start, addDays(today, 1), meal);
   const tomorrowText = !tomorrow
     ? ''
     : tomorrow.id === me.id
@@ -281,7 +287,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
   const upNext = [1, 2, 3].map((i) => {
     const date = addDays(today, i);
-    return { date, member: deciderFor(members, room.rotation_start, date) };
+    return { date, member: deciderFor(members, room.rotation_start, date, meal) };
   });
 
   const recent = (entries ?? []).filter((e) => e.status === 'accepted' && e.entry_date < today).slice(0, 3);
@@ -368,6 +374,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         </header>
       )}
 
+      {onMealChange && !proposalView && (
+        <div className="segmented" role="group" aria-label="Meal" style={{ flexShrink: 0 }}>
+          {(['lunch', 'dinner'] as const).map((m) => (
+            <button key={m} type="button" aria-pressed={meal === m} onClick={() => onMealChange(m)}>
+              {m === 'lunch' ? 'Lunch' : 'Dinner'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {main}
 
       {vetoedNames.length > 0 && isDecider && todayEntry?.status === 'pending' && (
@@ -382,7 +398,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             entryId={lastMeal.entry.id}
             ratings={extras.ratings}
             meId={me.id}
-            label={`How was ${lastMeal.entry.entry_date === addDays(today, -1) ? 'yesterday’s' : 'your last'} ${lastMeal.food.name}?`}
+            label={`How was ${lastMeal.entry.entry_date === today ? 'lunch,' : lastMeal.entry.entry_date === addDays(today, -1) ? 'yesterday’s' : 'your last'} ${lastMeal.food.name}?`}
             onRate={(r) => run(() => extras.rate(lastMeal.entry.id, r))}
           />
         </section>

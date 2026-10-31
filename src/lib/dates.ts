@@ -16,3 +16,8 @@ export function todayIn(timeZone = DEFAULT_TZ, now = new Date()): string {
 export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
+
+/** The hour (0–23) right now in `timeZone`. */
+export function localHour(timeZone = DEFAULT_TZ, now = new Date()): number {
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(now));
+}

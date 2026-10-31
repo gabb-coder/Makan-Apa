@@ -263,7 +263,8 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                       {m.food.name}
                     </span>
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      {m.entry.entry_date === today ? 'Today' : dayLabel(m.entry.entry_date)} ·{' '}
+                      {m.entry.entry_date === today ? 'Today' : dayLabel(m.entry.entry_date)}
+                      {(room.meals === 'both' || m.entry.meal === 'dinner') && ` ${m.entry.meal === 'dinner' ? 'dinner' : 'lunch'}`} ·{' '}
                       {m.entry.method === 'wheel' ? `${who}, by wheel` : `${who} picked`}
                       {(() => {
                         const r = extras.ratings.filter((x) => x.day_entry_id === m.entry.id);
