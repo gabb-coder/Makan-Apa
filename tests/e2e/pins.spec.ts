@@ -45,6 +45,7 @@ test('a room code alone is not enough to become someone else', async ({ browser 
     await gabriel.goto('/#settings');
     await gabriel.click('button[aria-label="Edit Alex"]');
     await gabriel.click('button:text-is("Let Alex rejoin on a new phone")');
+    await expect(gabriel.getByText('Alex can rejoin on a new phone for the next 15 minutes.')).toBeVisible();
     await notAlex.click('button:text-is("Join room")');
     await expect(notAlex.locator('nav')).toBeVisible();
   } finally {

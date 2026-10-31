@@ -52,7 +52,7 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
     await wei.fill('#spot-name', 'Restoran Yong');
     await wei.fill('#spot-area', 'SS15');
     await wei.click('button:text-is("Add for the whole room")');
-    await wei.click('text=/^See all \\d+$/');
+    // Back in the See all sheet, with the new place at the top.
     await expect(wei.locator('.sheet button.row', { hasText: 'Restoran Yong' })).toBeVisible();
   } finally {
     await deleteRoom(wei);

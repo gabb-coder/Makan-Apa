@@ -346,7 +346,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                     >
                       <FoodTile food={f} size={24} style={{ background: '#FFFFFF', borderRadius: 999 }} />
                       {f.name}
-                      <span style={{ fontWeight: 600, opacity: 0.8 }}>· {lastEatenLabel(f.daysSinceEaten)}</span>
+                      <span style={{ fontWeight: 600 }}>· {lastEatenLabel(f.daysSinceEaten)}</span>
                     </span>
                   ))}
                 </div>

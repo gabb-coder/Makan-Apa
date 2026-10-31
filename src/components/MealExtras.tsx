@@ -59,7 +59,7 @@ export function BillLine({ bill, members, meId, onOpen }: { bill: MealBillRow | 
       type="button"
       className="press"
       onClick={onOpen}
-      style={{ alignSelf: 'center', minHeight: 44, padding: '0 12px', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: bill ? 'var(--ink-2)' : 'var(--accent)' }}
+      style={{ alignSelf: 'center', minHeight: 44, padding: '0 12px', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: bill ? 'var(--ink-2)' : 'var(--accent-text)' }}
     >
       {bill
         ? `${t('{name} paid {amount}', { name: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents) })} · ${bill.split_between.length === 1 ? t('no split') : t('split {n} ways', { n: bill.split_between.length })} · ${t('Edit')}`
