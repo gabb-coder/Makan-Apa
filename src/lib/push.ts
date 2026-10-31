@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { isIOS, isStandalone } from './install';
 import { supabase } from './supabase';
 
@@ -12,7 +13,7 @@ export function pushSupport(): PushSupport {
 
 async function registration(): Promise<ServiceWorkerRegistration> {
   const reg = await navigator.serviceWorker.getRegistration();
-  if (!reg) throw new Error('Reminders need the installed app. Open the deployed site, not the dev server.');
+  if (!reg) throw new Error(t('Reminders need the installed app. Open the deployed site, not the dev server.'));
   return reg;
 }
 
@@ -48,17 +49,17 @@ export async function setWeeklyRecap(on: boolean): Promise<void> {
 export async function enableReminders(memberId: string, hour: number): Promise<void> {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    throw new Error('Notifications are blocked for this site. Allow them in your browser settings, then try again.');
+    throw new Error(t('Notifications are blocked for this site. Allow them in your browser settings, then try again.'));
   }
   const reg = await registration();
   const { data: key, error: keyError } = await supabase.rpc('vapid_public_key');
   if (keyError) throw new Error(keyError.message);
-  if (!key) throw new Error('Reminders are still being set up on the server. Try again in a few minutes.');
+  if (!key) throw new Error(t('Reminders are still being set up on the server. Try again in a few minutes.'));
   let sub = await reg.pushManager.getSubscription();
   try {
     sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key as string) });
   } catch (e) {
-    throw new Error(`This browser couldn’t sign up for notifications (${e instanceof Error ? e.message : e}).`);
+    throw new Error(t('This browser couldn’t sign up for notifications ({error}).', { error: e instanceof Error ? e.message : String(e) }));
   }
   const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };
   const { error } = await supabase.rpc('subscribe_push', {

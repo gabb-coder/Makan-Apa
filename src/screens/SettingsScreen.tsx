@@ -3,7 +3,7 @@ import { Avatar, HostBadge } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { shareInvite } from '../lib/invite';
 import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
-import { LANGS, setLang, t, useLang } from '../lib/i18n';
+import { getLang, LANGS, locale, setLang, t, tk, tNodes, useLang } from '../lib/i18n';
 import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
@@ -60,7 +60,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   useEffect(() => setRoomNameDraft(room.name ?? ''), [room.name]);
   const saveRoomName = () => {
     const next = roomNameDraft.trim() || null;
-    if (next !== (room.name ?? null)) attempt(() => updateRoom({ name: next }), next ? 'Room renamed.' : 'Room name removed.');
+    if (next !== (room.name ?? null)) attempt(() => updateRoom({ name: next }), next ? t('Room renamed.') : t('Room name removed.'));
   };
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
   const theme = usePref(themePref);
@@ -76,7 +76,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
       await fn();
       if (ok) onToast(ok);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : 'Could not save that change.');
+      onToast(e instanceof Error ? e.message : t('Could not save that change.'));
     }
   };
 
@@ -105,7 +105,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   return (
     <main className="screen" style={{ gap: 16 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" className="icon-btn press" aria-label="Back" onClick={onBack}>
+        <button type="button" className="icon-btn press" aria-label={t('Back')} onClick={onBack}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -114,21 +114,21 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {roomTitle(room)}
           </span>
-          <h1 className="title title--sm">Settings</h1>
+          <h1 className="title title--sm">{t('Settings')}</h1>
         </div>
       </header>
 
       <section className="card fade-up" style={cardStyle}>
-        <span className="section-label">Room</span>
+        <span className="section-label">{t('Room')}</span>
         {iAmHost ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label htmlFor="room-name-setting" className="field-label">
-              Room name
+              {t('Room name')}
             </label>
             <input
               id="room-name-setting"
               className="input"
-              placeholder="e.g. Sunway lunch gang"
+              placeholder={t('e.g. Sunway lunch gang')}
               maxLength={ROOM_NAME_MAX}
               value={roomNameDraft}
               onChange={(e) => setRoomNameDraft(e.target.value)}
@@ -140,7 +140,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           room.name && <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, overflowWrap: 'anywhere' }}>{room.name}</span>
         )}
         <span className="field-label" style={{ marginBottom: -6 }}>
-          Code
+          {t('Code')}
         </span>
         <span
           style={{
@@ -154,26 +154,26 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           {room.code}
         </span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-          <button type="button" className="btn btn--secondary press" onClick={() => copy(room.code, 'Room code copied.')}>
-            Copy code
+          <button type="button" className="btn btn--secondary press" onClick={() => copy(room.code, t('Room code copied.'))}>
+            {t('Copy code')}
           </button>
           <button type="button" className="btn btn--primary press" onClick={share}>
-            Share invite
+            {t('Share invite')}
           </button>
         </div>
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.08s' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="section-label">Members · decider order</span>
+          <span className="section-label">{t('Members · decider order')}</span>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            The top person decides on the rotation start date, then it goes down the list, one day each.
+            {t('The top person decides on the rotation start date, then it goes down the list, one day each.')}
           </span>
           {members.length > 1 && (
             <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
               {iAmHost
-                ? 'You’re the host: tap someone’s name to rename them, change their colour or remove them from the room.'
-                : `${host?.name ?? 'The host'} is the host and can remove people from the room.`}
+                ? t('You’re the host: tap someone’s name to rename them, change their colour or remove them from the room.')
+                : t('{name} is the host and can remove people from the room.', { name: host?.name ?? t('The host') })}
             </span>
           )}
         </div>
@@ -193,7 +193,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                         saveName(m);
                       }}
                     >
-                      <label htmlFor={`member-${m.id}`} className="sr-only">Name</label>
+                      <label htmlFor={`member-${m.id}`} className="sr-only">{t('Name')}</label>
                       <input
                         id={`member-${m.id}`}
                         className="input"
@@ -209,7 +209,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                     <button
                       type="button"
                       onClick={() => startEdit(m)}
-                      aria-label={`Edit ${m.name}`}
+                      aria-label={t('Edit {name}', { name: m.name })}
                       style={{
                         flexGrow: 1,
                         minWidth: 0,
@@ -230,7 +230,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                       </span>
                       {m.id === me.id && m.id !== host?.id && (
                         <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
-                          You
+                          {t('You')}
                         </span>
                       )}
                       {m.id === host?.id && <HostBadge you={m.id === me.id} />}
@@ -249,7 +249,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                           key={label}
                           type="button"
                           className="icon-btn press"
-                          aria-label={`Move ${m.name} ${label}`}
+                          aria-label={delta === -1 ? t('Move {name} up', { name: m.name }) : t('Move {name} down', { name: m.name })}
                           disabled={disabled}
                           style={{ opacity: disabled ? 0.35 : 1 }}
                           onClick={() => attempt(() => moveMember(m.id, delta))}
@@ -272,11 +272,11 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                       if (confirmRemove !== m.id) return setConfirmRemove(m.id);
                       setConfirmRemove(null);
                       setEditingId(null);
-                      attempt(() => removeMember(m.id), `${m.name} removed from the room.`);
+                      attempt(() => removeMember(m.id), t('{name} removed from the room.', { name: m.name }));
                     }}
                     style={{ order: 2, marginLeft: 26, height: 40, fontSize: 14 }}
                   >
-                    {confirmRemove === m.id ? `Tap again to remove ${m.name}` : `Remove ${m.name} from the room`}
+                    {confirmRemove === m.id ? t('Tap again to remove {name}', { name: m.name }) : t('Remove {name} from the room', { name: m.name })}
                   </button>
                 )}
                 {editing && iAmHost && m.id !== me.id && (
@@ -290,19 +290,20 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                         attempt(async () => {
                           await letMemberRejoin(room.id, m.id);
                           await refreshPins();
-                        }, `${m.name} can rejoin on a new phone for the next 15 minutes.`);
+                        }, t('{name} can rejoin on a new phone for the next 15 minutes.', { name: m.name }));
                       }}
                       style={{ height: 40, fontSize: 14 }}
                     >
-                      Let {m.name} rejoin on a new phone
+                      {t('Let {name} rejoin on a new phone', { name: m.name })}
                     </button>
                     <span style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-                      {pins?.has(m.id) ? `${m.name} has a PIN. This clears it.` : `${m.name} has no PIN.`} For 15 minutes, joining as {m.name} won't need one.
+                      {pins?.has(m.id) ? t('{name} has a PIN. This clears it.', { name: m.name }) : t('{name} has no PIN.', { name: m.name })}{' '}
+                      {t("For 15 minutes, joining as {name} won't need one.", { name: m.name })}
                     </span>
                   </div>
                 )}
                 {editing && (
-                  <div role="group" aria-label={`${m.name}'s colour`} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 26 }}>
+                  <div role="group" aria-label={t("{name}'s colour", { name: m.name })} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 26 }}>
                     {MEMBER_COLORS.map((c) => {
                       const on = m.color.toUpperCase() === c.toUpperCase();
                       return (
@@ -335,7 +336,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         </ol>
         {members.length < 2 && (
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--accent-ink)' }}>
-            Waiting for your kaki to join with code {room.code}.
+            {t('Waiting for your kaki to join with code {code}.', { code: room.code })}
           </p>
         )}
         <PinSetting
@@ -349,12 +350,12 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.12s' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="section-label">Your food needs</span>
+          <span className="section-label">{t('Your food needs')}</span>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            Foods that clash with anyone in the room stay off the wheel, and nearby ideas skip places that don't fit.
+            {t("Foods that clash with anyone in the room stay off the wheel, and nearby ideas skip places that don't fit.")}
           </span>
         </div>
-        <div className="chip-row" role="group" aria-label="Diet" style={{ flexWrap: 'wrap' }}>
+        <div className="chip-row" role="group" aria-label={t('Diet')} style={{ flexWrap: 'wrap' }}>
           {MEMBER_NEEDS.map((n) => {
             const on = me.diet.includes(n.key);
             return (
@@ -365,17 +366,17 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                 aria-pressed={on}
                 onClick={() => attempt(() => updateMember(me.id, { diet: on ? me.diet.filter((d) => d !== n.key) : [...me.diet, n.key] }))}
               >
-                {n.label}
+                {t(n.label)}
               </button>
             );
           })}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>Budget per meal</span>
+          <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Budget per meal')}</span>
           <div className="segmented" role="group" aria-labelledby="budget-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
             {BUDGETS.map((b) => (
               <button key={b.label} type="button" aria-pressed={me.budget === b.value} onClick={() => me.budget !== b.value && attempt(() => updateMember(me.id, { budget: b.value }))}>
-                {b.label}
+                {t(b.label)}
               </button>
             ))}
           </div>
@@ -383,36 +384,36 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
-        <span className="section-label">Rules</span>
+        <span className="section-label">{t('Rules')}</span>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="meals-label" style={{ fontSize: 15, fontWeight: 700 }}>Meals to decide</span>
+          <span id="meals-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Meals to decide')}</span>
           <div className="segmented" role="group" aria-labelledby="meals-label">
             {(
               [
-                ['lunch', 'Lunch only'],
-                ['both', 'Lunch and dinner'],
+                ['lunch', tk('Lunch only')],
+                ['both', tk('Lunch and dinner')],
               ] as const
             ).map(([value, label]) => (
               <button key={value} type="button" aria-pressed={room.meals === value} onClick={() => room.meals !== value && attempt(() => updateRoom({ meals: value }))}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
             {room.meals === 'both'
-              ? 'Each day has a lunch and a dinner decision. Dinner goes to the next person in the order, so nobody decides both.'
-              : 'One decision a day. Turn on dinner to decide both meals.'}
+              ? t('Each day has a lunch and a dinner decision. Dinner goes to the next person in the order, so nobody decides both.')
+              : t('One decision a day. Turn on dinner to decide both meals.')}
           </span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="mode-label" style={{ fontSize: 15, fontWeight: 700 }}>How we decide</span>
+          <span id="mode-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('How we decide')}</span>
           <div className="segmented" role="group" aria-labelledby="mode-label">
             {(
               [
-                ['decider', 'Decider picks'],
-                ['secret', 'Secret picks'],
+                ['decider', tk('Decider picks')],
+                ['secret', tk('Secret picks')],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -421,27 +422,27 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                 aria-pressed={room.decision_mode === value}
                 onClick={() => room.decision_mode !== value && attempt(() => updateRoom({ decision_mode: value }))}
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
             {room.decision_mode === 'secret'
-              ? 'Everyone picks in secret. Once everyone’s in, the picks are revealed and the wheel spins among them. No vetoes.'
-              : 'Today’s decider picks or spins, and everyone else can accept or veto.'}
+              ? t('Everyone picks in secret. Once everyone’s in, the picks are revealed and the wheel spins among them. No vetoes.')
+              : t('Today’s decider picks or spins, and everyone else can accept or veto.')}
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>Vetoes per day</span>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>For each person who isn't deciding</span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Vetoes per day')}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t("For each person who isn't deciding")}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
               type="button"
               className="icon-btn press"
-              aria-label="Fewer vetoes"
+              aria-label={t('Fewer vetoes')}
               disabled={room.veto_limit <= 0}
               style={{ opacity: room.veto_limit <= 0 ? 0.35 : 1, fontSize: 20, fontWeight: 700 }}
               onClick={() => attempt(() => updateRoom({ veto_limit: room.veto_limit - 1 }))}
@@ -454,7 +455,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             <button
               type="button"
               className="icon-btn press"
-              aria-label="More vetoes"
+              aria-label={t('More vetoes')}
               disabled={room.veto_limit >= VETO_MAX}
               style={{ opacity: room.veto_limit >= VETO_MAX ? 0.35 : 1, fontSize: 20, fontWeight: 700 }}
               onClick={() => attempt(() => updateRoom({ veto_limit: room.veto_limit + 1 }))}
@@ -465,7 +466,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="rotation-start" className="field-label">Rotation start date</label>
+          <label htmlFor="rotation-start" className="field-label">{t('Rotation start date')}</label>
           <input
             id="rotation-start"
             type="date"
@@ -476,7 +477,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="timezone" className="field-label">Timezone</label>
+          <label htmlFor="timezone" className="field-label">{t('Timezone')}</label>
           <select
             id="timezone"
             className="input"
@@ -489,12 +490,12 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
               </option>
             ))}
           </select>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>Decides when “today” starts for the rotation.</span>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Decides when “today” starts for the rotation.')}</span>
         </div>
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.24s' }}>
-        <span className="section-label">This phone</span>
+        <span className="section-label">{t('This phone')}</span>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span id="language-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Language')}</span>
@@ -508,17 +509,17 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="appearance-label" style={{ fontSize: 15, fontWeight: 700 }}>Appearance</span>
+          <span id="appearance-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Appearance')}</span>
           <div className="segmented" role="group" aria-labelledby="appearance-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
             {(
               [
-                ['system', 'System'],
-                ['light', 'Light'],
-                ['dark', 'Dark'],
+                ['system', tk('System')],
+                ['light', tk('Light')],
+                ['dark', tk('Dark')],
               ] as [ThemePref, string][]
             ).map(([value, label]) => (
               <button key={value} type="button" aria-pressed={theme === value} onClick={() => themePref.set(value)}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -526,8 +527,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>Wheel sounds</span>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>A tick per slice and a chime on landing</span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Wheel sounds')}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('A tick per slice and a chime on landing')}</span>
           </span>
           <input
             type="checkbox"
@@ -540,8 +541,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>Food ideas near {NEARBY_LABEL}</span>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Places around Bandar Sunway on Today and with each result</span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Food ideas near {place}', { place: NEARBY_LABEL })}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Places around Bandar Sunway on Today and with each result')}</span>
           </span>
           <input
             type="checkbox"
@@ -555,13 +556,13 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         {nearby === 'on' && (
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 15, fontWeight: 700 }}>Use my location</span>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Use my location')}</span>
               <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
                 {location.status === 'denied'
-                  ? 'Blocked by your browser. Allow location for this site in your phone settings, then turn this on.'
+                  ? t('Blocked by your browser. Allow location for this site in your phone settings, then turn this on.')
                   : location.status === 'unavailable'
-                    ? "Couldn't get your location. Turn it off and on to try again."
-                    : 'Show the closest places first, and search near you when you’re away from Sunway. Stays on this phone; never shared with the room.'}
+                    ? t("Couldn't get your location. Turn it off and on to try again.")
+                    : t('Show the closest places first, and search near you when you’re away from Sunway. Stays on this phone; never shared with the room.')}
               </span>
             </span>
             <input
@@ -578,33 +579,38 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
         {!installed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4, borderTop: '1px solid var(--divider)' }}>
-            <span style={{ fontSize: 15, fontWeight: 700, paddingTop: 10 }}>Add to Home Screen</span>
+            <span style={{ fontSize: 15, fontWeight: 700, paddingTop: 10 }}>{t('Add to Home Screen')}</span>
             {install.available ? (
               <>
-                <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>Open Makan apa? like an app, full screen.</span>
+                <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{t('Open Makan apa? like an app, full screen.')}</span>
                 <button
                   type="button"
                   className="btn btn--primary press"
                   onClick={async () => {
-                    if (await install.prompt()) onToast('Added. Look for Makan apa? on your home screen.');
+                    if (await install.prompt()) onToast(t('Added. Look for Makan apa? on your home screen.'));
                   }}
                 >
-                  Install app
+                  {t('Install app')}
                 </button>
               </>
             ) : isIOS() ? (
               <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-                In Safari, tap{' '}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Share" style={{ verticalAlign: '-2px' }}>
-                  <path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" />
-                  <path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
-                </svg>{' '}
-                Share, then <strong style={{ color: 'var(--ink)' }}>Add to Home Screen</strong>.
+                {tNodes('In Safari, tap {icon} Share, then {add}.', {
+                  icon: (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label={t('Share')} style={{ verticalAlign: '-2px' }}>
+                      <path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" />
+                      <path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
+                    </svg>
+                  ),
+                  add: <strong style={{ color: 'var(--ink)' }}>{t('Add to Home Screen')}</strong>,
+                })}
               </span>
             ) : (
               <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-                Open your browser menu and choose <strong style={{ color: 'var(--ink)' }}>Install app</strong> or{' '}
-                <strong style={{ color: 'var(--ink)' }}>Add to Home screen</strong>.
+                {tNodes('Open your browser menu and choose {install} or {add}.', {
+                  install: <strong style={{ color: 'var(--ink)' }}>{t('Install app')}</strong>,
+                  add: <strong style={{ color: 'var(--ink)' }}>{t('Add to Home screen')}</strong>,
+                })}
               </span>
             )}
           </div>
@@ -618,10 +624,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           data-armed={confirmLeave}
           onClick={() => (confirmLeave ? onLeave() : setConfirmLeave(true))}
         >
-          {confirmLeave ? 'Tap again to leave this room' : 'Leave room on this phone'}
+          {confirmLeave ? t('Tap again to leave this room') : t('Leave room on this phone')}
         </button>
         <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-          You stay in the rotation. Rejoin any time with code {room.code} and the same name.
+          {t('You stay in the rotation. Rejoin any time with code {code} and the same name.', { code: room.code })}
         </p>
         {iAmHost && (
           <>
@@ -632,10 +638,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
               style={{ marginTop: 8 }}
               onClick={() => (confirmDelete ? attempt(deleteRoom) : setConfirmDelete(true))}
             >
-              {confirmDelete ? 'Tap again to delete everything' : 'Delete this room for everyone'}
+              {confirmDelete ? t('Tap again to delete everything') : t('Delete this room for everyone')}
             </button>
             <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-              Host only. Removes the food list, history and members for good.
+              {t('Host only. Removes the food list, history and members for good.')}
             </p>
           </>
         )}
@@ -658,9 +664,9 @@ function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; 
       await onSaved();
       setEditing(false);
       setPin('');
-      onToast(next ? 'PIN saved. Use it to continue as you on another phone.' : 'PIN removed.');
+      onToast(next ? t('PIN saved. Use it to continue as you on another phone.') : t('PIN removed.'));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : 'Could not save your PIN.');
+      onToast(e instanceof Error ? e.message : t('Could not save your PIN.'));
     } finally {
       setBusy(false);
     }
@@ -669,16 +675,16 @@ function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Your PIN</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Your PIN')}</span>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: hasPin === false ? 'var(--accent-ink)' : 'var(--muted)' }}>
             {hasPin
-              ? `Set. Joining as ${me.name} on another phone needs it.`
-              : `Not set. Add a 4-digit PIN so nobody else can join as ${me.name}, and so you can continue on a new phone.`}
+              ? t('Set. Joining as {name} on another phone needs it.', { name: me.name })
+              : t('Not set. Add a 4-digit PIN so nobody else can join as {name}, and so you can continue on a new phone.', { name: me.name })}
           </span>
         </span>
         {!editing && (
           <button type="button" className="btn btn--secondary press" style={{ height: 40, padding: '0 16px', fontSize: 14, flexShrink: 0 }} onClick={() => setEditing(true)}>
-            {hasPin ? 'Change' : 'Set PIN'}
+            {hasPin ? t('Change') : t('Set PIN')}
           </button>
         )}
       </div>
@@ -690,7 +696,7 @@ function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; 
             if (pin.length === 4) void save(pin);
           }}
         >
-          <label htmlFor="my-pin" className="sr-only">New 4-digit PIN</label>
+          <label htmlFor="my-pin" className="sr-only">{t('New 4-digit PIN')}</label>
           <input
             id="my-pin"
             className="input"
@@ -698,21 +704,21 @@ function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; 
             pattern="[0-9]*"
             autoComplete="new-password"
             maxLength={4}
-            placeholder="4 digits"
+            placeholder={t('4 digits')}
             autoFocus
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
             style={{ height: 44, width: 120, flexGrow: 1, fontWeight: 700, letterSpacing: '0.3em' }}
           />
           <button type="submit" className="btn btn--primary press" disabled={busy || pin.length !== 4} style={{ height: 44, padding: '0 18px' }}>
-            Save
+            {t('Save')}
           </button>
           <button type="button" className="btn btn--secondary press" disabled={busy} style={{ height: 44, padding: '0 14px' }} onClick={() => setEditing(false)}>
-            Cancel
+            {t('Cancel')}
           </button>
           {hasPin && (
             <button type="button" className="btn btn--danger press" disabled={busy} style={{ height: 44, padding: '0 14px' }} onClick={() => void save(null)}>
-              Remove PIN
+              {t('Remove PIN')}
             </button>
           )}
         </form>
@@ -722,6 +728,8 @@ function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; 
 }
 
 function hourLabel(h: number): string {
+  // English keeps "11:00 am"; Malay and Chinese use their own clock style.
+  if (getLang() !== 'en') return new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(Date.UTC(2000, 0, 1, h));
   const suffix = h < 12 ? 'am' : 'pm';
   return `${h % 12 === 0 ? 12 : h % 12}:00 ${suffix}`;
 }
@@ -749,7 +757,6 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
   }, [me.id]);
 
   const on = status !== 'loading' && status !== null;
-  const what = room.decision_mode === 'secret' ? 'to make your secret pick' : 'when it’s your turn to choose';
 
   const run = async (fn: () => Promise<void>, ok: string) => {
     setBusy(true);
@@ -757,7 +764,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
       await fn();
       onToast(ok);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : 'Could not change reminders.');
+      onToast(e instanceof Error ? e.message : t('Could not change reminders.'));
     } finally {
       setBusy(false);
     }
@@ -774,20 +781,22 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
           setStatus(null);
         }
       },
-      next ? `Reminders on. We'll nudge you at ${hourLabel(hour)}.` : 'Reminders off on this phone.',
+      next ? t("Reminders on. We'll nudge you at {time}.", { time: hourLabel(hour) }) : t('Reminders off on this phone.'),
     );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: support === 'ok' ? 'pointer' : 'default' }}>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Daily reminder</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Daily reminder')}</span>
           <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>
             {support === 'ok'
-              ? `A notification ${what}, if it’s not decided yet.`
+              ? room.decision_mode === 'secret'
+                ? t('A notification to make your secret pick, if it’s not decided yet.')
+                : t('A notification when it’s your turn to choose, if it’s not decided yet.')
               : support === 'needs-install'
-                ? 'On iPhone, add Makan apa? to your Home Screen first (below), then turn this on from there.'
-                : 'This browser can’t show notifications.'}
+                ? t('On iPhone, add Makan apa? to your Home Screen first (below), then turn this on from there.')
+                : t('This browser can’t show notifications.')}
           </span>
         </span>
         <input
@@ -802,7 +811,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
       {on && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <label htmlFor="reminder-hour" style={{ fontSize: 14, fontWeight: 600 }}>
-            Remind me at
+            {t('Remind me at')}
           </label>
           <select
             id="reminder-hour"
@@ -815,7 +824,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
               run(async () => {
                 await enableReminders(me.id, h);
                 setStatus((s) => ({ hour: h, recap: s !== 'loading' && s ? s.recap : true }));
-              }, `Reminder moved to ${hourLabel(h)}.`);
+              }, t('Reminder moved to {time}.', { time: hourLabel(h) }));
             }}
             style={{ width: 'auto', height: 44 }}
           >
@@ -830,8 +839,8 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
       {on && typeof status === 'object' && status && (
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Weekly recap</span>
-            <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>Sunday at 8pm: the week's meals, favourite, vetoes and who paid most.</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{t('Weekly recap')}</span>
+            <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>{t("Sunday at 8pm: the week's meals, favourite, vetoes and who paid most.")}</span>
           </span>
           <input
             type="checkbox"
@@ -844,13 +853,13 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
               run(async () => {
                 await setWeeklyRecap(next);
                 setStatus({ ...status, recap: next });
-              }, next ? 'Weekly recap on.' : 'Weekly recap off.');
+              }, next ? t('Weekly recap on.') : t('Weekly recap off.'));
             }}
           />
         </label>
       )}
       {on && (
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>Times are in the room’s timezone ({room.timezone.replace(/_/g, ' ')}).</span>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('Times are in the room’s timezone ({zone}).', { zone: room.timezone.replace(/_/g, ' ') })}</span>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { todayIn } from './dates';
+import { t } from './i18n';
 import { storage } from './storage';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
 
@@ -166,7 +167,7 @@ interface JoinResult {
 
 async function finish(result: JoinResult): Promise<Session & { rejoined: boolean }> {
   const session = await loadSession(result.room.id, result.member.id);
-  if (!session) throw new Error('Could not open the room. Try again.');
+  if (!session) throw new Error(t('Could not open the room. Try again.'));
   remember(session);
   return { ...session, rejoined: result.rejoined };
 }
@@ -187,13 +188,17 @@ export class JoinError extends Error {
 export function joinProblemText(problem: JoinProblem, name: string, triesLeft?: number): string {
   switch (problem) {
     case 'pin_required':
-      return `${name} is already in this room. If that's you, enter your PIN to continue on this phone.`;
+      return t("{name} is already in this room. If that's you, enter your PIN to continue on this phone.", { name });
     case 'wrong_pin':
-      return `That PIN isn't right. ${triesLeft === 1 ? '1 try' : `${triesLeft ?? 'A few'} tries`} left before it locks for 15 minutes.`;
+      return triesLeft === 1
+        ? t("That PIN isn't right. 1 try left before it locks for 15 minutes.")
+        : triesLeft == null
+          ? t("That PIN isn't right. A few tries left before it locks for 15 minutes.")
+          : t("That PIN isn't right. {n} tries left before it locks for 15 minutes.", { n: triesLeft });
     case 'pin_locked':
-      return `Too many wrong PINs for ${name}. Try again in 15 minutes, or ask the host to let you back in.`;
+      return t('Too many wrong PINs for {name}. Try again in 15 minutes, or ask the host to let you back in.', { name });
     case 'name_in_use':
-      return `${name} is already using this name on another phone. Pick a different name, or ask the host to let you back in from Settings.`;
+      return t('{name} is already using this name on another phone. Pick a different name, or ask the host to let you back in from Settings.', { name });
   }
 }
 
@@ -202,7 +207,7 @@ export async function joinRoom(rawCode: string, rawName: string, pin?: string): 
   await ensureSignedIn();
   const { data, error } = await supabase.rpc('join_room', { p_code: code, p_name: rawName.trim(), p_pin: pin || null });
   if (error) throw new Error(error.message);
-  if (!data) throw new Error(`No room with code ${code}. Check it with your kaki.`);
+  if (!data) throw new Error(t('No room with code {code}. Check it with your kaki.', { code }));
   const problem = data as { error?: JoinProblem; name?: string; tries_left?: number };
   if (problem.error) throw new JoinError(problem.error, problem.name ?? rawName.trim(), problem.tries_left);
   // Same name as someone already there continues as that member rather than adding a twin.
@@ -230,7 +235,7 @@ export async function roomPins(roomId: string): Promise<Set<string>> {
 
 /** What to call a room: its name, or "Room K7M2QX" if it has none. */
 export function roomTitle(room: Pick<RoomRow, 'name' | 'code'>): string {
-  return room.name?.trim() || `Room ${room.code}`;
+  return room.name?.trim() || t('Room {code}', { code: room.code });
 }
 
 export const ROOM_NAME_MAX = 40;

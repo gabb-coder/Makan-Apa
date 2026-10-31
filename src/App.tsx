@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
+import { t } from './lib/i18n';
 import { disableReminders } from './lib/push';
 import { closeCurrentRoom, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { suitsEveryone } from './lib/diet';
@@ -83,17 +84,17 @@ export default function App() {
 
   let body: React.ReactNode;
   if (state.status === 'loading') {
-    body = <Splash>Loading…</Splash>;
+    body = <Splash>{t('Loading…')}</Splash>;
   } else if (state.status === 'error') {
     body = (
       <Splash>
         <p style={{ margin: 0, lineHeight: 1.5 }}>
           {state.message === 'offline'
-            ? 'You’re offline. Makan apa? needs a connection to sync with your room, and will reconnect when you’re back.'
-            : `Couldn't reach the server. ${state.message}`}
+            ? t('You’re offline. Makan apa? needs a connection to sync with your room, and will reconnect when you’re back.')
+            : t("Couldn't reach the server. {message}", { message: state.message })}
         </p>
         <button type="button" className="btn btn--primary press" onClick={restore}>
-          Try again
+          {t('Try again')}
         </button>
       </Splash>
     );
@@ -204,7 +205,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   // Someone removed this phone's member from the room.
   useEffect(() => {
     if (removed) {
-      onToast(`You’re no longer in room ${room.code}.`);
+      onToast(t('You’re no longer in room {code}.', { code: room.code }));
       onLeave();
     }
   }, [removed]);
@@ -235,7 +236,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal);
   const isDecider = decider?.id === me.id;
   const others = members.filter((m) => m.id !== decider?.id);
-  const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : 'everyone';
+  const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : t('everyone');
   const vetoedNames = days.todayVetoes.map((v) => v.rejected_food);
   const vetoed = new Set(vetoedNames.map((n) => n.toLowerCase()));
   const notVetoed = active?.filter((f) => !vetoed.has(f.name.toLowerCase())) ?? null;
@@ -245,33 +246,36 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   const leftOut = notVetoed && suiting && pickable === suiting ? notVetoed.length - suiting.length : 0;
   const dietNote =
     leftOut > 0
-      ? ` ${leftOut} ${leftOut === 1 ? 'food is' : 'foods are'} left off so it suits everyone's diet and budget.`
+      ? ' ' +
+        (leftOut === 1
+          ? t("{n} food is left off so it suits everyone's diet and budget.", { n: leftOut })
+          : t("{n} foods are left off so it suits everyone's diet and budget.", { n: leftOut }))
       : notVetoed && suiting && suiting.length < notVetoed.length
-        ? ' Too few foods suit everyone’s diet and budget, so all of them are on.'
+        ? ' ' + t('Too few foods suit everyone’s diet and budget, so all of them are on.')
         : '';
   const decidedFood = entry?.status === 'accepted' ? entryFood(entry, new Map((foods ?? []).map((f) => [f.id, f]))) : null;
 
   let wheelSend: WheelSend;
-  if (room.decision_mode === 'secret' && !decidedFood) wheelSend = { kind: 'note', text: 'Secret picks are on today. Make your pick on Today.' };
-  else if (decidedFood) wheelSend = { kind: 'note', text: `Today's already decided: ${decidedFood.name}. Spin for fun.` };
-  else if (!isDecider) wheelSend = { kind: 'note', text: `It's ${decider?.name ?? 'someone else'}'s turn, so only they can send today's pick.` };
-  else if (!sendTo) wheelSend = { kind: 'send', label: 'Lock it in' };
-  else wheelSend = { kind: 'send', label: entry?.status === 'proposed' ? `Send instead` : `Send to ${sendTo}` };
+  if (room.decision_mode === 'secret' && !decidedFood) wheelSend = { kind: 'note', text: t('Secret picks are on today. Make your pick on Today.') };
+  else if (decidedFood) wheelSend = { kind: 'note', text: t("Today's already decided: {food}. Spin for fun.", { food: decidedFood.name }) };
+  else if (!isDecider) wheelSend = { kind: 'note', text: t("It's {name}'s turn, so only they can send today's pick.", { name: decider?.name ?? t('someone else') }) };
+  else if (!sendTo) wheelSend = { kind: 'send', label: t('Lock it in') };
+  else wheelSend = { kind: 'send', label: entry?.status === 'proposed' ? t('Send instead') : t('Send to {name}', { name: sendTo }) };
 
   const sendFromWheel = async (food: Food) => {
     try {
       const inPool = !food.id.startsWith('custom');
       await days.propose(inPool ? { foodId: food.id, name: food.name } : { foodId: null, name: food.name }, 'wheel');
-      onToast(sendTo ? `Sent ${food.name} to ${sendTo}.` : `${food.name} it is.`);
+      onToast(sendTo ? t('Sent {food} to {name}.', { food: food.name, name: sendTo }) : t('{food} it is.', { food: food.name }));
       go('today');
     } catch (e) {
-      onToast(e instanceof Error ? e.message : 'Could not send that.');
+      onToast(e instanceof Error ? e.message : t('Could not send that.'));
     }
   };
 
   const loading = (
     <main className="screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--muted)', textAlign: 'center' }}>
-      {foodsApi.error ? `Couldn't load the food list. ${foodsApi.error}` : 'Loading food list…'}
+      {foodsApi.error ? t("Couldn't load the food list. {error}", { error: foodsApi.error }) : t('Loading food list…')}
     </main>
   );
 
@@ -282,7 +286,9 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
     <div className="app">
       {connection.offline && (
         <div role="status" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '8px 16px', background: 'var(--ink)', color: 'var(--on-ink)', fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
-          You're offline{connection.pending ? ` · ${connection.pending} waiting to send` : ''}. Changes from others will appear when you're back.
+          {connection.pending
+            ? t("You're offline · {n} waiting to send. Changes from others will appear when you're back.", { n: connection.pending })
+            : t("You're offline. Changes from others will appear when you're back.")}
         </div>
       )}
       <Suspense fallback={loading}>
@@ -323,7 +329,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
           onBack={() => go('today')}
           deleteRoom={async () => {
             await deleteRoom();
-            onToast(`${roomTitle(room)} deleted.`);
+            onToast(t('{room} deleted.', { room: roomTitle(room) }));
             void leaveRoom(room.id).catch(() => {});
             onLeave();
           }}
@@ -341,7 +347,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
             vetoedNames={vetoedNames}
             extraNote={dietNote}
             timezone={room.timezone}
-            turnLabel={isDecider ? 'Your turn' : `${decider?.name ?? 'Someone'}'s turn`}
+            turnLabel={isDecider ? t('Your turn') : t("{name}'s turn", { name: decider?.name ?? t('Someone') })}
             send={wheelSend}
             onBack={() => go('today')}
             onSend={sendFromWheel}

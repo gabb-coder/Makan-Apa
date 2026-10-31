@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { t } from '../lib/i18n';
 import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
 
 const SLICES = [
@@ -38,12 +39,12 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
 
   const run = async (kind: 'join' | 'create') => {
     if (!trimmed) {
-      setError('Add your name first so your kakis know who’s deciding.');
+      setError(t('Add your name first so your kakis know who’s deciding.'));
       document.getElementById('join-name')?.focus();
       return;
     }
     if (kind === 'join' && code.length !== CODE_LENGTH) {
-      setError(`Room codes are ${CODE_LENGTH} characters. Or create a new room.`);
+      setError(t('Room codes are {n} characters. Or create a new room.', { n: CODE_LENGTH }));
       document.getElementById('join-code')?.focus();
       return;
     }
@@ -52,10 +53,22 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
     try {
       if (kind === 'join') {
         const s = await joinRoom(code, trimmed, pinFor ? pin : undefined);
-        onJoined(s, s.rejoined ? `Welcome back, ${s.me.name}.` : `You're in ${s.room.name ? `“${s.room.name}”` : `room ${s.room.code}`}.`);
+        onJoined(
+          s,
+          s.rejoined
+            ? t('Welcome back, {name}.', { name: s.me.name })
+            : s.room.name
+              ? t("You're in “{name}”.", { name: s.room.name })
+              : t("You're in room {code}.", { code: s.room.code }),
+        );
       } else {
         const s = await createRoom(trimmed, roomName);
-        onJoined(s, `${s.room.name ? `“${roomTitle(s.room)}”` : `Room ${s.room.code}`} created. Share code ${s.room.code} with your kakis.`);
+        onJoined(
+          s,
+          s.room.name
+            ? t('“{name}” created. Share code {code} with your kakis.', { name: roomTitle(s.room), code: s.room.code })
+            : t('Room {code} created. Share code {code} with your kakis.', { code: s.room.code }),
+        );
       }
     } catch (e) {
       if (e instanceof JoinError && (e.problem === 'pin_required' || e.problem === 'wrong_pin')) {
@@ -63,7 +76,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
         setPin('');
         setTimeout(() => document.getElementById('join-pin')?.focus(), 0);
       }
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+      setError(e instanceof Error ? e.message : t('Something went wrong. Try again.'));
       setBusy(null);
     }
   };
@@ -123,7 +136,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
           </span>
         </h1>
         <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5, color: 'var(--ink-2)', animation: fadeUp(0.45) }}>
-          Take turns deciding what to eat, or let the wheel settle it.
+          {t('Take turns deciding what to eat, or let the wheel settle it.')}
         </p>
       </div>
 
@@ -149,7 +162,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="join-name" className="field-label">Your name</label>
+            <label htmlFor="join-name" className="field-label">{t('Your name')}</label>
             <input
               id="join-name"
               className="input"
@@ -165,7 +178,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="join-code" className="field-label">Room code</label>
+            <label htmlFor="join-code" className="field-label">{t('Room code')}</label>
             <input
               id="join-code"
               className="input"
@@ -182,7 +195,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
 
         {pinFor && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
-            <label htmlFor="join-pin" className="field-label">{pinFor}'s PIN</label>
+            <label htmlFor="join-pin" className="field-label">{t("{name}'s PIN", { name: pinFor })}</label>
             <input
               id="join-pin"
               className="input"
@@ -216,17 +229,17 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
             animation: 'glowSoft 2.4s ease-in-out 1.4s infinite',
           }}
         >
-          {busy === 'join' ? 'Joining…' : 'Join room'}
+          {busy === 'join' ? t('Joining…') : t('Join room')}
         </button>
         {naming && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
             <label htmlFor="room-name" className="field-label">
-              Room name <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span>
+              {t('Room name')} <span style={{ fontWeight: 500, color: 'var(--muted)' }}>{t('(optional)')}</span>
             </label>
             <input
               id="room-name"
               className="input"
-              placeholder="e.g. Sunway lunch gang"
+              placeholder={t('e.g. Sunway lunch gang')}
               maxLength={ROOM_NAME_MAX}
               autoFocus
               value={roomName}
@@ -248,23 +261,23 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
           onClick={() => (naming ? run('create') : setNaming(true))}
           style={{ height: 50, borderRadius: 16 }}
         >
-          {busy === 'create' ? 'Creating…' : naming ? 'Create room' : 'Create a new room'}
+          {busy === 'create' ? t('Creating…') : naming ? t('Create room') : t('Create a new room')}
         </button>
       </form>
 
       {rooms.length > 0 && onOpenRoom && (
         <section style={{ position: 'relative', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, animation: fadeUp(0.7) }}>
-          <span className="section-label">Your rooms on this phone</span>
+          <span className="section-label">{t('Your rooms on this phone')}</span>
           <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {rooms.map((r) => (
               <button key={r.roomId} type="button" className="row" onClick={() => onOpenRoom(r.roomId)}>
                 <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
                   <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
                   <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                    Code {r.code} · you're {r.name}
+                    {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
                   </span>
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Open</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>{t('Open')}</span>
               </button>
             ))}
           </div>
@@ -272,7 +285,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
       )}
 
       <p style={{ position: 'relative', margin: '24px 0 0', textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-        No sign-up. Share the room code with your makan kakis.
+        {t('No sign-up. Share the room code with your makan kakis.')}
       </p>
     </div>
   );
