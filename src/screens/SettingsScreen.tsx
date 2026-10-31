@@ -6,7 +6,7 @@ import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
 import { disableReminders, enableReminders, pushSupport, reminderStatus } from '../lib/push';
-import { hostOf, MEMBER_COLORS, ROOM_NAME_MAX, roomTitle } from '../lib/session';
+import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
 
@@ -46,6 +46,12 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const host = hostOf(members);
   const iAmHost = host?.id === me.id;
+  const [pins, setPins] = useState<Set<string> | null>(null);
+  const refreshPins = () => roomPins(room.id).then(setPins, () => setPins(null));
+  useEffect(() => {
+    void refreshPins();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.id, members.length]);
 
   // Host renames the room; saved when the field loses focus.
   const [roomNameDraft, setRoomNameDraft] = useState(room.name ?? '');
@@ -270,6 +276,28 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                     {confirmRemove === m.id ? `Tap again to remove ${m.name}` : `Remove ${m.name} from the room`}
                   </button>
                 )}
+                {editing && iAmHost && m.id !== me.id && (
+                  <div style={{ order: 3, marginLeft: 26, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn btn--secondary press"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setEditingId(null);
+                        attempt(async () => {
+                          await letMemberRejoin(room.id, m.id);
+                          await refreshPins();
+                        }, `${m.name} can rejoin on a new phone for the next 15 minutes.`);
+                      }}
+                      style={{ height: 40, fontSize: 14 }}
+                    >
+                      Let {m.name} rejoin on a new phone
+                    </button>
+                    <span style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
+                      {pins?.has(m.id) ? `${m.name} has a PIN. This clears it.` : `${m.name} has no PIN.`} For 15 minutes, joining as {m.name} won't need one.
+                    </span>
+                  </div>
+                )}
                 {editing && (
                   <div role="group" aria-label={`${m.name}'s colour`} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 26 }}>
                     {MEMBER_COLORS.map((c) => {
@@ -307,6 +335,13 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             Waiting for your kaki to join with code {room.code}.
           </p>
         )}
+        <PinSetting
+          roomId={room.id}
+          me={me}
+          hasPin={pins?.has(me.id) ?? null}
+          onSaved={refreshPins}
+          onToast={onToast}
+        />
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
@@ -540,6 +575,81 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 }
 
 const REMINDER_HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6am to 10pm
+
+/** Your PIN: needed to continue as you on another phone, so the room code alone isn't enough. */
+function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; me: MemberRow; hasPin: boolean | null; onSaved: () => Promise<void>; onToast: (m: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async (next: string | null) => {
+    setBusy(true);
+    try {
+      await setMyPin(roomId, next);
+      await onSaved();
+      setEditing(false);
+      setPin('');
+      onToast(next ? 'PIN saved. Use it to continue as you on another phone.' : 'PIN removed.');
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : 'Could not save your PIN.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Your PIN</span>
+          <span style={{ fontSize: 13, lineHeight: 1.5, color: hasPin === false ? 'var(--accent-ink)' : 'var(--muted)' }}>
+            {hasPin
+              ? `Set. Joining as ${me.name} on another phone needs it.`
+              : `Not set. Add a 4-digit PIN so nobody else can join as ${me.name}, and so you can continue on a new phone.`}
+          </span>
+        </span>
+        {!editing && (
+          <button type="button" className="btn btn--secondary press" style={{ height: 40, padding: '0 16px', fontSize: 14, flexShrink: 0 }} onClick={() => setEditing(true)}>
+            {hasPin ? 'Change' : 'Set PIN'}
+          </button>
+        )}
+      </div>
+      {editing && (
+        <form
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pin.length === 4) void save(pin);
+          }}
+        >
+          <label htmlFor="my-pin" className="sr-only">New 4-digit PIN</label>
+          <input
+            id="my-pin"
+            className="input"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="new-password"
+            maxLength={4}
+            placeholder="4 digits"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            style={{ height: 44, width: 120, flexGrow: 1, fontWeight: 700, letterSpacing: '0.3em' }}
+          />
+          <button type="submit" className="btn btn--primary press" disabled={busy || pin.length !== 4} style={{ height: 44, padding: '0 18px' }}>
+            Save
+          </button>
+          <button type="button" className="btn btn--secondary press" disabled={busy} style={{ height: 44, padding: '0 14px' }} onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+          {hasPin && (
+            <button type="button" className="btn btn--danger press" disabled={busy} style={{ height: 44, padding: '0 14px' }} onClick={() => void save(null)}>
+              Remove PIN
+            </button>
+          )}
+        </form>
+      )}
+    </div>
+  );
+}
 
 function hourLabel(h: number): string {
   const suffix = h < 12 ? 'am' : 'pm';

@@ -104,14 +104,61 @@ async function finish(result: JoinResult): Promise<Session & { rejoined: boolean
   return { ...session, rejoined: result.rejoined };
 }
 
-export async function joinRoom(rawCode: string, rawName: string): Promise<Session & { rejoined: boolean }> {
+export type JoinProblem = 'pin_required' | 'wrong_pin' | 'pin_locked' | 'name_in_use';
+
+/** Joining with a name that's taken needs that person's PIN (see the member_pins migration). */
+export class JoinError extends Error {
+  constructor(
+    public problem: JoinProblem,
+    public memberName: string,
+    public triesLeft?: number,
+  ) {
+    super(joinProblemText(problem, memberName, triesLeft));
+  }
+}
+
+export function joinProblemText(problem: JoinProblem, name: string, triesLeft?: number): string {
+  switch (problem) {
+    case 'pin_required':
+      return `${name} is already in this room. If that's you, enter your PIN to continue on this phone.`;
+    case 'wrong_pin':
+      return `That PIN isn't right. ${triesLeft === 1 ? '1 try' : `${triesLeft ?? 'A few'} tries`} left before it locks for 15 minutes.`;
+    case 'pin_locked':
+      return `Too many wrong PINs for ${name}. Try again in 15 minutes, or ask the host to let you back in.`;
+    case 'name_in_use':
+      return `${name} is already using this name on another phone. Pick a different name, or ask the host to let you back in from Settings.`;
+  }
+}
+
+export async function joinRoom(rawCode: string, rawName: string, pin?: string): Promise<Session & { rejoined: boolean }> {
   const code = normalizeCode(rawCode);
   await ensureSignedIn();
-  const { data, error } = await supabase.rpc('join_room', { p_code: code, p_name: rawName.trim() });
+  const { data, error } = await supabase.rpc('join_room', { p_code: code, p_name: rawName.trim(), p_pin: pin || null });
   if (error) throw new Error(error.message);
-  // Same name as someone already there continues as that member rather than adding a twin.
   if (!data) throw new Error(`No room with code ${code}. Check it with your kaki.`);
+  const problem = data as { error?: JoinProblem; name?: string; tries_left?: number };
+  if (problem.error) throw new JoinError(problem.error, problem.name ?? rawName.trim(), problem.tries_left);
+  // Same name as someone already there continues as that member rather than adding a twin.
   return finish(data as JoinResult);
+}
+
+/** Set, change or (with null) remove this phone's member PIN. */
+export async function setMyPin(roomId: string, pin: string | null): Promise<void> {
+  const { error } = await supabase.rpc('set_my_pin', { p_room_id: roomId, p_pin: pin });
+  if (error) throw new Error(error.message);
+}
+
+/** Host only: let a member rejoin by name on a new phone for the next 15 minutes. */
+export async function letMemberRejoin(roomId: string, memberId: string): Promise<void> {
+  const { error } = await supabase.rpc('let_member_rejoin', { p_room_id: roomId, p_member_id: memberId });
+  if (error) throw new Error(error.message);
+}
+
+/** Members of the room who have a PIN. */
+export async function roomPins(roomId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.rpc('room_pins', { p_room_id: roomId });
+  if (error) throw new Error(error.message);
+  return new Set((data as string[] | null) ?? []);
 }
 
 /** What to call a room: its name, or "Room K7M2QX" if it has none. */

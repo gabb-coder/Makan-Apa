@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CODE_LENGTH, createRoom, joinRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
+import { CODE_LENGTH, createRoom, JoinError, joinRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
 
 const SLICES = [
   ['M160 160L160 10A150 150 0 0 1 266.07 53.93Z', '#A8D8A0'],
@@ -22,6 +22,9 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
   const [naming, setNaming] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [error, setError] = useState<string | null>(notice ?? null);
+  // Shown once the name turns out to be taken by someone with a PIN.
+  const [pinFor, setPinFor] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
 
   const trimmed = name.trim();
 
@@ -40,13 +43,18 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
     setError(null);
     try {
       if (kind === 'join') {
-        const s = await joinRoom(code, trimmed);
+        const s = await joinRoom(code, trimmed, pinFor ? pin : undefined);
         onJoined(s, s.rejoined ? `Welcome back, ${s.me.name}.` : `You're in ${s.room.name ? `“${s.room.name}”` : `room ${s.room.code}`}.`);
       } else {
         const s = await createRoom(trimmed, roomName);
         onJoined(s, `${s.room.name ? `“${roomTitle(s.room)}”` : `Room ${s.room.code}`} created. Share code ${s.room.code} with your kakis.`);
       }
     } catch (e) {
+      if (e instanceof JoinError && (e.problem === 'pin_required' || e.problem === 'wrong_pin')) {
+        setPinFor(e.memberName);
+        setPin('');
+        setTimeout(() => document.getElementById('join-pin')?.focus(), 0);
+      }
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
       setBusy(null);
     }
@@ -141,7 +149,10 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
               autoComplete="nickname"
               maxLength={24}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setPinFor(null);
+              }}
               style={{ height: 52 }}
             />
           </div>
@@ -160,6 +171,24 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
             />
           </div>
         </div>
+
+        {pinFor && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+            <label htmlFor="join-pin" className="field-label">{pinFor}'s PIN</label>
+            <input
+              id="join-pin"
+              className="input"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={4}
+              placeholder="••••"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              style={{ height: 52, fontWeight: 700, letterSpacing: '0.4em' }}
+            />
+          </div>
+        )}
 
         {error && (
           <p role="alert" style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--danger)' }}>
