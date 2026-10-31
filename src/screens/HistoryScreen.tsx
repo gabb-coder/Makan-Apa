@@ -3,6 +3,8 @@ import { FoodTile } from '../components/FoodTile';
 import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
 import { dayLabel } from '../lib/rotation';
+import { MoneyCard } from '../components/MealExtras';
+import type { RoomExtras } from '../lib/useRoomExtras';
 import { exportFileName, historyFile, historySheet, loadHistory, saveFile } from '../lib/exportHistory';
 import { roomTitle } from '../lib/session';
 import { availableMonths, monthKey, monthLabel, monthStats } from '../lib/stats';
@@ -19,6 +21,7 @@ interface Props {
   /** Every food, archived included. */
   foods: Food[];
   onToast: (message: string) => void;
+  extras: RoomExtras;
 }
 
 const grow = (delay: number, origin: 'left' | 'right' = 'left') =>
@@ -54,7 +57,7 @@ const statNumber = {
   lineHeight: 1.1,
 } as const;
 
-export function HistoryScreen({ room, me, members, today, entries, vetoes, foods, onToast }: Props) {
+export function HistoryScreen({ room, me, members, today, entries, vetoes, foods, onToast, extras }: Props) {
   const months = useMemo(() => availableMonths(entries, today), [entries, today]);
   const [month, setMonth] = useState(() => monthKey(today));
   const [showAllEaten, setShowAllEaten] = useState(false);
@@ -71,6 +74,9 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const eaten = showAllEaten ? stats.mostEaten.slice(0, 10) : stats.mostEaten.slice(0, 3);
   const maxEaten = stats.mostEaten[0]?.count ?? 1;
   const vetoSplit = stats.vetoesByMember.map((x) => `${x.member.id === me.id ? 'You' : x.member.name} ${x.count}`).join(' · ');
+
+  // Room favourites: foods with more thumbs up than down, all time.
+  const favourites = foods.filter((f) => (f.netRating ?? 0) > 0).sort((a, b) => (b.netRating ?? 0) - (a.netRating ?? 0)).slice(0, 5);
 
   // Haven't had in a while: never eaten first, then longest ago (all-time, not just this month).
   const longAgo = foods
@@ -259,6 +265,12 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                       {m.entry.entry_date === today ? 'Today' : dayLabel(m.entry.entry_date)} ·{' '}
                       {m.entry.method === 'wheel' ? `${who}, by wheel` : `${who} picked`}
+                      {(() => {
+                        const r = extras.ratings.filter((x) => x.day_entry_id === m.entry.id);
+                        const up = r.filter((x) => x.rating === 1).length;
+                        const down = r.length - up;
+                        return r.length ? ` · ${up ? `👍 ${up}` : ''}${up && down ? ' ' : ''}${down ? `👎 ${down}` : ''}` : '';
+                      })()}
                     </span>
                   </div>
                   {vetoed.length > 0 && (
@@ -276,10 +288,35 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         )}
       </section>
 
-      {(stats.mostVetoed.length > 0 || stats.tags.length > 0 || longAgo.length > 0) && (
+      <MoneyCard
+        bills={extras.bills}
+        settlements={extras.settlements}
+        members={members}
+        meId={me.id}
+        onRecord={async (p) => {
+          await extras.recordPayment(p);
+          onToast('Payment recorded.');
+        }}
+        onUndo={extras.removePayment}
+      />
+
+      {(stats.mostVetoed.length > 0 || stats.tags.length > 0 || longAgo.length > 0 || favourites.length > 0) && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, paddingBottom: 8 }}>
           <span className="section-label">More</span>
           <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {favourites.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>Room favourites</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {favourites.map((f) => (
+                    <span key={f.id} className="badge" style={{ background: FOOD_COLORS[f.color].tile, color: FOOD_COLORS[f.color].ink, fontSize: 13 }}>
+                      {f.name} · 👍 {f.netRating}
+                    </span>
+                  ))}
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Liked foods come up more often on the wheel.</span>
+              </div>
+            )}
             {longAgo.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span style={{ fontSize: 15, fontWeight: 800 }}>Haven't had in a while</span>

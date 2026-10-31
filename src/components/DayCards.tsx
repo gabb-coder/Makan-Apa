@@ -393,11 +393,13 @@ interface DecidedProps {
   here?: LatLng;
   /** Places nearby that serve it. */
   nearby?: ReactNode;
+  /** Rating and who-paid controls. */
+  extras?: ReactNode;
   busy: boolean;
   onUndo?: () => void;
 }
 
-export function DecidedCard({ food, tomorrowText, here, nearby, busy, onUndo }: DecidedProps) {
+export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, onUndo }: DecidedProps) {
   const reduced = usePrefersReducedMotion();
   return (
     <section
@@ -492,6 +494,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, busy, onUndo }: 
           Find one nearby
         </a>
         {nearby}
+        {extras}
         {onUndo && (
           <button
             type="button"

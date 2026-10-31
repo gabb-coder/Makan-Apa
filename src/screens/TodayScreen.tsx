@@ -11,6 +11,7 @@ import {
   YourTurnCard,
 } from '../components/DayCards';
 import { FoodTile } from '../components/FoodTile';
+import { BillLine, BillSheet, RatingRow } from '../components/MealExtras';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
@@ -26,6 +27,7 @@ import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
+import type { RoomExtras } from '../lib/useRoomExtras';
 
 type DaysApi = ReturnType<typeof useDays>;
 
@@ -48,15 +50,18 @@ interface Props {
   onSwitchRoom: (roomId: string) => void;
   onAddRoom: () => void;
   onToast: (message: string) => void;
+  /** Ratings, bills and the room's own spots. */
+  extras: RoomExtras;
 }
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast, extras }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
   const showNearby = usePref(nearbyPref) === 'on';
+  const [billOpen, setBillOpen] = useState(false);
   const location = useLocation();
   const here = location.status === 'ready' ? location.here : undefined;
   const nearSunway = !here || isNearSunway(here);
@@ -80,6 +85,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? 'nobody yet' : 'everyone';
   const todayFood = todayEntry ? entryFood(todayEntry, foodsById) : null;
   const vetoedNames = todayVetoes.map((v) => v.rejected_food);
+  // The last meal before today, if it was in the past couple of days and you haven't rated it.
+  const lastEntry = entries?.find((e) => e.entry_date < today && e.status === 'accepted') ?? null;
+  const lastMeal =
+    lastEntry && lastEntry.entry_date >= addDays(today, -2) && !extras.ratings.some((r) => r.day_entry_id === lastEntry.id && r.member_id === me.id)
+      ? { entry: lastEntry, food: entryFood(lastEntry, foodsById) ?? customFood('Lunch') }
+      : null;
   const latestVeto = todayVetoes[todayVetoes.length - 1] ?? null;
   const myVetoesLeft = Math.max(0, room.veto_limit - myVetoesToday);
 
@@ -150,6 +161,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         tomorrowText={tomorrowText}
         here={here}
         nearby={showNearby ? <NearbyList spots={suiting(spotsFor(todayFood, 6)).slice(0, 3)} here={here} /> : null}
+        extras={
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 8 }}>
+            <RatingRow entryId={todayEntry.id} ratings={extras.ratings} meId={me.id} onRate={(r) => run(() => extras.rate(todayEntry.id, r))} />
+            <BillLine bill={extras.bills.find((b) => b.day_entry_id === todayEntry.id) ?? null} members={members} meId={me.id} onOpen={() => setBillOpen(true)} />
+          </div>
+        }
         busy={busy}
         // A secret-picks result is everyone's, so it's final.
         onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
@@ -359,6 +376,18 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         </p>
       )}
 
+      {!proposalView && lastMeal && (
+        <section className="card fade-up" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          <RatingRow
+            entryId={lastMeal.entry.id}
+            ratings={extras.ratings}
+            meId={me.id}
+            label={`How was ${lastMeal.entry.entry_date === addDays(today, -1) ? 'yesterday’s' : 'your last'} ${lastMeal.food.name}?`}
+            onRate={(r) => run(() => extras.rate(lastMeal.entry.id, r))}
+          />
+        </section>
+      )}
+
       {!proposalView && (
         <>
           {members.length < 2 ? (
@@ -448,6 +477,21 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             </section>
           )}
         </>
+      )}
+
+      {billOpen && todayEntry && todayFood && (
+        <BillSheet
+          foodName={todayFood.name}
+          bill={extras.bills.find((b) => b.day_entry_id === todayEntry.id) ?? null}
+          members={members}
+          meId={me.id}
+          onSave={async (bill) => {
+            await extras.saveBill({ ...bill, day_entry_id: todayEntry.id });
+            onToast('Bill saved. See who owes what in History.');
+          }}
+          onRemove={() => extras.removeBill(todayEntry.id)}
+          onClose={() => setBillOpen(false)}
+        />
       )}
 
       {peopleOpen && (

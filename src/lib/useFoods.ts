@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { daysBetween } from './dates';
 import { rowToFood, STARTER_PACK, type Food, type FoodDraft } from './foods';
-import { supabase, type DayEntryRow, type FoodOptionRow, type RoomRow } from './supabase';
+import { supabase, type DayEntryRow, type FoodOptionRow, type MealRatingRow, type RoomRow } from './supabase';
 
 function upsert(rows: FoodOptionRow[], row: FoodOptionRow): FoodOptionRow[] {
   const i = rows.findIndex((r) => r.id === row.id);
@@ -12,7 +12,7 @@ function upsert(rows: FoodOptionRow[], row: FoodOptionRow): FoodOptionRow[] {
 }
 
 /** The room's food list, kept live with Supabase Realtime. */
-export function useFoods(room: RoomRow, memberId: string, entries: DayEntryRow[] | null, today: string) {
+export function useFoods(room: RoomRow, memberId: string, entries: DayEntryRow[] | null, today: string, ratings: MealRatingRow[] = []) {
   const [rows, setRows] = useState<FoodOptionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,13 +70,24 @@ export function useFoods(room: RoomRow, memberId: string, entries: DayEntryRow[]
     };
   }, [room.id, load]);
 
+  // Thumbs up minus down per food, over every meal of it.
+  const netRatings = useMemo(() => {
+    const foodOf = new Map((entries ?? []).filter((e) => e.food_option_id).map((e) => [e.id, e.food_option_id!]));
+    const net = new Map<string, number>();
+    for (const r of ratings) {
+      const food = foodOf.get(r.day_entry_id);
+      if (food) net.set(food, (net.get(food) ?? 0) + r.rating);
+    }
+    return net;
+  }, [entries, ratings]);
+
   const all = useMemo<Food[] | null>(() => {
     if (!rows) return null;
     return rows.map((r) => {
       const d = lastEaten.get(r.id);
-      return rowToFood(r, d ? daysBetween(d, today) : null);
+      return { ...rowToFood(r, d ? daysBetween(d, today) : null), netRating: netRatings.get(r.id) ?? 0 };
     });
-  }, [rows, lastEaten, today]);
+  }, [rows, lastEaten, today, netRatings]);
 
   const run = async <T,>(q: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> => {
     const { data, error: err } = await q;

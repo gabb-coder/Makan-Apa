@@ -14,6 +14,8 @@ export interface Food {
   diet: string[];
   /** 1 under RM15, 2 RM15–50, 3 more; null if not set. */
   price: number | null;
+  /** Thumbs up minus thumbs down across every time it was eaten. */
+  netRating?: number;
 }
 
 /** Fields the user edits on a food. */
@@ -64,8 +66,17 @@ export function lastEatenLabel(days: number | null): string {
 
 /** Recently-eaten penalty from the spec: never eaten = 1, otherwise days/7 clamped to [0.1, 1]. */
 export function wheelWeight(food: Food): number {
+  return recencyWeight(food) * ratingFactor(food.netRating ?? 0);
+}
+
+function recencyWeight(food: Food): number {
   if (food.daysSinceEaten === null) return 1;
   return Math.max(0.1, Math.min(1, food.daysSinceEaten / 7));
+}
+
+/** Liked foods come up more (up to 2×), disliked ones less (down to 0.3×). */
+export function ratingFactor(net: number): number {
+  return net >= 0 ? Math.min(2, 1 + 0.25 * net) : Math.max(0.3, 1 + 0.25 * net);
 }
 
 /** Weighted random draw. Returns the index of the winner. */

@@ -10,6 +10,7 @@ import { usePresence } from './lib/usePresence';
 import { useToday } from './lib/useToday';
 import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
+import { useRoomExtras } from './lib/useRoomExtras';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { JoinScreen } from './screens/JoinScreen';
 import { PoolScreen } from './screens/PoolScreen';
@@ -192,7 +193,8 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   }, [removed]);
   const today = useToday(room.timezone);
   const days = useDays(room, members, me.id, today);
-  const foodsApi = useFoods(room, me.id, days.entries, today);
+  const extras = useRoomExtras(room.id, me.id);
+  const foodsApi = useFoods(room, me.id, days.entries, today, extras.ratings);
   const online = usePresence(room.id, me.id);
   const { foods, active } = foodsApi;
 
@@ -272,6 +274,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
             onSeeAll={() => go('history')}
             onSwitchRoom={onSwitchRoom}
             onAddRoom={onAddRoom}
+            extras={extras}
             onToast={onToast}
           />
         ) : (
@@ -327,6 +330,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
             vetoes={days.vetoes}
             foods={foods}
             onToast={onToast}
+            extras={extras}
           />
         ) : (
           loading

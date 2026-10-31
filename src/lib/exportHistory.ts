@@ -2,7 +2,7 @@ import { customFood, entryFood, formatTag, type Food } from './foods';
 import { SUNWAY_SPOTS } from './nearby';
 import { dayLabel } from './rotation';
 import { supabase } from './supabase';
-import type { DayEntryRow, MemberRow, RoomRow, SecretPickRow, VetoRow } from './supabase';
+import type { DayEntryRow, MealBillRow, MealRatingRow, MemberRow, RoomRow, SecretPickRow, VetoRow } from './supabase';
 import { csv, xlsx, type Sheet } from './xlsx';
 
 const AREA_BY_NAME = new Map(SUNWAY_SPOTS.map((s) => [s.name.toLowerCase(), s.area]));
@@ -12,12 +12,14 @@ interface HistoryData {
   entries: DayEntryRow[];
   vetoes: VetoRow[];
   picks: SecretPickRow[];
+  ratings?: MealRatingRow[];
+  bills?: MealBillRow[];
   members: MemberRow[];
   foodsById: Map<string, Food>;
 }
 
 /** One row per agreed meal, oldest first: when, what, who chose it, how, and what got vetoed. */
-export function historySheet({ room, entries, vetoes, picks, members, foodsById }: HistoryData): Sheet {
+export function historySheet({ room, entries, vetoes, picks, ratings = [], bills = [], members, foodsById }: HistoryData): Sheet {
   const nameOf = new Map(members.map((m) => [m.id, m.name]));
   const who = (id: string | null) => (id && nameOf.get(id)) || 'Removed member';
   const byEntry = <T extends { day_entry_id: string }>(rows: T[]) => {
@@ -51,6 +53,15 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
         suggestedBy.join(', '),
         vetoed,
         food.tags.map(formatTag).join(', '),
+        ...(() => {
+          const r = ratings.filter((x) => x.day_entry_id === e.id);
+          const up = r.filter((x) => x.rating === 1).length;
+          return [up || null, r.length - up || null];
+        })(),
+        ...(() => {
+          const bill = bills.find((b) => b.day_entry_id === e.id);
+          return bill ? [who(bill.paid_by), bill.amount_cents / 100, bill.split_between.map(who).join(', ')] : [null, null, null];
+        })(),
       ];
     });
 
@@ -66,21 +77,34 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
       { header: 'Suggested by', width: 16 },
       { header: 'Vetoed (by)', width: 36 },
       { header: 'Tags', width: 24 },
+      { header: 'Liked', width: 7 },
+      { header: 'Disliked', width: 9 },
+      { header: 'Paid by', width: 14 },
+      { header: 'Bill (RM)', width: 10 },
+      { header: 'Split between', width: 28 },
     ],
     rows,
   };
 }
 
 /** Every agreed day in the room, straight from the database (the app only keeps recent ones). */
-export async function loadHistory(roomId: string): Promise<Pick<HistoryData, 'entries' | 'vetoes' | 'picks'>> {
-  const [e, v, p] = await Promise.all([
+export async function loadHistory(roomId: string): Promise<Pick<HistoryData, 'entries' | 'vetoes' | 'picks' | 'ratings' | 'bills'>> {
+  const [e, v, p, r, b] = await Promise.all([
     supabase.from('day_entries').select('*').eq('room_id', roomId).eq('status', 'accepted').order('entry_date').limit(10_000),
     supabase.from('vetoes').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId).limit(50_000),
     supabase.from('secret_picks').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId).limit(50_000),
+    supabase.from('meal_ratings').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId).limit(50_000),
+    supabase.from('meal_bills').select('*').eq('room_id', roomId).limit(50_000),
   ]);
-  const error = e.error ?? v.error ?? p.error;
+  const error = e.error ?? v.error ?? p.error ?? r.error ?? b.error;
   if (error) throw new Error(error.message);
-  return { entries: e.data as DayEntryRow[], vetoes: v.data as VetoRow[], picks: p.data as SecretPickRow[] };
+  return {
+    entries: e.data as DayEntryRow[],
+    vetoes: v.data as VetoRow[],
+    picks: p.data as SecretPickRow[],
+    ratings: r.data as MealRatingRow[],
+    bills: b.data as MealBillRow[],
+  };
 }
 
 export function exportFileName(room: Pick<RoomRow, 'name' | 'code'>, today: string, ext: 'xlsx' | 'csv'): string {
