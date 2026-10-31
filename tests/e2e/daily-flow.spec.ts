@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { createRoom, deleteRoom, joinRoom, newPhone } from './helpers';
 
@@ -47,6 +48,18 @@ test('two phones: propose, veto, re-pick, accept, and it shows in History', asyn
     await gabriel.click('nav >> text=History');
     await expect(gabriel.getByText('Most eaten')).toBeVisible();
     await expect(gabriel.locator('.row')).toHaveCount(1);
+
+    // Export the history as a spreadsheet
+    const [xlsx] = await Promise.all([gabriel.waitForEvent('download'), gabriel.click('button:text-is("Excel (.xlsx)")')]);
+    expect(xlsx.suggestedFilename()).toMatch(/^makan-apa-sunway-lunch-gang-history-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    const [csvFile] = await Promise.all([gabriel.waitForEvent('download'), gabriel.click('button:text-is("CSV")')]);
+    const csv = readFileSync(await csvFile.path(), 'utf8');
+    expect(csv).toContain('Date,Day,Food / place,Area,Chosen by,How,Suggested by,Vetoed (by),Tags');
+    expect(csv).toMatch(/,Gabriel,Spun the wheel,,Pizza \(Alex\),/);
+    if (process.env.EXPORT_DIR) {
+      await xlsx.saveAs(`${process.env.EXPORT_DIR}/${xlsx.suggestedFilename()}`);
+      await csvFile.saveAs(`${process.env.EXPORT_DIR}/${csvFile.suggestedFilename()}`);
+    }
   } finally {
     await deleteRoom(gabriel);
   }

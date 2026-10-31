@@ -3,6 +3,7 @@ import { FoodTile } from '../components/FoodTile';
 import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
 import { dayLabel } from '../lib/rotation';
+import { exportFileName, historyFile, historySheet, loadHistory, saveFile } from '../lib/exportHistory';
 import { roomTitle } from '../lib/session';
 import { availableMonths, monthKey, monthLabel, monthStats } from '../lib/stats';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
@@ -17,6 +18,7 @@ interface Props {
   vetoes: VetoRow[];
   /** Every food, archived included. */
   foods: Food[];
+  onToast: (message: string) => void;
 }
 
 const grow = (delay: number, origin: 'left' | 'right' = 'left') =>
@@ -52,7 +54,7 @@ const statNumber = {
   lineHeight: 1.1,
 } as const;
 
-export function HistoryScreen({ room, me, members, today, entries, vetoes, foods }: Props) {
+export function HistoryScreen({ room, me, members, today, entries, vetoes, foods, onToast }: Props) {
   const months = useMemo(() => availableMonths(entries, today), [entries, today]);
   const [month, setMonth] = useState(() => monthKey(today));
   const [showAllEaten, setShowAllEaten] = useState(false);
@@ -329,7 +331,58 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           </div>
         </section>
       )}
+
+      {entries.some((e) => e.status === 'accepted') && (
+        <ExportCard room={room} members={members} today={today} foodsById={foodsById} onToast={onToast} />
+      )}
     </main>
+  );
+}
+
+interface ExportProps {
+  room: RoomRow;
+  members: MemberRow[];
+  today: string;
+  foodsById: Map<string, Food>;
+  onToast: (message: string) => void;
+}
+
+/** Download every agreed meal as a spreadsheet. */
+function ExportCard({ room, members, today, foodsById, onToast }: ExportProps) {
+  const [busy, setBusy] = useState<'xlsx' | 'csv' | null>(null);
+  const run = async (format: 'xlsx' | 'csv') => {
+    setBusy(format);
+    try {
+      const data = await loadHistory(room.id);
+      const sheet = historySheet({ room, members, foodsById, ...data });
+      const saved = await saveFile(historyFile(sheet, exportFileName(room, today, format), format));
+      if (saved) onToast(`Exported ${sheet.rows.length} ${sheet.rows.length === 1 ? 'meal' : 'meals'}.`);
+    } catch (e) {
+      onToast(e instanceof Error ? `Couldn't export: ${e.message}` : "Couldn't export. Try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, paddingBottom: 8 }}>
+      <span className="section-label">Export</span>
+      <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+          Every meal you've agreed on, all months: the date, the food or place, who chose it, how, and what got vetoed.
+        </span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <button type="button" className="btn btn--primary press" disabled={busy !== null} onClick={() => run('xlsx')}>
+            {busy === 'xlsx' ? 'Exporting…' : 'Excel (.xlsx)'}
+          </button>
+          <button type="button" className="btn btn--secondary press" disabled={busy !== null} onClick={() => run('csv')}>
+            {busy === 'csv' ? 'Exporting…' : 'CSV'}
+          </button>
+        </div>
+        <span style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
+          Both open in Excel, Numbers and Google Sheets. For Google Sheets, upload the file to Google Drive and open it, or use File → Import in Sheets.
+        </span>
+      </div>
+    </section>
   );
 }
 
