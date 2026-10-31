@@ -2,6 +2,7 @@ import type { Food } from './foods';
 import type { RoomSpotRow } from './supabase';
 import { distanceKm, type LatLng } from './geo';
 import { clockIn, openLabel, openState } from './hours';
+import { t, tk } from './i18n';
 import { SPOT_DETAILS, type SpotDetails } from './spotDetails';
 import type { FoodColor, FoodIconName } from './palette';
 
@@ -32,6 +33,20 @@ export interface Spot {
   details?: SpotDetails;
 }
 
+/** What a room spot shows when its area or note was left out; kept in English and translated on display. */
+export const ROOM_SPOT_AREA = tk('Added by your room');
+const ROOM_SPOT_NOTE = tk('A place someone in your room added');
+
+/** The spot's area as shown: a room spot's fallback is translated, real places stay as they are. */
+export function spotArea(spot: Spot): string {
+  return spot.room && spot.area === ROOM_SPOT_AREA ? t(ROOM_SPOT_AREA) : spot.area;
+}
+
+/** What the spot is known for, as shown: a room spot's fallback is translated, anything typed is not. */
+export function spotKnownFor(spot: Spot): string {
+  return spot.room && spot.knownFor === ROOM_SPOT_NOTE ? t(ROOM_SPOT_NOTE) : spot.knownFor;
+}
+
 /** A room's own spot, shaped like the Sunway ones. */
 export function roomSpot(row: RoomSpotRow): Spot {
   let hash = 0;
@@ -40,8 +55,8 @@ export function roomSpot(row: RoomSpotRow): Spot {
   return {
     id: `room:${row.id}`,
     name: row.name,
-    area: row.area?.trim() || 'Added by your room',
-    knownFor: row.note?.trim() || 'A place someone in your room added',
+    area: row.area?.trim() || ROOM_SPOT_AREA,
+    knownFor: row.note?.trim() || ROOM_SPOT_NOTE,
     price: (row.price as 1 | 2 | 3 | null) ?? null,
     tags: [],
     matches: [row.name.toLowerCase()],
@@ -559,22 +574,22 @@ export function byDistance(spots: Spot[], here: LatLng): Spot[] {
     .map((x) => x.spot);
 }
 
-/** Quick Google Maps searches around you, for anywhere the Sunway list doesn't cover. */
+/** Quick Google Maps searches around you, for anywhere the Sunway list doesn't cover. Labels are shown with t(); queries stay English. */
 export const NEAR_YOU_SEARCHES: { label: string; query: string; icon: FoodIconName; color: FoodColor }[] = [
-  { label: 'Anything good', query: 'restaurants', icon: 'bowl', color: 'tomato' },
-  { label: 'Mamak', query: 'mamak', icon: 'cup', color: 'mustard' },
-  { label: 'Nasi lemak', query: 'nasi lemak', icon: 'rice', color: 'leaf' },
-  { label: 'Chicken rice', query: 'chicken rice', icon: 'rice', color: 'mustard' },
-  { label: 'Noodles', query: 'noodles', icon: 'bowl', color: 'sand' },
-  { label: 'Korean', query: 'korean food', icon: 'bowl', color: 'plum' },
-  { label: 'Cafe', query: 'cafe', icon: 'cup', color: 'teal' },
-  { label: 'Dessert', query: 'dessert', icon: 'cup', color: 'peach' },
+  { label: tk('Anything good'), query: 'restaurants', icon: 'bowl', color: 'tomato' },
+  { label: tk('Mamak'), query: 'mamak', icon: 'cup', color: 'mustard' },
+  { label: tk('Nasi lemak'), query: 'nasi lemak', icon: 'rice', color: 'leaf' },
+  { label: tk('Chicken rice'), query: 'chicken rice', icon: 'rice', color: 'mustard' },
+  { label: tk('Noodles'), query: 'noodles', icon: 'bowl', color: 'sand' },
+  { label: tk('Korean'), query: 'korean food', icon: 'bowl', color: 'plum' },
+  { label: tk('Cafe'), query: 'cafe', icon: 'cup', color: 'teal' },
+  { label: tk('Dessert'), query: 'dessert', icon: 'cup', color: 'peach' },
 ];
 
 export function spotMapsUrl(spot: Spot): string {
   if (spot.room) {
     const at = spot.details?.at;
-    const query = at ? `${at.lat},${at.lng}` : `${spot.name} ${spot.area === 'Added by your room' ? '' : spot.area}`.trim();
+    const query = at ? `${at.lat},${at.lng}` : `${spot.name} ${spot.area === ROOM_SPOT_AREA ? '' : spot.area}`.trim();
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   }
   const where = spot.area === 'On campus' ? 'Sunway University' : /sunway|subang/i.test(spot.area) ? spot.area : `${spot.area} Bandar Sunway`;
@@ -582,8 +597,8 @@ export function spotMapsUrl(spot: Spot): string {
 }
 
 export function priceLabel(price: Spot['price']): string {
-  if (price === null) return 'Price not set';
-  return price === 1 ? 'Under RM15' : price === 2 ? 'RM15–50' : 'RM50+';
+  if (price === null) return t('Price not set');
+  return price === 1 ? t('Under RM15') : price === 2 ? 'RM15–50' : 'RM50+';
 }
 
 /** Spots that fit a food: the longest dish-name match counts most, then shared tags. */

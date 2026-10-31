@@ -1,17 +1,18 @@
 import { daysBetween } from './dates';
 import { entryFood, type Food } from './foods';
 import type { DayEntryRow, MemberRow, VetoRow } from './supabase';
+import { locale } from './i18n';
 
 /** YYYY-MM for a YYYY-MM-DD date. */
 export function monthKey(date: string): string {
   return date.slice(0, 7);
 }
 
-/** "October", or "October 2025" when it isn't `currentYear`. */
+/** "October", or "October 2025" when it isn't `currentYear` (in the app's language: "Oktober 2025", "2025年10月"). */
 export function monthLabel(key: string, currentYear?: string): string {
   const d = new Date(`${key}-01T00:00:00Z`);
-  const month = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(d);
-  return currentYear && key.slice(0, 4) !== currentYear ? `${month} ${key.slice(0, 4)}` : month;
+  const withYear = !!currentYear && key.slice(0, 4) !== currentYear;
+  return new Intl.DateTimeFormat(locale(), { month: 'long', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' }).format(d);
 }
 
 /** Months with any day entry, plus the current one, newest first. */

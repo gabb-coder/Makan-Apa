@@ -10,6 +10,7 @@ import { roomTitle } from '../lib/session';
 import { availableMonths, monthKey, monthLabel, monthStats } from '../lib/stats';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { t } from '../lib/i18n';
 
 interface Props {
   room: RoomRow;
@@ -66,14 +67,14 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const stats = useMemo(() => monthStats(month, entries, vetoes, members, foodsById), [month, entries, vetoes, members, foodsById]);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
-  const nameFor = (id: string | null) => (id === me.id ? 'You' : (id && memberById.get(id)?.name) || 'Someone');
+  const nameFor = (id: string | null) => (id === me.id ? t('You') : (id && memberById.get(id)?.name) || t('Someone'));
 
   const currentYear = today.slice(0, 4);
   const isCurrent = month === monthKey(today);
   const mealsN = stats.meals.length;
   const eaten = showAllEaten ? stats.mostEaten.slice(0, 10) : stats.mostEaten.slice(0, 3);
   const maxEaten = stats.mostEaten[0]?.count ?? 1;
-  const vetoSplit = stats.vetoesByMember.map((x) => `${x.member.id === me.id ? 'You' : x.member.name} ${x.count}`).join(' · ');
+  const vetoSplit = stats.vetoesByMember.map((x) => `${x.member.id === me.id ? t('You') : x.member.name} ${x.count}`).join(' · ');
 
   // Room favourites: foods with more thumbs up than down, all time.
   const favourites = foods.filter((f) => (f.netRating ?? 0) > 0).sort((a, b) => (b.netRating ?? 0) - (a.netRating ?? 0)).slice(0, 5);
@@ -91,7 +92,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {roomTitle(room)}
           </span>
-          <h1 className="title">History</h1>
+          <h1 className="title">{t('History')}</h1>
         </div>
         <label
           className="press"
@@ -117,7 +118,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           </svg>
           {/* Native picker on top, invisible, so phones get their own month list. */}
           <select
-            aria-label={`Change month, showing ${monthLabel(month, currentYear)}`}
+            aria-label={t('Change month, showing {month}', { month: monthLabel(month, currentYear) })}
             value={month}
             onChange={(e) => {
               setMonth(e.target.value);
@@ -136,28 +137,28 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
 
       <div key={`stats-${month}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
         <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Meals</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{t('Meals')}</span>
           <span style={statNumber}>{Math.round(mealsN * p)}</span>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isCurrent ? 'this month' : 'that month'}</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isCurrent ? t('this month') : t('that month')}</span>
         </div>
         <div style={{ background: 'var(--streak-bg)', borderRadius: 18, padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--streak-ink-2)' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ transformOrigin: '50% 90%', animation: 'flicker 1.1s ease-in-out infinite' }}>
               <path d="M12 2c.5 3.5 5 5.5 5 11a5 5 0 0 1-10 0c0-2.8 1.6-4.4 2.8-5.6.2 2.1 1.2 3.4 2.4 3.6-.6-3.2-.8-6 0-9z" fill="#CC3F17" />
             </svg>
-            <span style={{ whiteSpace: 'nowrap' }}>No repeats</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{t('No repeats')}</span>
           </span>
           <span style={{ ...statNumber, color: 'var(--streak-ink)', whiteSpace: 'nowrap' }}>
             {Math.round(stats.bestStreak * p)}
-            <span style={{ fontSize: 16, letterSpacing: '-0.01em' }}> {stats.bestStreak === 1 ? 'day' : 'days'}</span>
+            <span style={{ fontSize: 16, letterSpacing: '-0.01em' }}> {stats.bestStreak === 1 ? t('day') : t('days')}</span>
           </span>
-          <span style={{ fontSize: 12, color: 'var(--streak-ink-2)' }}>best streak</span>
+          <span style={{ fontSize: 12, color: 'var(--streak-ink-2)' }}>{t('best streak')}</span>
         </div>
         <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Vetoes</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{t('Vetoes')}</span>
           <span style={statNumber}>{Math.round(stats.vetoes.length * p)}</span>
           <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {vetoSplit || 'None'}
+            {vetoSplit || t('None')}
           </span>
         </div>
       </div>
@@ -168,9 +169,9 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 15, fontWeight: 800 }}>Who decided</span>
+          <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Who decided')}</span>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {mealsN} {mealsN === 1 ? 'day' : 'days'}
+            {mealsN === 1 ? t('{n} day', { n: mealsN }) : t('{n} days', { n: mealsN })}
           </span>
         </div>
         {stats.deciders.length === 0 ? (
@@ -178,7 +179,13 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         ) : (
           <div
             role="img"
-            aria-label={stats.deciders.map((d) => `${nameFor(d.member.id)} decided ${d.count} ${d.count === 1 ? 'day' : 'days'}`).join(', ')}
+            aria-label={stats.deciders
+              .map((d) =>
+                d.count === 1
+                  ? t('{name} decided {n} day', { name: nameFor(d.member.id), n: d.count })
+                  : t('{name} decided {n} days', { name: nameFor(d.member.id), n: d.count }),
+              )
+              .join(', ')}
             style={{ display: 'flex', gap: 4, height: 12 }}
           >
             {stats.deciders.map((d, i) => (
@@ -211,19 +218,19 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 15, fontWeight: 800 }}>Most eaten</span>
+          <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Most eaten')}</span>
           {stats.mostEaten.length > 3 && (
             <button
               type="button"
               onClick={() => setShowAllEaten((s) => !s)}
               style={{ minHeight: 32, padding: 0, border: 'none', background: 'none', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}
             >
-              {showAllEaten ? 'Show top 3' : `See top ${Math.min(10, stats.mostEaten.length)}`}
+              {showAllEaten ? t('Show top 3') : t('See top {n}', { n: Math.min(10, stats.mostEaten.length) })}
             </button>
           )}
         </div>
         {eaten.length === 0 ? (
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>Nothing agreed on yet.</span>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Nothing agreed on yet.')}</span>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr) 24px', alignItems: 'center', columnGap: 10, rowGap: 8, fontSize: 13 }}>
             {eaten.map((r, i) => (
@@ -241,10 +248,10 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
       </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-        <span className="section-label">{isCurrent ? 'Recent meals' : `Meals in ${monthLabel(month, currentYear)}`}</span>
+        <span className="section-label">{isCurrent ? t('Recent meals') : t('Meals in {month}', { month: monthLabel(month, currentYear) })}</span>
         {stats.meals.length === 0 ? (
           <p className="card" style={{ margin: 0, padding: 16, fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {isCurrent ? 'No meals agreed yet this month.' : 'No meals that month.'}
+            {isCurrent ? t('No meals agreed yet this month.') : t('No meals that month.')}
           </p>
         ) : (
           <div key={`meals-${month}`} className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -263,9 +270,9 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                       {m.food.name}
                     </span>
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      {m.entry.entry_date === today ? 'Today' : dayLabel(m.entry.entry_date)}
-                      {(room.meals === 'both' || m.entry.meal === 'dinner') && ` ${m.entry.meal === 'dinner' ? 'dinner' : 'lunch'}`} ·{' '}
-                      {m.entry.method === 'wheel' ? `${who}, by wheel` : `${who} picked`}
+                      {m.entry.entry_date === today ? t('Today') : dayLabel(m.entry.entry_date)}
+                      {(room.meals === 'both' || m.entry.meal === 'dinner') && ` ${m.entry.meal === 'dinner' ? t('dinner') : t('lunch')}`} ·{' '}
+                      {m.entry.method === 'wheel' ? t('{name}, by wheel', { name: who }) : t('{name} picked', { name: who })}
                       {(() => {
                         const r = extras.ratings.filter((x) => x.day_entry_id === m.entry.id);
                         const up = r.filter((x) => x.rating === 1).length;
@@ -279,7 +286,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                       className="badge"
                       style={{ flexShrink: 1, minWidth: 0, maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', background: 'var(--bar-track)', color: 'var(--ink-2)' }}
                     >
-                      {vetoed.length > 2 ? `${vetoed.length} vetoed` : `${vetoed.join(', ')} vetoed`}
+                      {vetoed.length > 2 ? t('{n} vetoed', { n: vetoed.length }) : t('{foods} vetoed', { foods: vetoed.join(', ') })}
                     </span>
                   )}
                 </div>
@@ -296,18 +303,18 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         meId={me.id}
         onRecord={async (p) => {
           await extras.recordPayment(p);
-          onToast('Payment recorded.');
+          onToast(t('Payment recorded.'));
         }}
         onUndo={extras.removePayment}
       />
 
       {(stats.mostVetoed.length > 0 || stats.tags.length > 0 || longAgo.length > 0 || favourites.length > 0) && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, paddingBottom: 8 }}>
-          <span className="section-label">More</span>
+          <span className="section-label">{t('More')}</span>
           <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {favourites.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>Room favourites</span>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Room favourites')}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {favourites.map((f) => (
                     <span key={f.id} className="badge" style={{ background: FOOD_COLORS[f.color].tile, color: FOOD_COLORS[f.color].ink, fontSize: 13 }}>
@@ -315,12 +322,12 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                     </span>
                   ))}
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Liked foods come up more often on the wheel.</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('Liked foods come up more often on the wheel.')}</span>
               </div>
             )}
             {longAgo.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>Haven't had in a while</span>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>{t("Haven't had in a while")}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {longAgo.map((f) => (
                     <span
@@ -343,12 +350,12 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                     </span>
                   ))}
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>These get the best odds on the wheel.</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('These get the best odds on the wheel.')}</span>
               </div>
             )}
             {stats.mostVetoed.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>Most vetoed</span>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Most vetoed')}</span>
                 <div style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr) 24px', alignItems: 'center', columnGap: 10, rowGap: 8, fontSize: 13 }}>
                   {stats.mostVetoed.slice(0, 3).map((r, i) => (
                     <Bar key={r.key} name={r.name} count={r.count} pct={(r.count / stats.mostVetoed[0].count) * 100} color="var(--border-strong)" delay={0.2 + i * 0.12} />
@@ -358,7 +365,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
             )}
             {stats.tags.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>By tag</span>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>{t('By tag')}</span>
                 <div style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr) 24px', alignItems: 'center', columnGap: 10, rowGap: 8, fontSize: 13 }}>
                   {stats.tags.slice(0, 5).map((t, i) => (
                     <Bar key={t.tag} name={formatTag(t.tag)} count={t.count} pct={(t.count / stats.tags[0].count) * 100} color="#FFB4A2" delay={0.2 + i * 0.12} />
@@ -394,30 +401,30 @@ function ExportCard({ room, members, today, foodsById, onToast }: ExportProps) {
       const data = await loadHistory(room.id);
       const sheet = historySheet({ room, members, foodsById, ...data });
       const saved = await saveFile(historyFile(sheet, exportFileName(room, today, format), format));
-      if (saved) onToast(`Exported ${sheet.rows.length} ${sheet.rows.length === 1 ? 'meal' : 'meals'}.`);
+      if (saved) onToast(sheet.rows.length === 1 ? t('Exported {n} meal.', { n: sheet.rows.length }) : t('Exported {n} meals.', { n: sheet.rows.length }));
     } catch (e) {
-      onToast(e instanceof Error ? `Couldn't export: ${e.message}` : "Couldn't export. Try again.");
+      onToast(e instanceof Error ? t("Couldn't export: {error}", { error: e.message }) : t("Couldn't export. Try again."));
     } finally {
       setBusy(null);
     }
   };
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, paddingBottom: 8 }}>
-      <span className="section-label">Export</span>
+      <span className="section-label">{t('Export')}</span>
       <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
-          Every meal you've agreed on, all months: the date, the food or place, who chose it, how, and what got vetoed.
+          {t("Every meal you've agreed on, all months: the date, the food or place, who chose it, how, and what got vetoed.")}
         </span>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button type="button" className="btn btn--primary press" disabled={busy !== null} onClick={() => run('xlsx')}>
-            {busy === 'xlsx' ? 'Exporting…' : 'Excel (.xlsx)'}
+            {busy === 'xlsx' ? t('Exporting…') : 'Excel (.xlsx)'}
           </button>
           <button type="button" className="btn btn--secondary press" disabled={busy !== null} onClick={() => run('csv')}>
-            {busy === 'csv' ? 'Exporting…' : 'CSV'}
+            {busy === 'csv' ? t('Exporting…') : 'CSV'}
           </button>
         </div>
         <span style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-          Both open in Excel, Numbers and Google Sheets. For Google Sheets, upload the file to Google Drive and open it, or use File → Import in Sheets.
+          {t('Both open in Excel, Numbers and Google Sheets. For Google Sheets, upload the file to Google Drive and open it, or use File → Import in Sheets.')}
         </span>
       </div>
     </section>

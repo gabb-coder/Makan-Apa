@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { spotSuitability, suitsEveryone, type Needs } from '../lib/diet';
 import { formatTag } from '../lib/foods';
-import { dayHoursLabel, WEEKDAYS } from '../lib/hours';
+import { dayHoursLabel, WEEKDAYS, weekdayLabel } from '../lib/hours';
+import { t, tk } from '../lib/i18n';
 import { distanceKm, formatDistance, mapsNearUrl, type LatLng } from '../lib/geo';
 import { turnOffLocation, turnOnLocation, type LocationState } from '../lib/location';
 import {
@@ -11,9 +12,11 @@ import {
   NEAR_YOU_SEARCHES,
   NEARBY_LABEL,
   priceLabel,
+  spotArea,
   spotDetails,
   spotDistanceIsRough,
   spotDistanceKm,
+  spotKnownFor,
   spotOpenNow,
   spotMapsUrl,
   SUNWAY_CENTRE,
@@ -28,7 +31,7 @@ function DietBadge({ diet }: { diet: Spot['diet'] }) {
       className="badge"
       style={diet === 'halal' ? { background: '#DDEFD8', color: '#2F6B2A' } : { background: 'var(--bar-track)', color: 'var(--ink-2)' }}
     >
-      {diet === 'halal' ? 'Halal' : 'Serves pork'}
+      {diet === 'halal' ? t('Halal') : t('Serves pork')}
     </span>
   );
 }
@@ -44,7 +47,7 @@ function OpenText({ spot, short = false }: { spot: Spot; short?: boolean }) {
   if (!now) return null;
   return (
     <span style={{ fontSize: 12, fontWeight: 700, color: now.open ? 'var(--success)' : 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-      {short ? (now.open ? 'Open now' : 'Closed now') : now.label}
+      {short ? (now.open ? t('Open now') : t('Closed now')) : now.label}
     </span>
   );
 }
@@ -75,7 +78,7 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
             <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {here ? `${distanceText(s, here)} · ${s.area}` : s.area}
+              {here ? `${distanceText(s, here)} · ${spotArea(s)}` : spotArea(s)}
             </span>
           </span>
           <span
@@ -90,7 +93,7 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
               minHeight: 34,
             }}
           >
-            {s.knownFor}
+            {spotKnownFor(s)}
           </span>
           <span style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-ink)', whiteSpace: 'nowrap' }}>{priceLabel(s.price)}</span>
@@ -136,7 +139,7 @@ export function NearbyList({ spots, here }: { spots: Spot[]; here?: LatLng }) {
   if (!shown.length) return null;
   return (
     <div style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' }}>
-      <span className="section-label">{here ? 'Near you' : `Near ${NEARBY_LABEL}`}</span>
+      <span className="section-label">{here ? t('Near you') : t('Near {place}', { place: NEARBY_LABEL })}</span>
       {shown.map((s) => (
         <a key={s.id} href={spotMapsUrl(s)} target="_blank" rel="noreferrer" className="press" style={listRow}>
           <FoodTile food={s} size={32} />
@@ -144,7 +147,7 @@ export function NearbyList({ spots, here }: { spots: Spot[]; here?: LatLng }) {
             <span style={{ fontSize: 14, fontWeight: 700 }}>{s.name}</span>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>
               {here ? `${distanceText(s, here)} · ` : ''}
-              {s.area} · {priceLabel(s.price)}
+              {spotArea(s)} · {priceLabel(s.price)}
             </span>
             <OpenText spot={s} />
           </span>
@@ -179,9 +182,9 @@ export function NearYouStrip({ here }: { here: LatLng }) {
           }}
         >
           <FoodTile food={q} size={36} />
-          <span style={{ fontSize: 14, fontWeight: 800 }}>{q.label}</span>
+          <span style={{ fontSize: 14, fontWeight: 800 }}>{t(q.label)}</span>
           <span style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {PIN(12)} Near you
+            {PIN(12)} {t('Near you')}
           </span>
         </a>
       ))}
@@ -196,22 +199,22 @@ export function LocationLine({ location, nearSunway }: { location: LocationState
   if (location.status === 'off')
     return (
       <button type="button" className="press" onClick={() => void turnOnLocation()} style={{ ...link, display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
-        {PIN(15)} Use my location to find what's closest
+        {PIN(15)} {t("Use my location to find what's closest")}
       </button>
     );
-  if (location.status === 'locating') return <span style={{ ...note, padding: '10px 0' }}>Finding where you are…</span>;
+  if (location.status === 'locating') return <span style={{ ...note, padding: '10px 0' }}>{t('Finding where you are…')}</span>;
   if (location.status === 'denied')
     return (
       <span style={{ ...note, padding: '6px 0' }}>
-        Location is blocked for this app. To use it, allow location for this site in your browser or phone settings, then turn it on in Settings.
+        {t('Location is blocked for this app. To use it, allow location for this site in your browser or phone settings, then turn it on in Settings.')}
       </span>
     );
   if (location.status === 'unavailable')
     return (
       <span style={{ ...note, padding: '6px 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0 8px' }}>
-        Couldn't get your location.
+        {t("Couldn't get your location.")}
         <button type="button" className="press" onClick={() => void turnOnLocation()} style={link}>
-          Try again
+          {t('Try again')}
         </button>
       </span>
     );
@@ -220,11 +223,11 @@ export function LocationLine({ location, nearSunway }: { location: LocationState
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {PIN(13)}
         {nearSunway
-          ? 'Closest to you first'
-          : `You're ${formatDistance(distanceKm(location.here, SUNWAY_CENTRE))} from ${NEARBY_LABEL}`}
+          ? t('Closest to you first')
+          : t("You're {distance} from {place}", { distance: formatDistance(distanceKm(location.here, SUNWAY_CENTRE)), place: NEARBY_LABEL })}
       </span>
       <button type="button" className="press" onClick={turnOffLocation} style={link}>
-        Stop using location
+        {t('Stop using location')}
       </button>
     </span>
   );
@@ -258,23 +261,30 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
         <header style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <FoodTile food={spot} size={56} style={{ borderRadius: 16 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flexGrow: 1 }}>
-            <span className="eyebrow">{spot.room ? `Your room's spot${addedBy ? ` · added by ${addedBy}` : ''}` : `Near ${NEARBY_LABEL} · ${spot.area}`}</span>
+            <span className="eyebrow">
+              {spot.room
+                ? addedBy
+                  ? t("Your room's spot · added by {name}", { name: addedBy })
+                  : t("Your room's spot")
+                : t('Near {place} · {area}', { place: NEARBY_LABEL, area: spot.area })}
+            </span>
             <h2 id="spot-title" className="title title--sm" style={{ fontSize: 24, overflowWrap: 'anywhere' }}>
               {spot.name}
             </h2>
           </div>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
         </header>
-        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{spot.knownFor}.</p>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{spotKnownFor(spot)}.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {here && (
             <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
-              {spotDistanceIsRough(spot) ? 'About ' : ''}
-              {formatDistance(spotDistanceKm(spot, here))} away
+              {spotDistanceIsRough(spot)
+                ? t('About {distance} away', { distance: formatDistance(spotDistanceKm(spot, here)) })
+                : t('{distance} away', { distance: formatDistance(spotDistanceKm(spot, here)) })}
             </span>
           )}
           <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
@@ -287,7 +297,7 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
             </span>
           ))}
         </div>
-        {spot.room ? <span style={{ fontSize: 13, color: 'var(--muted)' }}>{spot.area}</span> : <SpotHours spot={spot} />}
+        {spot.room ? <span style={{ fontSize: 13, color: 'var(--muted)' }}>{spotArea(spot)}</span> : <SpotHours spot={spot} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {onPick && pickLabel && (
             <button type="button" className="btn btn--primary press" style={{ height: 52 }} onClick={onPick}>
@@ -302,18 +312,18 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
             style={{ height: 52, background: 'var(--ink)', color: 'var(--on-ink)' }}
           >
             {PIN(18)}
-            Open in Google Maps
+            {t('Open in Google Maps')}
           </a>
           <button type="button" className="btn btn--secondary press" disabled={inList} onClick={onAdd}>
-            {inList ? 'Already in your food list' : 'Add to food list'}
+            {inList ? t('Already in your food list') : t('Add to food list')}
           </button>
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-          {spot.room ? 'Added by someone in your room.' : 'From local food guides and map listings. Hours change, so check Google Maps before a special trip.'}
+          {spot.room ? t('Added by someone in your room.') : t('From local food guides and map listings. Hours change, so check Google Maps before a special trip.')}
         </p>
         {onRemove && (
           <button type="button" className="btn btn--danger press" onClick={onRemove} style={{ height: 44 }}>
-            Remove from your room's spots
+            {t("Remove from your room's spots")}
           </button>
         )}
       </div>
@@ -321,23 +331,24 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
   );
 }
 
+// Labels stay English as filter ids and are shown with t().
 const FILTERS: { label: string; test: (s: Spot) => boolean }[] = [
-  { label: 'All', test: () => true },
-  { label: 'Open now', test: (s) => spotOpenNow(s)?.open === true },
-  { label: 'Halal', test: (s) => s.diet === 'halal' },
-  { label: 'Under RM15', test: (s) => s.price === 1 },
-  { label: 'Late night', test: (s) => s.tags.includes('late night') },
-  { label: 'Rice', test: (s) => s.tags.includes('rice') },
-  { label: 'Noodles', test: (s) => s.tags.includes('noodles') },
-  { label: 'Korean', test: (s) => s.tags.includes('korean') },
-  { label: 'Dessert', test: (s) => s.tags.includes('dessert') },
+  { label: tk('All'), test: () => true },
+  { label: tk('Open now'), test: (s) => spotOpenNow(s)?.open === true },
+  { label: tk('Halal'), test: (s) => s.diet === 'halal' },
+  { label: tk('Under RM15'), test: (s) => s.price === 1 },
+  { label: tk('Late night'), test: (s) => s.tags.includes('late night') },
+  { label: tk('Rice'), test: (s) => s.tags.includes('rice') },
+  { label: tk('Noodles'), test: (s) => s.tags.includes('noodles') },
+  { label: tk('Korean'), test: (s) => s.tags.includes('korean') },
+  { label: tk('Dessert'), test: (s) => s.tags.includes('dessert') },
 ];
 
 /** Today's hours with the whole week behind a tap. */
 function SpotHours({ spot }: { spot: Spot }) {
   const [open, setOpen] = useState(false);
   const { hours, mallHours } = spotDetails(spot);
-  if (!hours) return <span style={{ fontSize: 13, color: 'var(--muted)' }}>Opening hours not listed.</span>;
+  if (!hours) return <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Opening hours not listed.')}</span>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <button
@@ -349,14 +360,14 @@ function SpotHours({ spot }: { spot: Spot }) {
         <span style={{ fontSize: 14 }}>
           <OpenText spot={spot} />
         </span>
-        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{mallHours ? '(mall hours)' : ''}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{open ? 'Hide hours' : 'All hours'}</span>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{mallHours ? t('(mall hours)') : ''}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{open ? t('Hide hours') : t('All hours')}</span>
       </button>
       {open && (
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '48px 1fr', rowGap: 4, fontSize: 13 }}>
           {WEEKDAYS.map((d, i) => (
             <div key={d} style={{ display: 'contents' }}>
-              <dt style={{ fontWeight: 700 }}>{d}</dt>
+              <dt style={{ fontWeight: 700 }}>{weekdayLabel(i)}</dt>
               <dd style={{ margin: 0, color: 'var(--ink-2)' }}>{dayHoursLabel(hours[i])}</dd>
             </div>
           ))}
@@ -381,7 +392,7 @@ interface AllProps {
 
 export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, here, members = [], onClose, onOpen }: AllProps) {
   const needs = members.some((m) => m.diet.length > 0 || m.budget);
-  const filters = needs ? [FILTERS[0], { label: 'Suits everyone', test: (s: Spot) => suitsEveryone(spotSuitability(s), members) }, ...FILTERS.slice(1)] : FILTERS;
+  const filters = needs ? [FILTERS[0], { label: tk('Suits everyone'), test: (s: Spot) => suitsEveryone(spotSuitability(s), members) }, ...FILTERS.slice(1)] : FILTERS;
   const [filter, setFilter] = useState(needs ? 'Suits everyone' : 'All');
   const test = (filters.find((f) => f.label === filter) ?? filters[0]).test;
   const spots = allSpots.filter(test);
@@ -400,32 +411,32 @@ export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, her
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">{allSpots.length} places from local food guides</span>
+            <span className="eyebrow">{t('{n} places from local food guides', { n: allSpots.length })}</span>
             <h2 id="nearby-title" className="title title--sm" style={{ fontSize: 24 }}>
-              Near {NEARBY_LABEL}
+              {t('Near {place}', { place: NEARBY_LABEL })}
             </h2>
           </div>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
         </header>
-        <div className="chip-row" role="group" aria-label="Filter places" style={{ flexShrink: 0 }}>
+        <div className="chip-row" role="group" aria-label={t('Filter places')} style={{ flexShrink: 0 }}>
           {filters.map((f) => (
             <button key={f.label} type="button" className="chip press" aria-pressed={filter === f.label} onClick={() => setFilter(f.label)}>
-              {f.label}
+              {t(f.label)}
             </button>
           ))}
         </div>
         {filter === 'Halal' && (
           <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-            Only places a source describes as halal. Others may be halal too; check before you go.
+            {t('Only places a source describes as halal. Others may be halal too; check before you go.')}
           </p>
         )}
         {(ours.length > 0 || onAddSpot) && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span className="section-label">Your room's spots</span>
+            <span className="section-label">{t("Your room's spots")}</span>
             {ours.length > 0 && (
               <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 {ours.map((s) => (
@@ -435,7 +446,7 @@ export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, her
                       <span style={{ fontSize: 15, fontWeight: 700 }}>{s.name}</span>
                       <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {here && s.details?.at ? `${distanceText(s, here)} · ` : ''}
-                        {s.knownFor}
+                        {spotKnownFor(s)}
                       </span>
                     </span>
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
@@ -448,7 +459,7 @@ export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, her
             )}
             {onAddSpot && (
               <button type="button" className="btn btn--secondary press" onClick={onAddSpot}>
-                Add a place
+                {t('Add a place')}
               </button>
             )}
           </section>
@@ -522,7 +533,7 @@ export function AddSpotSheet({ here, onSave, onClose }: AddSpotProps) {
       });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add that place.');
+      setError(e instanceof Error ? e.message : t('Could not add that place.'));
       setBusy(false);
     }
   };
@@ -543,42 +554,42 @@ export function AddSpotSheet({ here, onSave, onClose }: AddSpotProps) {
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <h2 id="add-spot-title" className="title title--sm" style={{ fontSize: 24 }}>
-            Add a place
+            {t('Add a place')}
           </h2>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
         </header>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="spot-name" className="field-label">Name</label>
-          <input id="spot-name" className="input" maxLength={60} autoFocus placeholder="e.g. Restoran Yong" value={name} onChange={(e) => setName(e.target.value)} style={{ height: 50 }} />
+          <label htmlFor="spot-name" className="field-label">{t('Name')}</label>
+          <input id="spot-name" className="input" maxLength={60} autoFocus placeholder={t('e.g. Restoran Yong')} value={name} onChange={(e) => setName(e.target.value)} style={{ height: 50 }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="spot-area" className="field-label">Where <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span></label>
-          <input id="spot-area" className="input" maxLength={60} placeholder="e.g. SS15, or Sunway Pyramid LG2" value={area} onChange={(e) => setArea(e.target.value)} style={{ height: 50 }} />
+          <label htmlFor="spot-area" className="field-label">{t('Where')} <span style={{ fontWeight: 500, color: 'var(--muted)' }}>{t('(optional)')}</span></label>
+          <input id="spot-area" className="input" maxLength={60} placeholder={t('e.g. SS15, or Sunway Pyramid LG2')} value={area} onChange={(e) => setArea(e.target.value)} style={{ height: 50 }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="spot-note" className="field-label">Known for <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span></label>
-          <input id="spot-note" className="input" maxLength={200} placeholder="e.g. Claypot chicken rice, closed Mondays" value={note} onChange={(e) => setNote(e.target.value)} style={{ height: 50 }} />
+          <label htmlFor="spot-note" className="field-label">{t('Known for')} <span style={{ fontWeight: 500, color: 'var(--muted)' }}>{t('(optional)')}</span></label>
+          <input id="spot-note" className="input" maxLength={200} placeholder={t('e.g. Claypot chicken rice, closed Mondays')} value={note} onChange={(e) => setNote(e.target.value)} style={{ height: 50 }} />
         </div>
         <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Price per person</legend>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Price per person')}</legend>
           <div className="segmented" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-            {([[null, 'Not sure'], [1, 'Under RM15'], [2, 'RM15–50'], [3, 'RM50+']] as const).map(([v, label]) => (
+            {([[null, tk('Not sure')], [1, tk('Under RM15')], [2, 'RM15–50'], [3, 'RM50+']] as const).map(([v, label]) => (
               <button key={label} type="button" aria-pressed={price === v} onClick={() => setPrice(v)} style={{ fontSize: 13 }}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
         </fieldset>
         <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Diet</legend>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Diet')}</legend>
           <div className="segmented" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-            {([[null, 'Not sure'], ['halal', 'Halal'], ['pork', 'Serves pork']] as const).map(([v, label]) => (
+            {([[null, tk('Not sure')], ['halal', tk('Halal')], ['pork', tk('Serves pork')]] as const).map(([v, label]) => (
               <button key={label} type="button" aria-pressed={diet === v} onClick={() => setDiet(v)} style={{ fontSize: 13 }}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -586,7 +597,7 @@ export function AddSpotSheet({ here, onSave, onClose }: AddSpotProps) {
         {here && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, cursor: 'pointer' }}>
             <input type="checkbox" checked={pinHere} onChange={(e) => setPinHere(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--accent)' }} />
-            <span style={{ fontSize: 14 }}>I'm there now: pin it where I am</span>
+            <span style={{ fontSize: 14 }}>{t("I'm there now: pin it where I am")}</span>
           </label>
         )}
         {error && (
@@ -595,7 +606,7 @@ export function AddSpotSheet({ here, onSave, onClose }: AddSpotProps) {
           </p>
         )}
         <button type="submit" className="btn btn--primary press" disabled={busy || !name.trim()} style={{ height: 52 }}>
-          {busy ? 'Adding…' : 'Add for the whole room'}
+          {busy ? t('Adding…') : t('Add for the whole room')}
         </button>
       </form>
     </div>

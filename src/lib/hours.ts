@@ -3,8 +3,18 @@
  * checked against the time in Malaysia wherever the phone is.
  */
 
+import { getLang, locale, t } from './i18n';
+
 const DAY = 24 * 60;
+/** English abbreviations, as Intl writes them in en-GB: clockIn parses these. */
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** Short weekday name for display, Monday = 0: "Mon", "Isn", "周一". */
+export function weekdayLabel(day: number): string {
+  if (getLang() === 'en') return WEEKDAYS[day];
+  // 1 January 2024 was a Monday.
+  return new Intl.DateTimeFormat(locale(), { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2024, 0, 1 + day)));
+}
 
 /** Monday = 0, and minutes since midnight, in the given time zone. */
 export function clockIn(timeZone: string, now = new Date()): { day: number; minute: number } {
@@ -27,12 +37,13 @@ export function ranges(day: string): [number, number][] {
   });
 }
 
-/** "10pm", "9:30am", "midnight". */
+/** "10pm", "9:30am", "midnight"; 24-hour "22:00" in Chinese. */
 export function timeLabel(minute: number): string {
   const m = ((minute % DAY) + DAY) % DAY;
-  if (m === 0) return 'midnight';
+  if (m === 0) return t('midnight');
   const h = Math.floor(m / 60);
   const mm = m % 60;
+  if (getLang() === 'zh') return `${h}:${String(mm).padStart(2, '0')}`;
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}${mm ? `:${String(mm).padStart(2, '0')}` : ''}${h < 12 ? 'am' : 'pm'}`;
 }
@@ -58,17 +69,19 @@ export function openState(week: string[], at: { day: number; minute: number }): 
 
 /** "Open · till 10pm", "Open 24 hours", "Closed · opens 11am", "Closed · opens Wed 1pm". */
 export function openLabel(state: OpenState, at: { day: number }): string {
-  if (state.open) return state.allDay ? 'Open 24 hours' : `Open · till ${timeLabel(state.closesAt ?? 0)}`;
-  if (!state.opensAt) return 'Closed';
+  if (state.open) return state.allDay ? t('Open 24 hours') : t('Open · till {time}', { time: timeLabel(state.closesAt ?? 0) });
+  if (!state.opensAt) return t('Closed');
   const { dayOffset, minute } = state.opensAt;
-  const when = dayOffset === 0 ? '' : dayOffset === 1 ? 'tomorrow ' : `${WEEKDAYS[(at.day + dayOffset) % 7]} `;
-  return `Closed · opens ${when}${timeLabel(minute)}`;
+  const time = timeLabel(minute);
+  if (dayOffset === 0) return t('Closed · opens {time}', { time });
+  if (dayOffset === 1) return t('Closed · opens tomorrow {time}', { time });
+  return t('Closed · opens {day} {time}', { day: weekdayLabel((at.day + dayOffset) % 7), time });
 }
 
 /** "11am–10pm", "Closed", "Open 24 hours" for one day's ranges. */
 export function dayHoursLabel(day: string): string {
   const r = ranges(day);
-  if (!r.length) return 'Closed';
-  if (r.length === 1 && r[0][0] === 0 && r[0][1] === DAY) return 'Open 24 hours';
+  if (!r.length) return t('Closed');
+  if (r.length === 1 && r[0][0] === 0 && r[0][1] === DAY) return t('Open 24 hours');
   return r.map(([a, b]) => `${timeLabel(a)}–${timeLabel(b)}`).join(', ');
 }
