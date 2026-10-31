@@ -1,5 +1,7 @@
 import type { Food } from './foods';
 import { distanceKm, type LatLng } from './geo';
+import { clockIn, openLabel, openState } from './hours';
+import { SPOT_DETAILS, type SpotDetails } from './spotDetails';
 import type { FoodColor, FoodIconName } from './palette';
 
 /**
@@ -83,17 +85,7 @@ export const SUNWAY_SPOTS: Spot[] = [
     icon: 'rice',
     color: 'peach',
   },
-  {
-    id: 'teh-tarik-place',
-    name: 'Teh Tarik Place',
-    area: 'Sunway Pyramid',
-    knownFor: 'Mamak favourites: roti canai, nasi lemak ayam and teh tarik',
-    price: 1,
-    tags: ['cheap'],
-    matches: ['mamak', 'roti', 'teh tarik', 'nasi lemak'],
-    icon: 'cup',
-    color: 'teal',
-  },
+
   {
     id: 'powertea-lok-lok',
     name: 'POWERTEA Lok Lok',
@@ -263,17 +255,7 @@ export const SUNWAY_SPOTS: Spot[] = [
     color: 'tomato',
     diet: 'halal',
   },
-  {
-    id: 'kyochon',
-    name: 'KyoChon',
-    area: 'Sunway Pyramid',
-    knownFor: 'Korean fried chicken, best known for the Honey Garlic series',
-    price: 2,
-    tags: ['korean', 'sharing'],
-    matches: ['korean', 'fried chicken', 'chicken'],
-    icon: 'burger',
-    color: 'mustard',
-  },
+
   {
     id: 'tea-garden',
     name: 'Tea Garden',
@@ -358,7 +340,7 @@ export const SUNWAY_SPOTS: Spot[] = [
     id: 'burger-baek',
     name: 'Burger Baek',
     area: 'Sunway Mentari (PJS 8)',
-    knownFor: 'Supper burgers plus kam heong lala and fried rice, open 2pm to 3am',
+    knownFor: 'Supper burgers plus kam heong lala and fried rice, open 3pm to 3am',
     price: 1,
     tags: ['cheap', 'late night', 'western'],
     matches: ['burger', 'supper', 'late night', 'lala'],
@@ -510,8 +492,34 @@ export const SUNWAY_CENTRE = AREA_CENTRES['On campus'];
 /** Beyond this, the Sunway picks aren't "near you" and the app searches around you instead. */
 export const NEAR_SUNWAY_KM = 8;
 
+export function spotDetails(spot: Pick<Spot, 'id'>): SpotDetails {
+  return SPOT_DETAILS[spot.id] ?? {};
+}
+
+/** The spot's own pin, or the middle of its area. */
+export function spotPoint(spot: Spot): LatLng {
+  return spotDetails(spot).at ?? AREA_CENTRES[spot.area] ?? SUNWAY_CENTRE;
+}
+
+/** Whether the distance is only roughly right (pin on the street or area, not the shop). */
+export function spotDistanceIsRough(spot: Spot): boolean {
+  return spotDetails(spot).pin !== 'exact' && spotDetails(spot).pin !== 'building';
+}
+
 export function spotDistanceKm(spot: Spot, here: LatLng): number {
-  return distanceKm(here, AREA_CENTRES[spot.area] ?? SUNWAY_CENTRE);
+  return distanceKm(here, spotPoint(spot));
+}
+
+/** Spots are in Malaysia, so "open now" goes by Malaysian time wherever the phone is. */
+export const SPOT_TIME_ZONE = 'Asia/Kuala_Lumpur';
+
+/** Open/closed right now, or null when the spot's hours aren't known. */
+export function spotOpenNow(spot: Spot, now = new Date()): { open: boolean; label: string } | null {
+  const hours = spotDetails(spot).hours;
+  if (!hours) return null;
+  const at = clockIn(SPOT_TIME_ZONE, now);
+  const state = openState(hours, at);
+  return { open: state.open, label: openLabel(state, at) };
 }
 
 export function isNearSunway(here: LatLng): boolean {

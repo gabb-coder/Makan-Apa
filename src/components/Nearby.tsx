@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatTag } from '../lib/foods';
+import { dayHoursLabel, WEEKDAYS } from '../lib/hours';
 import { distanceKm, formatDistance, mapsNearUrl, type LatLng } from '../lib/geo';
 import { turnOffLocation, turnOnLocation, type LocationState } from '../lib/location';
 import {
@@ -9,7 +10,10 @@ import {
   NEAR_YOU_SEARCHES,
   NEARBY_LABEL,
   priceLabel,
+  spotDetails,
+  spotDistanceIsRough,
   spotDistanceKm,
+  spotOpenNow,
   spotMapsUrl,
   SUNWAY_CENTRE,
   type Spot,
@@ -24,6 +28,22 @@ function DietBadge({ diet }: { diet: Spot['diet'] }) {
       style={diet === 'halal' ? { background: '#DDEFD8', color: '#2F6B2A' } : { background: 'var(--bar-track)', color: 'var(--ink-2)' }}
     >
       {diet === 'halal' ? 'Halal' : 'Serves pork'}
+    </span>
+  );
+}
+
+/** "~1.2 km" when the pin is only the street or area, "1.2 km" when it's the shop. */
+function distanceText(spot: Spot, here: LatLng): string {
+  return `${spotDistanceIsRough(spot) ? '~' : ''}${formatDistance(spotDistanceKm(spot, here))}`;
+}
+
+/** Green "Open · till 10pm" or grey "Closed · opens 11am"; nothing when hours are unknown. */
+function OpenText({ spot, short = false }: { spot: Spot; short?: boolean }) {
+  const now = spotOpenNow(spot);
+  if (!now) return null;
+  return (
+    <span style={{ fontSize: 12, fontWeight: 700, color: now.open ? 'var(--success)' : 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {short ? (now.open ? 'Open now' : 'Closed now') : now.label}
     </span>
   );
 }
@@ -54,7 +74,7 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
             <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {here ? `~${formatDistance(spotDistanceKm(s, here))} · ${s.area}` : s.area}
+              {here ? `${distanceText(s, here)} · ${s.area}` : s.area}
             </span>
           </span>
           <span
@@ -71,7 +91,10 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
           >
             {s.knownFor}
           </span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-ink)' }}>{priceLabel(s.price)}</span>
+          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-ink)', whiteSpace: 'nowrap' }}>{priceLabel(s.price)}</span>
+            <OpenText spot={s} short />
+          </span>
         </button>
       ))}
     </div>
@@ -119,9 +142,10 @@ export function NearbyList({ spots, here }: { spots: Spot[]; here?: LatLng }) {
           <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>{s.name}</span>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-              {here ? `~${formatDistance(spotDistanceKm(s, here))} · ` : ''}
+              {here ? `${distanceText(s, here)} · ` : ''}
               {s.area} · {priceLabel(s.price)}
             </span>
+            <OpenText spot={s} />
           </span>
           {ARROW}
         </a>
@@ -245,7 +269,8 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {here && (
             <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
-              About {formatDistance(spotDistanceKm(spot, here))} away
+              {spotDistanceIsRough(spot) ? 'About ' : ''}
+              {formatDistance(spotDistanceKm(spot, here))} away
             </span>
           )}
           <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
@@ -258,6 +283,7 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
             </span>
           ))}
         </div>
+        <SpotHours spot={spot} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {onPick && pickLabel && (
             <button type="button" className="btn btn--primary press" style={{ height: 52 }} onClick={onPick}>
@@ -279,7 +305,7 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
           </button>
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-          From local food guides. Check Google Maps for current hours before you go.
+          From local food guides and map listings. Hours change, so check Google Maps before a special trip.
         </p>
       </div>
     </div>
@@ -288,6 +314,7 @@ export function SpotSheet({ spot, here, inList, pickLabel, onClose, onAdd, onPic
 
 const FILTERS: { label: string; test: (s: Spot) => boolean }[] = [
   { label: 'All', test: () => true },
+  { label: 'Open now', test: (s) => spotOpenNow(s)?.open === true },
   { label: 'Halal', test: (s) => s.diet === 'halal' },
   { label: 'Under RM15', test: (s) => s.price === 1 },
   { label: 'Late night', test: (s) => s.tags.includes('late night') },
@@ -296,6 +323,39 @@ const FILTERS: { label: string; test: (s: Spot) => boolean }[] = [
   { label: 'Korean', test: (s) => s.tags.includes('korean') },
   { label: 'Dessert', test: (s) => s.tags.includes('dessert') },
 ];
+
+/** Today's hours with the whole week behind a tap. */
+function SpotHours({ spot }: { spot: Spot }) {
+  const [open, setOpen] = useState(false);
+  const { hours, mallHours } = spotDetails(spot);
+  if (!hours) return <span style={{ fontSize: 13, color: 'var(--muted)' }}>Opening hours not listed.</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32, padding: 0, border: 'none', background: 'none', color: 'inherit', textAlign: 'left' }}
+      >
+        <span style={{ fontSize: 14 }}>
+          <OpenText spot={spot} />
+        </span>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{mallHours ? '(mall hours)' : ''}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{open ? 'Hide hours' : 'All hours'}</span>
+      </button>
+      {open && (
+        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '48px 1fr', rowGap: 4, fontSize: 13 }}>
+          {WEEKDAYS.map((d, i) => (
+            <div key={d} style={{ display: 'contents' }}>
+              <dt style={{ fontWeight: 700 }}>{d}</dt>
+              <dd style={{ margin: 0, color: 'var(--ink-2)' }}>{dayHoursLabel(hours[i])}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
 
 /** Every spot, grouped by area (nearest area first when location is on). */
 export function NearbyAllSheet({ spots: allSpots, here, onClose, onOpen }: { spots: Spot[]; here?: LatLng; onClose: () => void; onOpen: (spot: Spot) => void }) {
@@ -357,6 +417,7 @@ export function NearbyAllSheet({ spots: allSpots, here, onClose, onOpen }: { spo
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                       <DietBadge diet={s.diet} />
                       <span style={{ fontSize: 12, color: 'var(--muted)' }}>{priceLabel(s.price)}</span>
+                      <OpenText spot={s} short />
                     </span>
                   </button>
                 ))}

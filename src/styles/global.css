@@ -17,6 +17,7 @@
   --bar-track: #f1f1ed;
   --hover: #fafaf8;
   --danger: #b42318;
+  --success: #2f7a4f;
   --danger-tint: #fdecea;
   --streak-bg: #fff0c2;
   --streak-ink: #4a3000;
@@ -48,6 +49,7 @@
   --bar-track: #2a2a2f;
   --hover: #232327;
   --danger: #ff7b6b;
+  --success: #6cc48f;
   --danger-tint: #3a1714;
   --streak-bg: #3a2d06;
   --streak-ink: #ffe08a;
@@ -73,6 +75,7 @@
     --bar-track: #2a2a2f;
     --hover: #232327;
     --danger: #ff7b6b;
+    --success: #6cc48f;
     --danger-tint: #3a1714;
     --streak-bg: #3a2d06;
     --streak-ink: #ffe08a;
