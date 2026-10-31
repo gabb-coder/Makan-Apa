@@ -814,7 +814,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
           </select>
         </div>
       )}
-      {on && status !== 'loading' && status && (
+      {on && typeof status === 'object' && status && (
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Weekly recap</span>
