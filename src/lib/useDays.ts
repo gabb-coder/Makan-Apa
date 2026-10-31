@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { t } from './i18n';
 import { deciderFor } from './rotation';
 import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
 
@@ -156,7 +157,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
 
   /** Run an update on today's entry; returns false if `guard` no longer matched (someone got there first). */
   const updateToday = async (patch: Partial<DayEntryRow>, guard: (q: any) => any = (q) => q): Promise<boolean> => {
-    if (!todayEntry) throw new Error('Today isn’t ready yet. Try again in a moment.');
+    if (!todayEntry) throw new Error(t('Today isn’t ready yet. Try again in a moment.'));
     const { data, error: err } = await guard(supabase.from('day_entries').update(patch).eq('id', todayEntry.id)).select();
     if (err) throw new Error(err.message);
     const rows = data as DayEntryRow[];
@@ -179,7 +180,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       // Only today's decider may pick, even if this phone's view of the rotation is a moment stale.
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
     );
-    if (!ok) throw new Error('It’s not your turn right now, or today’s already decided.');
+    if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
   };
 
   /** Decider takes back a proposal nobody has answered yet. */
@@ -193,7 +194,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** Step 3: a non-decider accepts. */
   const accept = async () => {
     const ok = await updateToday({ status: 'accepted' }, (q) => q.eq('status', 'proposed'));
-    if (!ok) throw new Error('That pick changed. Have another look.');
+    if (!ok) throw new Error(t('That pick changed. Have another look.'));
   };
 
   const undoAccept = async () => {
@@ -202,14 +203,14 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
 
   /** Step 4: a non-decider vetoes, if they have vetoes left. Returns the veto so it can be undone. */
   const veto = async (foodName: string): Promise<{ veto: VetoRow; previous: DayEntryRow }> => {
-    if (!todayEntry) throw new Error('Today isn’t ready yet.');
-    if (myVetoesToday >= room.veto_limit) throw new Error('No vetoes left today, so this pick stands.');
+    if (!todayEntry) throw new Error(t('Today isn’t ready yet.'));
+    if (myVetoesToday >= room.veto_limit) throw new Error(t('No vetoes left today, so this pick stands.'));
     const previous = todayEntry;
     const ok = await updateToday(
       { food_option_id: null, custom_food: null, method: null, status: 'pending' },
       (q) => q.eq('status', 'proposed'),
     );
-    if (!ok) throw new Error('That pick changed. Have another look.');
+    if (!ok) throw new Error(t('That pick changed. Have another look.'));
     const { data, error: err } = await supabase
       .from('vetoes')
       .insert({ day_entry_id: todayEntry.id, member_id: meId, rejected_food: foodName })
@@ -232,7 +233,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       },
       (q) => q.eq('status', 'pending').is('food_option_id', null).is('custom_food', null),
     );
-    if (!ok) throw new Error(`Too late, there's a new pick.`);
+    if (!ok) throw new Error(t("Too late, there's a new pick."));
     const { error: err } = await supabase.from('vetoes').delete().eq('id', vetoRow.id);
     if (err) throw new Error(err.message);
     setVetoes((cur) => cur.filter((x) => x.id !== vetoRow.id));
@@ -240,7 +241,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
 
   /** Secret picks mode: set or change my pick for today. */
   const submitSecretPick = async (foodText: string) => {
-    if (!todayEntry) throw new Error('Today isn’t ready yet. Try again in a moment.');
+    if (!todayEntry) throw new Error(t('Today isn’t ready yet. Try again in a moment.'));
     const { data, error: err } = await supabase
       .from('secret_picks')
       .upsert({ day_entry_id: todayEntry.id, member_id: meId, food_text: foodText }, { onConflict: 'day_entry_id,member_id' })

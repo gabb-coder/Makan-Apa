@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { formatTag, lastEatenLabel, mapsSearchUrl, type Food } from '../lib/foods';
+import { t } from '../lib/i18n';
 import { mapsNearUrl, type LatLng } from '../lib/geo';
 import { isNetworkError, isOffline, queueForOnline } from '../lib/offline';
 import { darken, FOOD_COLORS } from '../lib/palette';
@@ -18,8 +19,8 @@ export function useAction(onError: (message: string) => void) {
     if (busy) return;
     // Offline: hold the tap and send it when the connection's back.
     const later = () => {
-      queueForOnline({ run: fn, onDone: (err) => onError(err ? `Couldn't send what you tapped offline: ${err}` : 'Back online. Sent what you tapped.') });
-      onError("You're offline. We'll send that when you're back (keep the app open).");
+      queueForOnline({ run: fn, onDone: (err) => onError(err ? t("Couldn't send what you tapped offline: {error}", { error: err }) : t('Back online. Sent what you tapped.')) });
+      onError(t("You're offline. We'll send that when you're back (keep the app open)."));
     };
     if (isOffline()) return later();
     setBusy(true);
@@ -27,7 +28,7 @@ export function useAction(onError: (message: string) => void) {
       await fn();
     } catch (e) {
       if (isNetworkError(e)) later();
-      else onError(e instanceof Error ? e.message : 'Something went wrong.');
+      else onError(e instanceof Error ? e.message : t('Something went wrong.'));
     } finally {
       setBusy(false);
     }
@@ -70,7 +71,7 @@ export function DeciderShell({ decider, label, children }: { decider: MemberRow;
       </svg>
       <span style={{ position: 'relative', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
       {children}
-      <span className="sr-only">Today's decider is {decider.name}</span>
+      <span className="sr-only">{t("Today's decider is {name}", { name: decider.name })}</span>
     </section>
   );
 }
@@ -115,8 +116,8 @@ interface YourTurnProps {
 
 export function YourTurnCard({ me, sub, onSpin, onPickList, onType }: YourTurnProps) {
   return (
-    <DeciderShell decider={me} label="Today's decider">
-      <DeciderHeading decider={me} title="Your turn!" sub={sub} />
+    <DeciderShell decider={me} label={t("Today's decider")}>
+      <DeciderHeading decider={me} title={t('Your turn!')} sub={sub} />
       <button
         type="button"
         className="press spin-btn"
@@ -142,14 +143,14 @@ export function YourTurnCard({ me, sub, onSpin, onPickList, onType }: YourTurnPr
           <circle cx="12" cy="12" r="9" />
           <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8" />
         </svg>
-        Spin the wheel
+        {t('Spin the wheel')}
       </button>
       <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
         <button type="button" className="btn btn--ghost-light press" onClick={onPickList}>
-          Pick from list
+          {t('Pick from list')}
         </button>
         <button type="button" className="btn btn--ghost-light press" onClick={onType}>
-          Type my own
+          {t('Type my own')}
         </button>
       </div>
     </DeciderShell>
@@ -158,8 +159,8 @@ export function YourTurnCard({ me, sub, onSpin, onPickList, onType }: YourTurnPr
 
 export function ChoosingCard({ decider, sub }: { decider: MemberRow; sub: string }) {
   return (
-    <DeciderShell decider={decider} label="Today's decider">
-      <DeciderHeading decider={decider} title={decider.name} sub={`is choosing… ${sub}`.trim()} />
+    <DeciderShell decider={decider} label={t("Today's decider")}>
+      <DeciderHeading decider={decider} title={decider.name} sub={`${t('is choosing…')} ${sub}`.trim()} />
     </DeciderShell>
   );
 }
@@ -178,8 +179,12 @@ interface SentProps {
 
 export function SentCard({ me, food, method, waitingFor, answerers, busy, onChange, onRetract }: SentProps) {
   return (
-    <DeciderShell decider={me} label="Today's decider">
-      <DeciderHeading decider={me} title={`Sent to ${waitingFor}`} sub={answerers.includes(' or ') ? `Waiting for a yes from ${answerers}…` : `Waiting for ${answerers} to say yes…`} />
+    <DeciderShell decider={me} label={t("Today's decider")}>
+      <DeciderHeading
+        decider={me}
+        title={t('Sent to {name}', { name: waitingFor })}
+        sub={answerers.includes(' or ') ? t('Waiting for a yes from {names}…', { names: answerers }) : t('Waiting for {name} to say yes…', { name: answerers })}
+      />
       <div
         style={{
           position: 'relative',
@@ -195,15 +200,15 @@ export function SentCard({ me, food, method, waitingFor, answerers, busy, onChan
         <FoodTile food={food} size={44} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
           <span style={{ fontSize: 17, fontWeight: 800, overflowWrap: 'anywhere' }}>{food.name}</span>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{method === 'wheel' ? 'Wheel pick' : 'Picked directly'}</span>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{method === 'wheel' ? t('Wheel pick') : t('Picked directly')}</span>
         </div>
       </div>
       <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
         <button type="button" className="btn btn--ghost-light press" disabled={busy} onClick={onChange}>
-          Change pick
+          {t('Change pick')}
         </button>
         <button type="button" className="btn btn--ghost-light press" disabled={busy} onClick={onRetract}>
-          Take it back
+          {t('Take it back')}
         </button>
       </div>
     </DeciderShell>
@@ -296,7 +301,7 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             )}
-            {method === 'wheel' ? 'Wheel pick' : 'Picked directly'}
+            {method === 'wheel' ? t('Wheel pick') : t('Picked directly')}
           </span>
         </div>
         <span style={{ position: 'relative', ...display, fontSize: nameSize, letterSpacing: '-0.04em', lineHeight: 0.95, color: deep, overflowWrap: 'anywhere' }}>
@@ -315,7 +320,7 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
       </section>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeUp 0.55s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
-        <span style={{ ...display, fontSize: 20 }}>Good with this?</span>
+        <span style={{ ...display, fontSize: 20 }}>{t('Good with this?')}</span>
         <button
           type="button"
           className="press"
@@ -340,7 +345,7 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
-          Let's go
+          {t("Let's go")}
         </button>
         {vetoesLeft > 0 ? (
           <>
@@ -354,15 +359,15 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
-              Veto · {vetoesLeft} left today
+              {t('Veto · {n} left today', { n: vetoesLeft })}
             </button>
             <p style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-              A veto sends it back to {deciderName} and takes {food.name} off the wheel for today.
+              {t('A veto sends it back to {name} and takes {food} off the wheel for today.', { name: deciderName, food: food.name })}
             </p>
           </>
         ) : (
           <p style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            You've used your vetoes today, so this pick stands.
+            {t("You've used your vetoes today, so this pick stands.")}
           </p>
         )}
       </div>
@@ -372,9 +377,9 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
 
 /** "Last eaten 5 days ago, picked by you" for the proposal card. */
 export function lastEatenText(days: number | null, pickedBy: string | null): string {
-  if (days === null) return 'You haven’t had this together yet';
-  const prefix = `Last eaten ${lastEatenLabel(days).toLowerCase()}`;
-  return pickedBy ? `${prefix}, picked by ${pickedBy}` : prefix;
+  if (days === null) return t('You haven’t had this together yet');
+  const when = lastEatenLabel(days).toLowerCase();
+  return pickedBy ? t('Last eaten {when}, picked by {name}', { when, name: pickedBy }) : t('Last eaten {when}', { when });
 }
 
 /* ---------- Decided ---------- */
@@ -469,7 +474,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
         </svg>
       </div>
       <span className="section-label" style={{ position: 'relative', marginTop: 10, letterSpacing: '0.08em' }}>
-        It's decided
+        {t("It's decided")}
       </span>
       <span
         style={{
@@ -485,7 +490,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
         {food.name}!
       </span>
       <p style={{ position: 'relative', margin: 0, fontSize: 15, lineHeight: 1.5, color: 'var(--muted)' }}>
-        Saved to history. {tomorrowText}
+        {t('Saved to history.')} {tomorrowText}
       </p>
       <div style={{ position: 'relative', alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
         <a
@@ -499,7 +504,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
             <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
             <circle cx="12" cy="9.5" r="2.5" />
           </svg>
-          Find one nearby
+          {t('Find one nearby')}
         </a>
         {nearby}
         {extras}
@@ -510,7 +515,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
             onClick={onUndo}
             style={{ height: 44, border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 600 }}
           >
-            Undo
+            {t('Undo')}
           </button>
         )}
       </div>
@@ -563,14 +568,16 @@ export function VetoedCard({ foodName, deciderName, vetoesLeft, busy, onUndo }: 
         </svg>
       </div>
       <span className="section-label" style={{ marginTop: 10, letterSpacing: '0.08em' }}>
-        Vetoed
+        {t('Vetoed')}
       </span>
-      <span style={{ ...display, fontSize: 34, letterSpacing: '-0.03em', lineHeight: 1.05 }}>Back to {deciderName}</span>
+      <span style={{ ...display, fontSize: 34, letterSpacing: '-0.03em', lineHeight: 1.05 }}>{t('Back to {name}', { name: deciderName })}</span>
       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: 'var(--muted)' }}>
-        {foodName} is off the wheel for today.{' '}
+        {t('{food} is off the wheel for today.', { food: foodName })}{' '}
         {vetoesLeft > 0
-          ? `You have ${vetoesLeft} veto${vetoesLeft === 1 ? '' : 'es'} left.`
-          : `You've used your veto, so the next pick stands.`}
+          ? vetoesLeft === 1
+            ? t('You have {n} veto left.', { n: vetoesLeft })
+            : t('You have {n} vetoes left.', { n: vetoesLeft })
+          : t("You've used your veto, so the next pick stands.")}
       </p>
       <button
         type="button"
@@ -578,7 +585,7 @@ export function VetoedCard({ foodName, deciderName, vetoesLeft, busy, onUndo }: 
         onClick={onUndo}
         style={{ marginTop: 12, height: 44, padding: '0 16px', border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 600 }}
       >
-        Undo veto
+        {t('Undo veto')}
       </button>
     </section>
   );

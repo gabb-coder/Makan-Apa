@@ -12,6 +12,7 @@ import {
   wheelWeight,
   type Food,
 } from '../lib/foods';
+import { t } from '../lib/i18n';
 import { FOOD_COLORS, nextColor } from '../lib/palette';
 import { soundPref, usePref } from '../lib/prefs';
 import { useWheelSpin } from '../lib/useWheelSpin';
@@ -74,7 +75,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
 
   const toggleTag = (tag: string) => {
     resetResult();
-    setTags((cur) => (cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]));
+    setTags((cur) => (cur.includes(tag) ? cur.filter((x) => x !== tag) : [...cur, tag]));
   };
 
   const toggleShortlist = (id: string) => {
@@ -124,41 +125,44 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
   };
 
   const vetoNote = vetoedNames.length
-    ? ` ${joinNames(vetoedNames)} ${vetoedNames.length === 1 ? 'is' : 'are'} off the wheel today.`
+    ? ' ' +
+      (vetoedNames.length === 1
+        ? t('{names} is off the wheel today.', { names: joinNames(vetoedNames) })
+        : t('{names} are off the wheel today.', { names: joinNames(vetoedNames) }))
     : '';
   let note: string;
   if (mode === 'shortlist' && wheelFoods.length < 2) {
-    note = `Pick 2–${SHORTLIST_MAX} foods for your shortlist, or type your own.`;
+    note = t('Pick 2–{max} foods for your shortlist, or type your own.', { max: SHORTLIST_MAX });
   } else if (pool.length < 2) {
-    note = 'Add at least 2 foods in the Food list to spin.';
+    note = t('Add at least 2 foods in the Food list to spin.');
   } else if (wheelFoods.length < 2) {
     note = wheelFoods.length === 0
-      ? 'Nothing matches those tags. Try fewer, or switch to “any”.'
-      : `Only ${wheelFoods[0].name} matches. Pick fewer tags to give the wheel a choice.`;
+      ? t('Nothing matches those tags. Try fewer, or switch to “any”.')
+      : t('Only {name} matches. Pick fewer tags to give the wheel a choice.', { name: wheelFoods[0].name });
   } else if (recentNames.length === 1) {
-    note = `${recentNames[0]} was eaten recently, so it's less likely to come up.`;
+    note = t("{name} was eaten recently, so it's less likely to come up.", { name: recentNames[0] });
   } else if (recentNames.length > 1) {
-    note = `${joinNames(recentNames)} were eaten recently, so they're less likely to come up.`;
+    note = t("{names} were eaten recently, so they're less likely to come up.", { names: joinNames(recentNames) });
   } else {
-    note = 'Nothing here was eaten recently, so every slice has a fair shot.';
+    note = t('Nothing here was eaten recently, so every slice has a fair shot.');
   }
 
   return (
     <main className="screen" style={{ gap: 16 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" className="icon-btn press" aria-label="Back to today" onClick={onBack}>
+        <button type="button" className="icon-btn press" aria-label={t('Back to today')} onClick={onBack}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span className="eyebrow">{turnLabel} · {shortDate(new Date(), timezone)}</span>
-          <h1 className="title title--sm">Spin the wheel</h1>
+          <h1 className="title title--sm">{t('Spin the wheel')}</h1>
         </div>
         <button
           type="button"
           className="icon-btn press"
-          aria-label={sound === 'on' ? 'Mute wheel sounds' : 'Turn wheel sounds on'}
+          aria-label={sound === 'on' ? t('Mute wheel sounds') : t('Turn wheel sounds on')}
           aria-pressed={sound === 'off'}
           onClick={() => soundPref.set(sound === 'on' ? 'off' : 'on')}
           style={{ marginLeft: 'auto' }}
@@ -170,19 +174,19 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
         </button>
       </header>
 
-      <div className="segmented" role="group" aria-label="Wheel source">
+      <div className="segmented" role="group" aria-label={t('Wheel source')}>
         <button type="button" aria-pressed={mode === 'all'} onClick={() => switchMode('all')}>
-          Whole list · {pool.length}
+          {t('Whole list')} · {pool.length}
         </button>
         <button type="button" aria-pressed={mode === 'shortlist'} onClick={() => switchMode('shortlist')}>
-          My shortlist{shortlistIds.length > 0 ? ` · ${shortlistIds.length}` : ''}
+          {t('My shortlist')}{shortlistIds.length > 0 ? ` · ${shortlistIds.length}` : ''}
         </button>
       </div>
 
       {mode === 'all' ? (
-        <div className="chip-row" role="group" aria-label="Filter by tag">
+        <div className="chip-row" role="group" aria-label={t('Filter by tag')}>
           <button type="button" className="chip press" aria-pressed={tags.length === 0} disabled={spinning} onClick={() => { resetResult(); setTags([]); }}>
-            Anything
+            {t('Anything')}
           </button>
           {tagChips.map((tag) => (
             <button key={tag} type="button" className="chip press" aria-pressed={tags.includes(tag)} disabled={spinning} onClick={() => toggleTag(tag)}>
@@ -194,16 +198,16 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
               type="button"
               className="chip chip--ghost press"
               disabled={spinning}
-              aria-label={`Matching ${tagMode === 'and' ? 'all' : 'any'} selected tags. Tap to switch.`}
+              aria-label={tagMode === 'and' ? t('Matching all selected tags. Tap to switch.') : t('Matching any selected tags. Tap to switch.')}
               onClick={() => { resetResult(); setTagMode((m) => (m === 'and' ? 'or' : 'and')); }}
             >
-              Match {tagMode === 'and' ? 'all' : 'any'}
+              {tagMode === 'and' ? t('Match all') : t('Match any')}
             </button>
           )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
-          <div className="chip-row" role="group" aria-label={`Choose up to ${SHORTLIST_MAX} foods`}>
+          <div className="chip-row" role="group" aria-label={t('Choose up to {max} foods', { max: SHORTLIST_MAX })}>
             {shortlistOptions.map((f) => {
               const on = shortlistIds.includes(f.id);
               return (
@@ -222,7 +226,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
               );
             })}
             <button type="button" className="chip chip--ghost press" disabled={spinning} onClick={() => setTyping(true)}>
-              + Type one
+              {t('+ Type one')}
             </button>
           </div>
           {typing && (
@@ -233,18 +237,18 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
                 addCustom();
               }}
             >
-              <label htmlFor="custom-food" className="sr-only">Food name</label>
+              <label htmlFor="custom-food" className="sr-only">{t('Food name')}</label>
               <input
                 id="custom-food"
                 className="input"
                 autoFocus
-                placeholder="e.g. Banana leaf"
+                placeholder={t('e.g. Banana leaf')}
                 value={draft}
                 maxLength={40}
                 onChange={(e) => setDraft(e.target.value)}
               />
               <button type="submit" className="btn btn--primary press" style={{ padding: '0 18px', flexShrink: 0 }}>
-                Add
+                {t('Add')}
               </button>
             </form>
           )}
@@ -278,7 +282,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <FoodTile food={result} size={56} style={{ borderRadius: 16, animation: 'wiggleLoop 3s 0.8s ease-in-out infinite' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-              <span className="section-label">The wheel says</span>
+              <span className="section-label">{t('The wheel says')}</span>
               <span
                 style={{
                   fontFamily: 'var(--font-display)',
@@ -296,7 +300,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
           {send.kind === 'send' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <button type="button" className="btn btn--secondary press" disabled={sending} onClick={spin}>
-                Spin again
+                {t('Spin again')}
               </button>
               <button
                 type="button"
@@ -311,13 +315,13 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
                   }
                 }}
               >
-                {sending ? 'Sending…' : send.label}
+                {sending ? t('Sending…') : send.label}
               </button>
             </div>
           ) : (
             <>
               <button type="button" className="btn btn--secondary press" onClick={spin}>
-                Spin again
+                {t('Spin again')}
               </button>
               <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{send.text}</p>
             </>
@@ -347,7 +351,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
               opacity: !canSpin && !spinning ? 0.5 : 1,
             }}
           >
-            {spinning ? 'Spinning…' : 'SPIN'}
+            {spinning ? t('Spinning…') : t('SPIN')}
           </button>
         </div>
       )}

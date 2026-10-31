@@ -3,6 +3,8 @@
  * they're marked: an unmarked food is assumed fine, except for vegetarians, who need a food
  * marked vegetarian.
  */
+import { joinNames } from './foods';
+import { getLang, t, tk } from './i18n';
 
 export type MemberNeed = 'halal' | 'no-pork' | 'no-beef' | 'vegetarian';
 export type FoodMark = 'halal' | 'pork' | 'beef' | 'vegetarian';
@@ -10,30 +12,30 @@ export type FoodMark = 'halal' | 'pork' | 'beef' | 'vegetarian';
 export type Price = 1 | 2 | 3;
 
 export const MEMBER_NEEDS: { key: MemberNeed; label: string }[] = [
-  { key: 'halal', label: 'Halal' },
-  { key: 'no-pork', label: 'No pork' },
-  { key: 'no-beef', label: 'No beef' },
-  { key: 'vegetarian', label: 'Vegetarian' },
+  { key: 'halal', label: tk('Halal') },
+  { key: 'no-pork', label: tk('No pork') },
+  { key: 'no-beef', label: tk('No beef') },
+  { key: 'vegetarian', label: tk('Vegetarian') },
 ];
 
 export const FOOD_MARKS: { key: FoodMark; label: string }[] = [
-  { key: 'halal', label: 'Halal' },
-  { key: 'vegetarian', label: 'Vegetarian' },
-  { key: 'pork', label: 'Has pork' },
-  { key: 'beef', label: 'Has beef' },
+  { key: 'halal', label: tk('Halal') },
+  { key: 'vegetarian', label: tk('Vegetarian') },
+  { key: 'pork', label: tk('Has pork') },
+  { key: 'beef', label: tk('Has beef') },
 ];
 
 export const BUDGETS: { value: Price | null; label: string }[] = [
-  { value: null, label: 'Any' },
-  { value: 1, label: 'Under RM15' },
-  { value: 2, label: 'Under RM50' },
+  { value: null, label: tk('Any') },
+  { value: 1, label: tk('Under RM15') },
+  { value: 2, label: tk('Under RM50') },
 ];
 
 export const PRICES: { value: Price | null; label: string }[] = [
-  { value: null, label: 'Not sure' },
-  { value: 1, label: 'Under RM15' },
-  { value: 2, label: 'RM15–50' },
-  { value: 3, label: 'RM50+' },
+  { value: null, label: tk('Not sure') },
+  { value: 1, label: tk('Under RM15') },
+  { value: 2, label: tk('RM15–50') },
+  { value: 3, label: tk('RM50+') },
 ];
 
 export interface Needs {
@@ -50,10 +52,10 @@ export interface Suitability {
 export function clashes(food: Suitability, person: Needs): string[] {
   const reasons: string[] = [];
   const has = (m: FoodMark) => food.diet.includes(m);
-  if ((person.diet.includes('halal') || person.diet.includes('no-pork')) && has('pork')) reasons.push(person.diet.includes('halal') ? 'halal' : 'no pork');
-  if (person.diet.includes('no-beef') && has('beef')) reasons.push('no beef');
-  if (person.diet.includes('vegetarian') && !has('vegetarian')) reasons.push('vegetarian');
-  if (person.budget && food.price && food.price > person.budget) reasons.push('budget');
+  if ((person.diet.includes('halal') || person.diet.includes('no-pork')) && has('pork')) reasons.push(person.diet.includes('halal') ? tk('halal') : tk('no pork'));
+  if (person.diet.includes('no-beef') && has('beef')) reasons.push(tk('no beef'));
+  if (person.diet.includes('vegetarian') && !has('vegetarian')) reasons.push(tk('vegetarian'));
+  if (person.budget && food.price && food.price > person.budget) reasons.push(tk('budget'));
   return reasons;
 }
 
@@ -69,16 +71,18 @@ export function suitsEveryone(food: Suitability, members: Needs[]): boolean {
 /** "Not for Alex (halal)", "Not for Alex and Wei". */
 export function clashText(found: { member: { name: string }; reasons: string[] }[]): string | null {
   if (!found.length) return null;
-  if (found.length === 1) return `Not for ${found[0].member.name} (${found[0].reasons.join(', ')})`;
-  const names = found.map((f) => f.member.name);
-  return `Not for ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  if (found.length === 1) {
+    const reasons = found[0].reasons.map((r) => t(r)).join(getLang() === 'zh' ? '、' : ', ');
+    return t('Not for {name} ({reasons})', { name: found[0].member.name, reasons });
+  }
+  return t('Not for {names}', { names: joinNames(found.map((f) => f.member.name)) });
 }
 
 /** "Halal · Under RM15" for someone's needs, or null if they have none. */
 export function needsLabel(person: Needs): string | null {
-  const parts = MEMBER_NEEDS.filter((n) => person.diet.includes(n.key)).map((n) => n.label);
+  const parts = MEMBER_NEEDS.filter((n) => person.diet.includes(n.key)).map((n) => t(n.label));
   const budget = BUDGETS.find((b) => b.value === person.budget && b.value !== null);
-  if (budget) parts.push(budget.label);
+  if (budget) parts.push(t(budget.label));
   return parts.length ? parts.join(' · ') : null;
 }
 

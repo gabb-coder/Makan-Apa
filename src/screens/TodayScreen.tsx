@@ -18,6 +18,7 @@ import { daysBetween } from '../lib/dates';
 import { AddSpotSheet, LocationLine, NearbyAllSheet, NearbyList, NearbyStrip, NearYouStrip, SpotSheet } from '../components/Nearby';
 import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
 import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
+import { locale, t, tNodes } from '../lib/i18n';
 import { shareInvite } from '../lib/invite';
 import { roomTitle } from '../lib/session';
 import { useLocation } from '../lib/location';
@@ -82,12 +83,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const { entries, todayEntry, todayVetoes, myVetoesToday } = days;
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
-  const nameFor = (id: string | null, you = 'You') => (id === me.id ? you : (id && memberById.get(id)?.name) || 'Someone');
+  const nameFor = (id: string | null, you = t('You')) => (id === me.id ? you : (id && memberById.get(id)?.name) || t('Someone'));
 
   const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal) || me;
   const isDecider = decider.id === me.id;
   const others = members.filter((m) => m.id !== decider.id);
-  const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? 'nobody yet' : 'everyone';
+  const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? t('nobody yet') : t('everyone');
   const todayFood = todayEntry ? entryFood(todayEntry, foodsById) : null;
   const vetoedNames = todayVetoes.map((v) => v.rejected_food);
   // The last meal before today, if it was in the past couple of days and you haven't rated it.
@@ -97,7 +98,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     ) ?? null;
   const lastMeal =
     lastEntry && lastEntry.entry_date >= addDays(today, -2) && !extras.ratings.some((r) => r.day_entry_id === lastEntry.id && r.member_id === me.id)
-      ? { entry: lastEntry, food: entryFood(lastEntry, foodsById) ?? customFood('Lunch') }
+      ? { entry: lastEntry, food: entryFood(lastEntry, foodsById) ?? { ...customFood('Lunch'), name: t('Lunch') } }
       : null;
   const latestVeto = todayVetoes[todayVetoes.length - 1] ?? null;
   const myVetoesLeft = Math.max(0, room.veto_limit - myVetoesToday);
@@ -131,8 +132,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const tomorrowText = !tomorrow
     ? ''
     : tomorrow.id === me.id
-      ? 'Tomorrow it’s your turn to decide.'
-      : `Tomorrow it’s ${tomorrow.name}’s turn.`;
+      ? t('Tomorrow it’s your turn to decide.')
+      : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name });
 
   const pickFromSheet = async (p: { food: Food } | { name: string }) => {
     if ('food' in p) return days.propose({ foodId: p.food.id, name: p.food.name }, 'direct');
@@ -148,7 +149,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   if (!todayEntry || !entries) {
     main = (
       <section className="card" style={{ padding: 22, color: 'var(--muted)', flexShrink: 0 }}>
-        {days.error ? `Couldn't load today. ${days.error}` : 'Getting today ready…'}
+        {days.error ? t("Couldn't load today. {error}", { error: days.error }) : t('Getting today ready…')}
       </section>
     );
   } else if (showReveal) {
@@ -208,13 +209,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       );
     } else {
       let sub: string;
-      if (others.length === 0) sub = 'Nobody else here yet, so your pick is final.';
-      else if (latestVeto) sub = `${nameFor(latestVeto.member_id)} vetoed ${latestVeto.rejected_food}. Pick again.`;
-      else if (room.veto_limit === 0) sub = 'No vetoes today, so your pick stands.';
+      if (others.length === 0) sub = t('Nobody else here yet, so your pick is final.');
+      else if (latestVeto) sub = t('{name} vetoed {food}. Pick again.', { name: nameFor(latestVeto.member_id), food: latestVeto.rejected_food });
+      else if (room.veto_limit === 0) sub = t('No vetoes today, so your pick stands.');
       else if (others.length === 1) {
         const left = room.veto_limit - todayVetoes.filter((v) => v.member_id === others[0].id).length;
-        sub = left > 0 ? `${others[0].name} can veto ${timesWord(left)}` : `${others[0].name} is out of vetoes, so your pick stands.`;
-      } else sub = `Everyone else can veto ${timesWord(room.veto_limit)}`;
+        sub =
+          left > 0
+            ? t('{name} can veto {times}', { name: others[0].name, times: timesWord(left) })
+            : t('{name} is out of vetoes, so your pick stands.', { name: others[0].name });
+      } else sub = t('Everyone else can veto {times}', { times: timesWord(room.veto_limit) });
       main = <YourTurnCard me={me} sub={sub} onSpin={onSpin} onPickList={() => setSheet('list')} onType={() => setSheet('type')} />;
     }
   } else if (todayEntry.status === 'proposed' && todayFood) {
@@ -232,7 +236,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         food={todayFood}
         method={todayEntry.method}
         deciderName={decider.name}
-        lastEatenText={lastEatenText(past ? daysBetween(past.entry_date, today) : null, past ? nameFor(past.decider_id, 'you') : null)}
+        lastEatenText={lastEatenText(past ? daysBetween(past.entry_date, today) : null, past ? nameFor(past.decider_id, t('you')) : null)}
         vetoesLeft={myVetoesLeft}
         busy={busy}
         onAccept={() => run(days.accept)}
@@ -264,8 +268,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       room.veto_limit === 0
         ? ''
         : myVetoesLeft > 0
-          ? `You can veto ${timesWord(myVetoesLeft)}.`
-          : 'Your vetoes are used up, so the next pick stands.';
+          ? t('You can veto {times}.', { times: timesWord(myVetoesLeft) })
+          : t('Your vetoes are used up, so the next pick stands.');
     main = <ChoosingCard decider={decider} sub={sub} />;
   }
 
@@ -275,13 +279,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       ? secret
         ? todayEntry.status === 'pending'
           ? myPick
-            ? 'Make this my secret pick instead'
-            : 'Make this my secret pick'
+            ? t('Make this my secret pick instead')
+            : t('Make this my secret pick')
           : undefined
         : isDecider && todayEntry.status === 'pending'
           ? others.length === 0
-            ? 'Pick this for today'
-            : `Send to ${waitingFor}`
+            ? t('Pick this for today')
+            : t('Send to {name}', { name: waitingFor })
           : undefined
       : undefined;
 
@@ -304,7 +308,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               {dayMonthLabel(today)} · {roomTitle(room)}
             </span>
             <h1 className="title title--sm" style={{ overflowWrap: 'anywhere' }}>
-              {decider.name}’s pick
+              {t('{name}’s pick', { name: decider.name })}
             </h1>
           </div>
         </header>
@@ -312,7 +316,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+              {new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
                 new Date(`${today}T00:00:00Z`),
               )}
               {room.name ? ` · ${room.name}` : ''}
@@ -324,7 +328,11 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           <button
             type="button"
             className="press"
-            aria-label={`${roomTitle(room)}, code ${room.code}: ${members.length} ${members.length === 1 ? 'person' : 'people'}, ${online.size} here now. Show people`}
+            aria-label={
+              members.length === 1
+                ? t('{room}, code {code}: {n} person, {online} here now. Show people', { room: roomTitle(room), code: room.code, n: members.length, online: online.size })
+                : t('{room}, code {code}: {n} people, {online} here now. Show people', { room: roomTitle(room), code: room.code, n: members.length, online: online.size })
+            }
             onClick={() => setPeopleOpen(true)}
             style={{
               display: 'flex',
@@ -377,10 +385,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       )}
 
       {onMealChange && !proposalView && (
-        <div className="segmented" role="group" aria-label="Meal" style={{ flexShrink: 0 }}>
+        <div className="segmented" role="group" aria-label={t('Meal')} style={{ flexShrink: 0 }}>
           {(['lunch', 'dinner'] as const).map((m) => (
             <button key={m} type="button" aria-pressed={meal === m} onClick={() => onMealChange(m)}>
-              {m === 'lunch' ? 'Lunch' : 'Dinner'}
+              {m === 'lunch' ? t('Lunch') : t('Dinner')}
             </button>
           ))}
         </div>
@@ -390,7 +398,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
       {vetoedNames.length > 0 && isDecider && todayEntry?.status === 'pending' && (
         <p style={{ margin: '-6px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
-          Off the wheel today: {joinNames(vetoedNames)}
+          {t('Off the wheel today: {names}', { names: joinNames(vetoedNames) })}
         </p>
       )}
 
@@ -400,7 +408,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             entryId={lastMeal.entry.id}
             ratings={extras.ratings}
             meId={me.id}
-            label={`How was ${lastMeal.entry.entry_date === today ? 'lunch,' : lastMeal.entry.entry_date === addDays(today, -1) ? 'yesterday’s' : 'your last'} ${lastMeal.food.name}?`}
+            label={
+              lastMeal.entry.entry_date === today
+                ? t('How was lunch, {food}?', { food: lastMeal.food.name })
+                : lastMeal.entry.entry_date === addDays(today, -1)
+                  ? t('How was yesterday’s {food}?', { food: lastMeal.food.name })
+                  : t('How was your last {food}?', { food: lastMeal.food.name })
+            }
             onRate={(r) => run(() => extras.rate(lastMeal.entry.id, r))}
           />
         </section>
@@ -410,15 +424,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <>
           {members.length < 2 ? (
             <section className="card fade-up" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, animationDelay: '0.12s' }}>
-              <span className="section-label">Up next</span>
+              <span className="section-label">{t('Up next')}</span>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
-                Share code <strong style={{ color: 'var(--ink)', letterSpacing: '0.08em' }}>{room.code}</strong> so your kaki can join. Then
-                you take turns deciding.
+                {tNodes('Share code {code} so your kaki can join. Then you take turns deciding.', {
+                  code: <strong style={{ color: 'var(--ink)', letterSpacing: '0.08em' }}>{room.code}</strong>,
+                })}
               </p>
             </section>
           ) : (
             <section style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
-              <span className="section-label">Up next</span>
+              <span className="section-label">{t('Up next')}</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
                 {upNext.map(({ date, member }) => (
                   <div key={date} className="card lift" style={{ borderRadius: 16, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
@@ -427,7 +442,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                         <Avatar name={member.name} color={member.color} />
                         <span style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {member.id === me.id ? 'You' : member.name}
+                          {member.id === me.id ? t('You') : member.name}
                         </span>
                       </div>
                     )}
@@ -439,18 +454,18 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, animation: 'fadeUp 0.55s 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="section-label">Recently</span>
+              <span className="section-label">{t('Recently')}</span>
               <button
                 type="button"
                 onClick={onSeeAll}
                 style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
               >
-                See all
+                {t('See all')}
               </button>
             </div>
             {recent.length === 0 ? (
               <p className="card" style={{ margin: 0, padding: 16, fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
-                Nothing yet. Meals you agree on show up here.
+                {t('Nothing yet. Meals you agree on show up here.')}
               </p>
             ) : (
               <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -464,7 +479,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                       <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <span style={{ fontSize: 15, fontWeight: 700 }}>{food.name}</span>
                         <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                          {dayLabel(e.entry_date)} · {e.method === 'wheel' ? `${who}, by wheel` : `${who} picked`}
+                          {dayLabel(e.entry_date)} · {e.method === 'wheel' ? t('{name}, by wheel', { name: who }) : t('{name} picked', { name: who })}
                         </span>
                       </div>
                     </div>
@@ -477,13 +492,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           {showNearby && (
             <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, animation: 'fadeUp 0.55s 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="section-label">{!here ? `Ideas near ${NEARBY_LABEL}` : nearSunway ? 'Ideas closest to you' : 'Ideas near you'}</span>
+                <span className="section-label">{!here ? t('Ideas near {place}', { place: NEARBY_LABEL }) : nearSunway ? t('Ideas closest to you') : t('Ideas near you')}</span>
                 <button
                   type="button"
                   onClick={() => setAllSpots(true)}
                   style={{ padding: '10px 0', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}
                 >
-                  {nearSunway ? `See all ${SUNWAY_SPOTS.length + roomSpots.length}` : `Sunway picks`}
+                  {nearSunway ? t('See all {n}', { n: SUNWAY_SPOTS.length + roomSpots.length }) : t('Sunway picks')}
                 </button>
               </div>
               {here && !nearSunway ? (
@@ -509,7 +524,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           meId={me.id}
           onSave={async (bill) => {
             await extras.saveBill({ ...bill, day_entry_id: todayEntry.id });
-            onToast('Bill saved. See who owes what in History.');
+            onToast(t('Bill saved. See who owes what in History.'));
           }}
           onRemove={() => extras.removeBill(todayEntry.id)}
           onClose={() => setBillOpen(false)}
@@ -543,7 +558,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           here={here}
           onSave={async (row) => {
             await extras.addSpot(row);
-            onToast(`${row.name} added to your room's spots.`);
+            onToast(t("{name} added to your room's spots.", { name: row.name }));
           }}
           onClose={() => setAddingSpot(false)}
         />
@@ -555,14 +570,14 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <SpotSheet
           spot={spot}
           here={here}
-          addedBy={spot.room?.addedBy ? (spot.room.addedBy === me.id ? 'you' : memberById.get(spot.room.addedBy)?.name) : undefined}
+          addedBy={spot.room?.addedBy ? (spot.room.addedBy === me.id ? t('you') : memberById.get(spot.room.addedBy)?.name) : undefined}
           onRemove={
             spot.room
               ? () =>
                   run(async () => {
                     await extras.removeSpot(spot.room!.id);
                     setSpot(null);
-                    onToast(`${spot.name} removed.`);
+                    onToast(t('{name} removed.', { name: spot.name }));
                   })
               : undefined
           }
@@ -572,7 +587,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           onAdd={() =>
             run(async () => {
               await onAddFood({ name: spot.name, tags: spot.tags.map(normalizeTag), icon: spot.icon, color: spot.color, diet: spot.diet ? [spot.diet] : [], price: spot.price });
-              onToast(`${spot.name} added to your food list.`);
+              onToast(t('{name} added to your food list.', { name: spot.name }));
             })
           }
           onPick={
@@ -581,10 +596,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                   run(async () => {
                     if (secret) {
                       await days.submitSecretPick(spot.name);
-                      onToast(`Locked in. Only you can see ${spot.name} until the reveal.`);
+                      onToast(t('Locked in. Only you can see {name} until the reveal.', { name: spot.name }));
                     } else {
                       await pickFromSheet({ name: spot.name });
-                      onToast(others.length === 0 ? `${spot.name} it is.` : `Sent ${spot.name} to ${waitingFor}.`);
+                      onToast(others.length === 0 ? t('{name} it is.', { name: spot.name }) : t('Sent {name} to {who}.', { name: spot.name, who: waitingFor }));
                     }
                     setSpot(null);
                     setAllSpots(false);
@@ -607,11 +622,11 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             const name = 'food' in p ? p.food.name : p.name;
             if (secret && todayEntry?.status === 'pending') {
               await days.submitSecretPick('food' in p ? p.food.name : foodByName(p.name).name);
-              onToast(`Locked in. Only you can see ${name} until the reveal.`);
+              onToast(t('Locked in. Only you can see {name} until the reveal.', { name }));
               return;
             }
             await pickFromSheet(p);
-            onToast(others.length === 0 ? `${name} it is.` : `Sent ${name} to ${waitingFor}.`);
+            onToast(others.length === 0 ? t('{name} it is.', { name }) : t('Sent {name} to {who}.', { name, who: waitingFor }));
           }}
         />
       )}

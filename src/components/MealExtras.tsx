@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { t, tNodes } from '../lib/i18n';
 import { balances, formatRM, parseRM, settleUp, shares } from '../lib/money';
 import type { MealBillRow, MealRatingRow, MemberRow, SettlementRow } from '../lib/supabase';
 import { Avatar } from './Avatar';
@@ -14,7 +15,7 @@ function Thumb({ down = false }: { down?: boolean }) {
 }
 
 /** "How was it?" with a thumbs up and down, and how the room voted. */
-export function RatingRow({ entryId, ratings, meId, label = 'How was it?', onRate }: { entryId: string; ratings: MealRatingRow[]; meId: string; label?: string; onRate: (rating: 1 | -1 | null) => Promise<void> }) {
+export function RatingRow({ entryId, ratings, meId, label = t('How was it?'), onRate }: { entryId: string; ratings: MealRatingRow[]; meId: string; label?: string; onRate: (rating: 1 | -1 | null) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const mine = ratings.find((r) => r.day_entry_id === entryId && r.member_id === meId)?.rating ?? null;
   const ups = ratings.filter((r) => r.day_entry_id === entryId && r.rating === 1).length;
@@ -32,7 +33,7 @@ export function RatingRow({ entryId, ratings, meId, label = 'How was it?', onRat
       type="button"
       className="chip press"
       aria-pressed={mine === value}
-      aria-label={`${name}${count ? `, ${count} so far` : ''}`}
+      aria-label={count ? t('{name}, {n} so far', { name, n: count }) : name}
       disabled={busy}
       onClick={() => void tap(value)}
       style={{ gap: 6, minWidth: 64, justifyContent: 'center' }}
@@ -44,15 +45,15 @@ export function RatingRow({ entryId, ratings, meId, label = 'How was it?', onRat
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
       <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-2)' }}>{label}</span>
-      {btn(1, ups, 'Liked it')}
-      {btn(-1, downs, 'Not again')}
+      {btn(1, ups, t('Liked it'))}
+      {btn(-1, downs, t('Not again'))}
     </div>
   );
 }
 
 /** "Who paid?" or "Wei paid RM42.00 · split 3 ways", opening the bill sheet. */
 export function BillLine({ bill, members, meId, onOpen }: { bill: MealBillRow | null; members: MemberRow[]; meId: string; onOpen: () => void }) {
-  const nameOf = (id: string) => (id === meId ? 'You' : members.find((m) => m.id === id)?.name ?? 'Someone');
+  const nameOf = (id: string) => (id === meId ? t('You') : members.find((m) => m.id === id)?.name ?? t('Someone'));
   return (
     <button
       type="button"
@@ -61,8 +62,8 @@ export function BillLine({ bill, members, meId, onOpen }: { bill: MealBillRow | 
       style={{ alignSelf: 'center', minHeight: 44, padding: '0 12px', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: bill ? 'var(--ink-2)' : 'var(--accent)' }}
     >
       {bill
-        ? `${nameOf(bill.paid_by)} paid ${formatRM(bill.amount_cents)} · ${bill.split_between.length === 1 ? 'no split' : `split ${bill.split_between.length} ways`} · Edit`
-        : 'Who paid? Split the bill'}
+        ? `${t('{name} paid {amount}', { name: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents) })} · ${bill.split_between.length === 1 ? t('no split') : t('split {n} ways', { n: bill.split_between.length })} · ${t('Edit')}`
+        : t('Who paid? Split the bill')}
     </button>
   );
 }
@@ -98,7 +99,7 @@ export function BillSheet({ foodName, bill, members, meId, onSave, onRemove, onC
       await fn();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save.');
+      setError(e instanceof Error ? e.message : t('Could not save.'));
       setBusy(false);
     }
   };
@@ -121,10 +122,10 @@ export function BillSheet({ foodName, bill, members, meId, onSave, onRemove, onC
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span className="eyebrow">{foodName}</span>
             <h2 id="bill-title" className="title title--sm" style={{ fontSize: 24 }}>
-              Who paid?
+              {t('Who paid?')}
             </h2>
           </div>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -132,18 +133,18 @@ export function BillSheet({ foodName, bill, members, meId, onSave, onRemove, onC
         </header>
 
         <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Paid by</legend>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Paid by')}</legend>
           <div className="chip-row" style={{ flexWrap: 'wrap' }}>
             {members.map((m) => (
               <button key={m.id} type="button" className="chip press" aria-pressed={paidBy === m.id} onClick={() => setPaidBy(m.id)}>
-                {m.id === meId ? 'You' : m.name}
+                {m.id === meId ? t('You') : m.name}
               </button>
             ))}
           </div>
         </fieldset>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="bill-amount" className="field-label">Total (RM)</label>
+          <label htmlFor="bill-amount" className="field-label">{t('Total (RM)')}</label>
           <input
             id="bill-amount"
             className="input"
@@ -157,7 +158,7 @@ export function BillSheet({ foodName, bill, members, meId, onSave, onRemove, onC
         </div>
 
         <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Split between</legend>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Split between')}</legend>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {members.map((m) => {
               const on = split.includes(m.id);
@@ -170,7 +171,7 @@ export function BillSheet({ foodName, bill, members, meId, onSave, onRemove, onC
                     style={{ width: 20, height: 20, accentColor: 'var(--accent)' }}
                   />
                   <Avatar name={m.name} color={m.color} size={28} />
-                  <span style={{ flexGrow: 1, fontSize: 15, fontWeight: 600 }}>{m.id === meId ? 'You' : m.name}</span>
+                  <span style={{ flexGrow: 1, fontSize: 15, fontWeight: 600 }}>{m.id === meId ? t('You') : m.name}</span>
                   <span style={{ fontSize: 14, color: 'var(--muted)' }}>{on && each ? formatRM(each.get(m.id) ?? 0) : ''}</span>
                 </label>
               );
@@ -184,11 +185,11 @@ export function BillSheet({ foodName, bill, members, meId, onSave, onRemove, onC
           </p>
         )}
         <button type="submit" className="btn btn--primary press" disabled={busy || !cents || !split.length} style={{ height: 52 }}>
-          Save
+          {t('Save')}
         </button>
         {bill && (
           <button type="button" className="btn btn--danger press" disabled={busy} onClick={() => void run(onRemove)}>
-            Remove bill
+            {t('Remove bill')}
           </button>
         )}
       </form>
@@ -214,7 +215,7 @@ export function MoneyCard({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   if (!bills.length) return null;
-  const nameOf = (id: string) => (id === meId ? 'You' : members.find((m) => m.id === id)?.name ?? 'Someone');
+  const nameOf = (id: string) => (id === meId ? t('You') : members.find((m) => m.id === id)?.name ?? t('Someone'));
   const net = balances(bills, settlements);
   const plan = settleUp(net);
   const spent = bills.reduce((n, b) => n + b.amount_cents, 0);
@@ -230,21 +231,26 @@ export function MoneyCard({
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-      <span className="section-label">Money</span>
+      <span className="section-label">{t('Money')}</span>
       <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>
-          {formatRM(spent)} paid across {bills.length} {bills.length === 1 ? 'meal' : 'meals'}.
+          {bills.length === 1
+            ? t('{amount} paid across {n} meal.', { amount: formatRM(spent), n: bills.length })
+            : t('{amount} paid across {n} meals.', { amount: formatRM(spent), n: bills.length })}
         </span>
         {plan.length === 0 ? (
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Everyone's settled up.</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{t("Everyone's settled up.")}</span>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {plan.map((p) => {
               const key = `${p.from_member}>${p.to_member}`;
+              const owes = { from: <b>{nameOf(p.from_member)}</b>, to: <b>{nameOf(p.to_member)}</b>, amount: formatRM(p.amount_cents) };
               return (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ flexGrow: 1, fontSize: 15 }}>
-                    <b>{nameOf(p.from_member)}</b> {p.from_member === meId ? 'owe' : 'owes'} <b>{nameOf(p.to_member)}</b> {formatRM(p.amount_cents)}
+                    {p.from_member === meId
+                      ? tNodes('{from} owe {to} {amount}', owes)
+                      : tNodes('{from} owes {to} {amount}', owes)}
                   </span>
                   <button
                     type="button"
@@ -253,7 +259,7 @@ export function MoneyCard({
                     onClick={() => void act(key, () => onRecord(p))}
                     style={{ height: 36, padding: '0 12px', fontSize: 13, flexShrink: 0 }}
                   >
-                    {busy === key ? 'Saving…' : 'Mark paid'}
+                    {busy === key ? t('Saving…') : t('Mark paid')}
                   </button>
                 </div>
               );
@@ -265,7 +271,7 @@ export function MoneyCard({
             {recent.map((s) => (
               <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--muted)' }}>
                 <span style={{ flexGrow: 1 }}>
-                  {nameOf(s.from_member)} paid {nameOf(s.to_member)} back {formatRM(s.amount_cents)}
+                  {t('{from} paid {to} back {amount}', { from: nameOf(s.from_member), to: nameOf(s.to_member), amount: formatRM(s.amount_cents) })}
                 </span>
                 <button
                   type="button"
@@ -273,7 +279,7 @@ export function MoneyCard({
                   onClick={() => void act(s.id, () => onUndo(s.id))}
                   style={{ minHeight: 36, border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 700, fontSize: 13 }}
                 >
-                  Undo
+                  {t('Undo')}
                 </button>
               </div>
             ))}

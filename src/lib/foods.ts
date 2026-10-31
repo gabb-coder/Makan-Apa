@@ -1,3 +1,4 @@
+import { getLang, t } from './i18n';
 import { COLOR_KEYS, ICONS, type FoodColor, type FoodIconName } from './palette';
 import type { DayEntryRow, FoodOptionRow } from './supabase';
 
@@ -55,13 +56,13 @@ export function isRecent(food: Food): boolean {
 }
 
 export function lastEatenLabel(days: number | null): string {
-  if (days === null) return 'Not yet';
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 14) return '1 week ago';
-  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
-  return `${Math.floor(days / 30)} months ago`;
+  if (days === null) return t('Not yet');
+  if (days <= 0) return t('Today');
+  if (days === 1) return t('Yesterday');
+  if (days < 7) return t('{n} days ago', { n: days });
+  if (days < 14) return t('1 week ago');
+  if (days < 60) return t('{n} weeks ago', { n: Math.floor(days / 7) });
+  return t('{n} months ago', { n: Math.floor(days / 30) });
 }
 
 /** Recently-eaten penalty from the spec: never eaten = 1, otherwise days/7 clamped to [0.1, 1]. */
@@ -112,7 +113,8 @@ export function popularTags(foods: Food[], limit = Infinity): string[] {
 /** "A", "A and B", "A, B and C" (or "A, B or C"). */
 export function joinNames(names: string[], conjunction: 'and' | 'or' = 'and'): string {
   if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} ${conjunction} ${names[names.length - 1]}`;
+  const vars = { rest: names.slice(0, -1).join(getLang() === 'zh' ? '、' : ', '), last: names[names.length - 1] };
+  return conjunction === 'and' ? t('{rest} and {last}', vars) : t('{rest} or {last}', vars);
 }
 
 export function filterByTags(foods: Food[], tags: string[], mode: 'and' | 'or'): Food[] {
@@ -141,7 +143,8 @@ export function customFood(name: string): Food {
 
 /** The food a day entry points at, or null if it has none. */
 export function entryFood(entry: DayEntryRow, foodsById: Map<string, Food>): Food | null {
-  if (entry.food_option_id) return foodsById.get(entry.food_option_id) ?? customFood('A deleted food');
+  // Same id and colour in every language; only the shown name is translated.
+  if (entry.food_option_id) return foodsById.get(entry.food_option_id) ?? { ...customFood('A deleted food'), name: t('A deleted food') };
   if (entry.custom_food) {
     const lower = entry.custom_food.toLowerCase();
     return [...foodsById.values()].find((f) => f.name.toLowerCase() === lower) ?? customFood(entry.custom_food);
@@ -151,7 +154,7 @@ export function entryFood(entry: DayEntryRow, foodsById: Map<string, Food>): Foo
 
 /** "once", "twice", "3 times". */
 export function timesWord(n: number): string {
-  return n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`;
+  return n === 1 ? t('once') : n === 2 ? t('twice') : t('{n} times', { n });
 }
 
 export function mapsSearchUrl(food: string): string {

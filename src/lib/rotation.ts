@@ -1,4 +1,5 @@
 import { daysBetween } from './dates';
+import { locale } from './i18n';
 import type { Meal, MemberRow } from './supabase';
 
 /** YYYY-MM-DD plus `n` days. */
@@ -8,18 +9,21 @@ export function addDays(date: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** e.g. "Sat 31" for a YYYY-MM-DD date. */
-export function dayLabel(date: string): string {
+/** e.g. "Sat 31" for a YYYY-MM-DD date ("Sab 31", "31日周六"). Pass 'en-GB' for English whatever the app language. */
+export function dayLabel(date: string, loc = locale()): string {
   const d = new Date(`${date}T00:00:00Z`);
-  const wd = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(d);
+  // Chinese puts the day first with its own suffix, so let Intl lay it out.
+  if (loc.startsWith('zh')) return new Intl.DateTimeFormat(loc, { weekday: 'short', day: 'numeric', timeZone: 'UTC' }).format(d);
+  const wd = new Intl.DateTimeFormat(loc, { weekday: 'short', timeZone: 'UTC' }).format(d);
   return `${wd} ${d.getUTCDate()}`;
 }
 
-/** e.g. "Fri 30 Oct" for a YYYY-MM-DD date. */
-export function dayMonthLabel(date: string): string {
+/** e.g. "Fri 30 Oct" for a YYYY-MM-DD date ("Jum 30 Okt", "10月30日周五"). */
+export function dayMonthLabel(date: string, loc = locale()): string {
   const d = new Date(`${date}T00:00:00Z`);
-  const month = new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' }).format(d);
-  return `${dayLabel(date)} ${month}`;
+  if (loc.startsWith('zh')) return new Intl.DateTimeFormat(loc, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(d);
+  const month = new Intl.DateTimeFormat(loc, { month: 'short', timeZone: 'UTC' }).format(d);
+  return `${dayLabel(date, loc)} ${month}`;
 }
 
 /**
