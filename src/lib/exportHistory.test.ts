@@ -11,13 +11,13 @@ const members = [
   { id: 'wei', name: 'Wei' },
   { id: 'alex', name: 'Alex' },
 ] as MemberRow[];
-const food = (id: string, name: string, tags: string[] = []): Food => ({ id, name, tags, icon: 'rice', color: 'leaf', isActive: true, daysSinceEaten: null });
+const food = (id: string, name: string, tags: string[] = []): Food => ({ id, name, tags, icon: 'rice', color: 'leaf', isActive: true, daysSinceEaten: null, diet: [], price: null });
 const foodsById = new Map([
   ['f1', food('f1', 'Nasi Lemak', ['rice', 'malay'])],
   ['f2', food('f2', 'Gold Chilli')],
 ]);
 const entry = (id: string, date: string, extra: Partial<DayEntryRow>): DayEntryRow =>
-  ({ id, room_id: 'r', entry_date: date, decider_id: 'wei', food_option_id: null, custom_food: null, method: 'direct', status: 'accepted', created_at: date, ...extra }) as DayEntryRow;
+  ({ id, room_id: 'r', entry_date: date, decider_id: 'wei', food_option_id: null, custom_food: null, method: 'direct', status: 'accepted', meal: 'lunch', created_at: date, ...extra }) as DayEntryRow;
 
 describe('historySheet', () => {
   const entries = [

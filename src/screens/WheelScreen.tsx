@@ -26,6 +26,8 @@ interface Props {
   pool: Food[];
   /** Foods vetoed today, mentioned in the note. */
   vetoedNames: string[];
+  /** Added to the note, e.g. how many foods were left off for someone's diet. */
+  extraNote?: string;
   timezone: string;
   /** e.g. "Your turn" or "Alex's turn". */
   turnLabel: string;
@@ -34,7 +36,7 @@ interface Props {
   onSend: (food: Food) => Promise<void>;
 }
 
-export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBack, onSend }: Props) {
+export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnLabel, send, onBack, onSend }: Props) {
   const [sending, setSending] = useState(false);
 
   const [mode, setMode] = useState<'all' | 'shortlist'>('all');
@@ -93,6 +95,8 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
       color: nextColor(pool.length + customFoods.length),
       isActive: true,
       daysSinceEaten: null,
+      diet: [],
+      price: null,
     };
     setCustomFoods((cur) => [...cur, food]);
     if (shortlistIds.length < SHORTLIST_MAX) {
@@ -321,7 +325,7 @@ export function WheelScreen({ pool, vetoedNames, timezone, turnLabel, send, onBa
         </section>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{note}{vetoNote}</p>
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{note}{vetoNote}{extraNote}</p>
           <button
             type="button"
             className="press"

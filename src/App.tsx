@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { disableReminders } from './lib/push';
 import { closeCurrentRoom, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
+import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
 import { useDays } from './lib/useDays';
@@ -215,7 +216,17 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : 'everyone';
   const vetoedNames = days.todayVetoes.map((v) => v.rejected_food);
   const vetoed = new Set(vetoedNames.map((n) => n.toLowerCase()));
-  const pickable = active?.filter((f) => !vetoed.has(f.name.toLowerCase())) ?? null;
+  const notVetoed = active?.filter((f) => !vetoed.has(f.name.toLowerCase())) ?? null;
+  // Keep foods that clash with someone's diet or budget off, unless that leaves too few to spin.
+  const suiting = notVetoed?.filter((f) => suitsEveryone(f, members)) ?? null;
+  const pickable = suiting && suiting.length >= 2 ? suiting : notVetoed;
+  const leftOut = notVetoed && suiting && pickable === suiting ? notVetoed.length - suiting.length : 0;
+  const dietNote =
+    leftOut > 0
+      ? ` ${leftOut} ${leftOut === 1 ? 'food is' : 'foods are'} left off so it suits everyone's diet and budget.`
+      : notVetoed && suiting && suiting.length < notVetoed.length
+        ? ' Too few foods suit everyone’s diet and budget, so all of them are on.'
+        : '';
   const decidedFood = entry?.status === 'accepted' ? entryFood(entry, new Map((foods ?? []).map((f) => [f.id, f]))) : null;
 
   let wheelSend: WheelSend;
@@ -245,14 +256,14 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   return (
     <div className="app">
       {route === 'today' &&
-        (foods && pickable ? (
+        (foods && notVetoed ? (
           <TodayScreen
             room={room}
             me={me}
             members={members}
             today={today}
             foods={foods}
-            pickable={pickable}
+            pickable={notVetoed}
             days={days}
             online={online}
             onAddFood={foodsApi.addFood}
@@ -294,6 +305,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
           <WheelScreen
             pool={pickable}
             vetoedNames={vetoedNames}
+            extraNote={dietNote}
             timezone={room.timezone}
             turnLabel={isDecider ? 'Your turn' : `${decider?.name ?? 'Someone'}'s turn`}
             send={wheelSend}

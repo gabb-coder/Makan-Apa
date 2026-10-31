@@ -7,6 +7,8 @@ const member = (id: string, sort_order: number, created_at = '2026-01-01T00:00:0
   room_id: 'r',
   name: id,
   color: '#000',
+  diet: [],
+  budget: null,
   sort_order,
   created_at,
 });

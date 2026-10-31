@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Avatar, HostBadge } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { shareInvite } from '../lib/invite';
+import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
 import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
@@ -344,8 +345,64 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         />
       </section>
 
+      <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.12s' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="section-label">Your food needs</span>
+          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+            Foods that clash with anyone in the room stay off the wheel, and nearby ideas skip places that don't fit.
+          </span>
+        </div>
+        <div className="chip-row" role="group" aria-label="Diet" style={{ flexWrap: 'wrap' }}>
+          {MEMBER_NEEDS.map((n) => {
+            const on = me.diet.includes(n.key);
+            return (
+              <button
+                key={n.key}
+                type="button"
+                className="chip press"
+                aria-pressed={on}
+                onClick={() => attempt(() => updateMember(me.id, { diet: on ? me.diet.filter((d) => d !== n.key) : [...me.diet, n.key] }))}
+              >
+                {n.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>Budget per meal</span>
+          <div className="segmented" role="group" aria-labelledby="budget-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+            {BUDGETS.map((b) => (
+              <button key={b.label} type="button" aria-pressed={me.budget === b.value} onClick={() => me.budget !== b.value && attempt(() => updateMember(me.id, { budget: b.value }))}>
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
         <span className="section-label">Rules</span>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span id="meals-label" style={{ fontSize: 15, fontWeight: 700 }}>Meals to decide</span>
+          <div className="segmented" role="group" aria-labelledby="meals-label">
+            {(
+              [
+                ['lunch', 'Lunch only'],
+                ['both', 'Lunch and dinner'],
+              ] as const
+            ).map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={room.meals === value} onClick={() => room.meals !== value && attempt(() => updateRoom({ meals: value }))}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+            {room.meals === 'both'
+              ? 'Each day has a lunch and a dinner decision. Dinner goes to the next person in the order, so nobody decides both.'
+              : 'One decision a day. Turn on dinner to decide both meals.'}
+          </span>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span id="mode-label" style={{ fontSize: 15, fontWeight: 700 }}>How we decide</span>

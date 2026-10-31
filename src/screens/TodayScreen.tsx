@@ -22,6 +22,7 @@ import { roomTitle } from '../lib/session';
 import { useLocation } from '../lib/location';
 import { byDistance, isNearSunway, NEARBY_LABEL, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
 import { nearbyPref, usePref } from '../lib/prefs';
+import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
@@ -59,6 +60,11 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const location = useLocation();
   const here = location.status === 'ready' ? location.here : undefined;
   const nearSunway = !here || isNearSunway(here);
+  // Places that suit everyone's diet and budget first; the rest only if nothing fits.
+  const suiting = (spots: Spot[]) => {
+    const fit = spots.filter((sp) => suitsEveryone(spotSuitability(sp), members));
+    return fit.length ? fit : spots;
+  };
   const [sheet, setSheet] = useState<'list' | 'type' | null>(null);
   const [justVetoed, setJustVetoed] = useState<JustVetoed | null>(null);
   const { busy, run } = useAction(onToast);
@@ -143,7 +149,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         food={todayFood}
         tomorrowText={tomorrowText}
         here={here}
-        nearby={showNearby ? <NearbyList spots={spotsFor(todayFood)} here={here} /> : null}
+        nearby={showNearby ? <NearbyList spots={suiting(spotsFor(todayFood, 6)).slice(0, 3)} here={here} /> : null}
         busy={busy}
         // A secret-picks result is everyone's, so it's final.
         onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
@@ -436,7 +442,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               {here && !nearSunway ? (
                 <NearYouStrip here={here} />
               ) : (
-                <NearbyStrip spots={here ? byDistance(spotsOfTheDay(today), here).slice(0, 8) : spotsOfTheDay(today).slice(0, 8)} here={here} onOpen={setSpot} />
+                <NearbyStrip spots={suiting(here ? byDistance(spotsOfTheDay(today), here) : spotsOfTheDay(today)).slice(0, 8)} here={here} onOpen={setSpot} />
               )}
               <LocationLine location={location} nearSunway={nearSunway} />
             </section>
@@ -466,7 +472,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         />
       )}
 
-      {allSpots && !spot && <NearbyAllSheet spots={SUNWAY_SPOTS} here={here} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
+      {allSpots && !spot && <NearbyAllSheet spots={SUNWAY_SPOTS} here={here} members={members} onClose={() => setAllSpots(false)} onOpen={setSpot} />}
 
       {spot && (
         <SpotSheet
@@ -477,7 +483,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           onClose={() => setSpot(null)}
           onAdd={() =>
             run(async () => {
-              await onAddFood({ name: spot.name, tags: spot.tags.map(normalizeTag), icon: spot.icon, color: spot.color });
+              await onAddFood({ name: spot.name, tags: spot.tags.map(normalizeTag), icon: spot.icon, color: spot.color, diet: spot.diet ? [spot.diet] : [], price: spot.price });
               onToast(`${spot.name} added to your food list.`);
             })
           }
@@ -507,6 +513,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           vetoed={vetoedNames}
           sendTo={others.length === 0 ? null : waitingFor}
           secret={secret && todayEntry?.status === 'pending'}
+          members={members}
           onClose={() => setSheet(null)}
           onPick={async (p) => {
             const name = 'food' in p ? p.food.name : p.name;

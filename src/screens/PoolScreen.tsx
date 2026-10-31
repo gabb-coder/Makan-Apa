@@ -198,7 +198,7 @@ export function PoolScreen({ foods, api, onError }: Props) {
           food={editing.mode === 'edit' ? editing.food : null}
           initial={
             editing.mode === 'edit'
-              ? { name: editing.food.name, tags: editing.food.tags, icon: editing.food.icon, color: editing.food.color }
+              ? { name: editing.food.name, tags: editing.food.tags, icon: editing.food.icon, color: editing.food.color, diet: editing.food.diet, price: editing.food.price }
               : newDraft
           }
           suggestedTags={allTags}

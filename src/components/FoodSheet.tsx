@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FOOD_MARKS, PRICES } from '../lib/diet';
 import { formatTag, normalizeTag, type Food, type FoodDraft } from '../lib/foods';
 import { COLOR_KEYS, FOOD_COLORS, ICONS } from '../lib/palette';
 import { FoodIcon } from './FoodIcon';
@@ -150,6 +151,32 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
               </div>
             )}
           </div>
+
+          <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Diet</legend>
+            <div className="chip-row" style={{ flexWrap: 'wrap' }}>
+              {FOOD_MARKS.map((m) => {
+                const marks = draft.diet ?? [];
+                const on = marks.includes(m.key);
+                return (
+                  <button key={m.key} type="button" className="chip press" aria-pressed={on} onClick={() => set('diet', on ? marks.filter((x) => x !== m.key) : [...marks, m.key])}>
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Price per person</legend>
+            <div className="segmented" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+              {PRICES.map((p) => (
+                <button key={p.label} type="button" aria-pressed={(draft.price ?? null) === p.value} onClick={() => set('price', p.value)} style={{ fontSize: 13 }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Icon</legend>

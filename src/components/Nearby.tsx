@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { spotSuitability, suitsEveryone, type Needs } from '../lib/diet';
 import { formatTag } from '../lib/foods';
 import { dayHoursLabel, WEEKDAYS } from '../lib/hours';
 import { distanceKm, formatDistance, mapsNearUrl, type LatLng } from '../lib/geo';
@@ -358,9 +359,20 @@ function SpotHours({ spot }: { spot: Spot }) {
 }
 
 /** Every spot, grouped by area (nearest area first when location is on). */
-export function NearbyAllSheet({ spots: allSpots, here, onClose, onOpen }: { spots: Spot[]; here?: LatLng; onClose: () => void; onOpen: (spot: Spot) => void }) {
-  const [filter, setFilter] = useState('All');
-  const spots = allSpots.filter((FILTERS.find((f) => f.label === filter) ?? FILTERS[0]).test);
+interface AllProps {
+  spots: Spot[];
+  here?: LatLng;
+  /** People in the room: with any diet or budget needs, "Suits everyone" is offered first. */
+  members?: Needs[];
+  onClose: () => void;
+  onOpen: (spot: Spot) => void;
+}
+
+export function NearbyAllSheet({ spots: allSpots, here, members = [], onClose, onOpen }: AllProps) {
+  const needs = members.some((m) => m.diet.length > 0 || m.budget);
+  const filters = needs ? [FILTERS[0], { label: 'Suits everyone', test: (s: Spot) => suitsEveryone(spotSuitability(s), members) }, ...FILTERS.slice(1)] : FILTERS;
+  const [filter, setFilter] = useState(needs ? 'Suits everyone' : 'All');
+  const spots = allSpots.filter((filters.find((f) => f.label === filter) ?? filters[0]).test);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -387,7 +399,7 @@ export function NearbyAllSheet({ spots: allSpots, here, onClose, onOpen }: { spo
           </button>
         </header>
         <div className="chip-row" role="group" aria-label="Filter places" style={{ flexShrink: 0 }}>
-          {FILTERS.map((f) => (
+          {filters.map((f) => (
             <button key={f.label} type="button" className="chip press" aria-pressed={filter === f.label} onClick={() => setFilter(f.label)}>
               {f.label}
             </button>

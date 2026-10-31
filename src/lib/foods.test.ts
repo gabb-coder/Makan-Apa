@@ -21,6 +21,8 @@ const food = (name: string, tags: string[] = [], daysSinceEaten: number | null =
   color: 'leaf',
   isActive: true,
   daysSinceEaten,
+  diet: [],
+  price: null,
 });
 
 describe('wheelWeight (recently-eaten penalty)', () => {
@@ -99,6 +101,7 @@ describe('entryFood', () => {
     custom_food: null,
     method: 'direct',
     status: 'accepted',
+    meal: 'lunch',
     created_at: '',
     ...patch,
   });

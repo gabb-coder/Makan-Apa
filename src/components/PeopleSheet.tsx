@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
+import { needsLabel } from '../lib/diet';
 import { hostOf, knownRooms, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
@@ -104,7 +105,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
                     {m.id === host?.id && <HostBadge you={m.id === me.id} />}
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                    {[here ? 'Here now' : null, turn].filter(Boolean).join(' · ') || 'Away'}
+                    {[here ? 'Here now' : null, turn, needsLabel(m)].filter(Boolean).join(' · ') || 'Away'}
                   </span>
                 </div>
                 {m.id === todayDeciderId && (

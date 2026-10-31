@@ -10,10 +10,14 @@ export interface Food {
   isActive: boolean;
   /** Days since this food was last accepted; null if never eaten. */
   daysSinceEaten: number | null;
+  /** halal, vegetarian, pork, beef (see diet.ts). */
+  diet: string[];
+  /** 1 under RM15, 2 RM15–50, 3 more; null if not set. */
+  price: number | null;
 }
 
 /** Fields the user edits on a food. */
-export type FoodDraft = Pick<Food, 'name' | 'tags' | 'icon' | 'color'>;
+export type FoodDraft = Pick<Food, 'name' | 'tags' | 'icon' | 'color'> & Partial<Pick<Food, 'diet' | 'price'>>;
 
 export function rowToFood(row: FoodOptionRow, daysSinceEaten: number | null): Food {
   return {
@@ -24,6 +28,8 @@ export function rowToFood(row: FoodOptionRow, daysSinceEaten: number | null): Fo
     color: (COLOR_KEYS as string[]).includes(row.color) ? (row.color as FoodColor) : 'leaf',
     isActive: row.is_active,
     daysSinceEaten,
+    diet: row.diet ?? [],
+    price: row.price ?? null,
   };
 }
 
@@ -117,6 +123,8 @@ export function customFood(name: string): Food {
     color: COLOR_KEYS[hash % COLOR_KEYS.length],
     isActive: true,
     daysSinceEaten: null,
+    diet: [],
+    price: null,
   };
 }
 

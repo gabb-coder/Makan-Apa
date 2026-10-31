@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clashText, whoClashes, type Needs } from '../lib/diet';
 import { formatTag, isRecent, lastEatenLabel, type Food } from '../lib/foods';
 import { FoodTile } from './FoodTile';
 
@@ -11,12 +12,14 @@ interface Props {
   sendTo: string | null;
   /** Secret picks mode: the pick stays hidden until everyone's in. */
   secret?: boolean;
+  /** People in the room, to flag foods that don't suit someone's diet or budget. */
+  members?: (Needs & { name: string })[];
   onClose: () => void;
   onPick: (pick: { food: Food } | { name: string }) => Promise<void>;
 }
 
 /** Bottom sheet for the decider: pick straight from the food list, or type a food. */
-export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose, onPick }: Props) {
+export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, members = [], onClose, onPick }: Props) {
   const [query, setQuery] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -81,6 +84,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
             <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {shown.map((f) => {
                 const off = vetoedSet.has(f.name.toLowerCase());
+                const clash = clashText(whoClashes(f, members));
                 return (
                   <button
                     key={f.id}
@@ -96,6 +100,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
                       <span style={{ fontSize: 13, color: 'var(--muted)' }}>
                         {off ? 'Vetoed today' : f.tags.length ? f.tags.map(formatTag).join(' · ') : 'No tags'}
                       </span>
+                      {!off && clash && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger)' }}>{clash}</span>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                       {!off && isRecent(f) && <span className="badge badge--recent">Recent</span>}
