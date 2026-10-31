@@ -3,6 +3,7 @@ import { Avatar, HostBadge } from '../components/Avatar';
 import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { shareInvite } from '../lib/invite';
 import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
+import { LANGS, setLang, t, useLang } from '../lib/i18n';
 import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
@@ -63,6 +64,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   };
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
   const theme = usePref(themePref);
+  const lang = useLang();
   const sound = usePref(soundPref);
   const nearby = usePref(nearbyPref);
   const location = useLocation();
@@ -493,6 +495,17 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.24s' }}>
         <span className="section-label">This phone</span>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span id="language-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Language')}</span>
+          <div className="segmented" role="group" aria-labelledby="language-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+            {LANGS.map((l) => (
+              <button key={l.key} type="button" lang={l.key === 'zh' ? 'zh-Hans' : l.key} aria-pressed={lang === l.key} onClick={() => setLang(l.key)} style={{ fontSize: 13 }}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span id="appearance-label" style={{ fontSize: 15, fontWeight: 700 }}>Appearance</span>
