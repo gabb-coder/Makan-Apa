@@ -1,4 +1,5 @@
 import type { Food } from '../lib/foods';
+import { t } from '../lib/i18n';
 import { FOOD_COLORS } from '../lib/palette';
 
 export type TickSpeed = 'fast' | 'mid' | 'slow' | 'crawl' | null;
@@ -107,7 +108,7 @@ export function Wheel({ foods, rotation, animate, sway, tick, burstKey, rotorRef
             height={SIZE}
             viewBox={`0 0 ${SIZE} ${SIZE}`}
             role="img"
-            aria-label={`Food wheel with ${n} options: ${foods.map((f) => f.name).join(', ')}`}
+            aria-label={t('Food wheel with {n} options: {names}', { n, names: foods.map((f) => f.name).join(', ') })}
           >
             <g stroke="#FFFFFF" strokeWidth="2">
               {n === 1 ? (

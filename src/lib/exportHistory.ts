@@ -2,7 +2,7 @@ import { customFood, entryFood, formatTag, type Food } from './foods';
 import { SUNWAY_SPOTS } from './nearby';
 import { dayLabel } from './rotation';
 import { supabase } from './supabase';
-import type { DayEntryRow, MemberRow, RoomRow, SecretPickRow, VetoRow } from './supabase';
+import type { DayEntryRow, MealBillRow, MealRatingRow, MemberRow, RoomRow, SecretPickRow, VetoRow } from './supabase';
 import { csv, xlsx, type Sheet } from './xlsx';
 
 const AREA_BY_NAME = new Map(SUNWAY_SPOTS.map((s) => [s.name.toLowerCase(), s.area]));
@@ -12,12 +12,14 @@ interface HistoryData {
   entries: DayEntryRow[];
   vetoes: VetoRow[];
   picks: SecretPickRow[];
+  ratings?: MealRatingRow[];
+  bills?: MealBillRow[];
   members: MemberRow[];
   foodsById: Map<string, Food>;
 }
 
 /** One row per agreed meal, oldest first: when, what, who chose it, how, and what got vetoed. */
-export function historySheet({ room, entries, vetoes, picks, members, foodsById }: HistoryData): Sheet {
+export function historySheet({ room, entries, vetoes, picks, ratings = [], bills = [], members, foodsById }: HistoryData): Sheet {
   const nameOf = new Map(members.map((m) => [m.id, m.name]));
   const who = (id: string | null) => (id && nameOf.get(id)) || 'Removed member';
   const byEntry = <T extends { day_entry_id: string }>(rows: T[]) => {
@@ -30,9 +32,11 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
 
   const rows = entries
     .filter((e) => e.status === 'accepted')
-    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+    .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.meal ?? 'lunch').localeCompare(b.meal ?? 'lunch'))
     .map((e) => {
-      const food = entryFood(e, foodsById) ?? customFood('Unknown');
+      // The export stays in English whatever the app's language.
+      const food =
+        e.food_option_id && !foodsById.has(e.food_option_id) ? customFood('A deleted food') : (entryFood(e, foodsById) ?? customFood('Unknown'));
       const dayPicks = picksFor.get(e.id) ?? [];
       const secret = dayPicks.length > 0;
       const suggestedBy = dayPicks.filter((p) => p.food_text.trim().toLowerCase() === food.name.trim().toLowerCase()).map((p) => who(p.member_id));
@@ -43,7 +47,8 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
         .join('; ');
       return [
         { date: e.entry_date },
-        dayLabel(e.entry_date).split(' ')[0],
+        dayLabel(e.entry_date, 'en-GB').split(' ')[0],
+        e.meal === 'dinner' ? 'Dinner' : 'Lunch',
         food.name,
         AREA_BY_NAME.get(food.name.toLowerCase()) ?? '',
         secret ? 'Everyone' : who(e.decider_id),
@@ -51,6 +56,15 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
         suggestedBy.join(', '),
         vetoed,
         food.tags.map(formatTag).join(', '),
+        ...(() => {
+          const r = ratings.filter((x) => x.day_entry_id === e.id);
+          const up = r.filter((x) => x.rating === 1).length;
+          return [up || null, r.length - up || null];
+        })(),
+        ...(() => {
+          const bill = bills.find((b) => b.day_entry_id === e.id);
+          return bill ? [who(bill.paid_by), bill.amount_cents / 100, bill.split_between.map(who).join(', ')] : [null, null, null];
+        })(),
       ];
     });
 
@@ -59,6 +73,7 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
     columns: [
       { header: 'Date', width: 12 },
       { header: 'Day', width: 6 },
+      { header: 'Meal', width: 8 },
       { header: 'Food / place', width: 28 },
       { header: 'Area', width: 22 },
       { header: 'Chosen by', width: 16 },
@@ -66,21 +81,34 @@ export function historySheet({ room, entries, vetoes, picks, members, foodsById 
       { header: 'Suggested by', width: 16 },
       { header: 'Vetoed (by)', width: 36 },
       { header: 'Tags', width: 24 },
+      { header: 'Liked', width: 7 },
+      { header: 'Disliked', width: 9 },
+      { header: 'Paid by', width: 14 },
+      { header: 'Bill (RM)', width: 10 },
+      { header: 'Split between', width: 28 },
     ],
     rows,
   };
 }
 
 /** Every agreed day in the room, straight from the database (the app only keeps recent ones). */
-export async function loadHistory(roomId: string): Promise<Pick<HistoryData, 'entries' | 'vetoes' | 'picks'>> {
-  const [e, v, p] = await Promise.all([
+export async function loadHistory(roomId: string): Promise<Pick<HistoryData, 'entries' | 'vetoes' | 'picks' | 'ratings' | 'bills'>> {
+  const [e, v, p, r, b] = await Promise.all([
     supabase.from('day_entries').select('*').eq('room_id', roomId).eq('status', 'accepted').order('entry_date').limit(10_000),
     supabase.from('vetoes').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId).limit(50_000),
     supabase.from('secret_picks').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId).limit(50_000),
+    supabase.from('meal_ratings').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId).limit(50_000),
+    supabase.from('meal_bills').select('*').eq('room_id', roomId).limit(50_000),
   ]);
-  const error = e.error ?? v.error ?? p.error;
+  const error = e.error ?? v.error ?? p.error ?? r.error ?? b.error;
   if (error) throw new Error(error.message);
-  return { entries: e.data as DayEntryRow[], vetoes: v.data as VetoRow[], picks: p.data as SecretPickRow[] };
+  return {
+    entries: e.data as DayEntryRow[],
+    vetoes: v.data as VetoRow[],
+    picks: p.data as SecretPickRow[],
+    ratings: r.data as MealRatingRow[],
+    bills: b.data as MealBillRow[],
+  };
 }
 
 export function exportFileName(room: Pick<RoomRow, 'name' | 'code'>, today: string, ext: 'xlsx' | 'csv'): string {

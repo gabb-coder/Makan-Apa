@@ -54,7 +54,7 @@ test('two phones: propose, veto, re-pick, accept, and it shows in History', asyn
     expect(xlsx.suggestedFilename()).toMatch(/^makan-apa-sunway-lunch-gang-history-\d{4}-\d{2}-\d{2}\.xlsx$/);
     const [csvFile] = await Promise.all([gabriel.waitForEvent('download'), gabriel.click('button:text-is("CSV")')]);
     const csv = readFileSync(await csvFile.path(), 'utf8');
-    expect(csv).toContain('Date,Day,Food / place,Area,Chosen by,How,Suggested by,Vetoed (by),Tags');
+    expect(csv).toContain('Date,Day,Meal,Food / place,Area,Chosen by,How,Suggested by,Vetoed (by),Tags');
     expect(csv).toMatch(/,Gabriel,Spun the wheel,,Pizza \(Alex\),/);
     if (process.env.EXPORT_DIR) {
       await xlsx.saveAs(`${process.env.EXPORT_DIR}/${xlsx.suggestedFilename()}`);

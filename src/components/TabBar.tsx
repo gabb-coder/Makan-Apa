@@ -1,9 +1,10 @@
+import { t, tk } from '../lib/i18n';
 export type Tab = 'today' | 'wheel' | 'pool' | 'history';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
     id: 'today',
-    label: 'Today',
+    label: tk('Today'),
     icon: (
       <>
         <rect x="3" y="5" width="18" height="16" rx="3" />
@@ -13,7 +14,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   },
   {
     id: 'wheel',
-    label: 'Wheel',
+    label: tk('Wheel'),
     icon: (
       <>
         <circle cx="12" cy="12" r="9" />
@@ -23,7 +24,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   },
   {
     id: 'pool',
-    label: 'Food list',
+    label: tk('Food list'),
     icon: (
       <>
         <path d="M9 6h12M9 12h12M9 18h12" />
@@ -35,7 +36,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   },
   {
     id: 'history',
-    label: 'History',
+    label: tk('History'),
     icon: (
       <>
         <circle cx="12" cy="12" r="9" />
@@ -47,13 +48,13 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 export function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   return (
-    <nav aria-label="Main" className="tabbar">
-      {TABS.map((t) => (
+    <nav aria-label={t('Main')} className="tabbar">
+      {TABS.map((tab) => (
         <button
-          key={t.id}
+          key={tab.id}
           type="button"
-          aria-current={active === t.id ? 'page' : undefined}
-          onClick={() => onChange(t.id)}
+          aria-current={active === tab.id ? 'page' : undefined}
+          onClick={() => onChange(tab.id)}
         >
           <svg
             width="22"
@@ -66,9 +67,9 @@ export function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab)
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            {t.icon}
+            {tab.icon}
           </svg>
-          {t.label}
+          {t(tab.label)}
         </button>
       ))}
     </nav>

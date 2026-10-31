@@ -1,5 +1,9 @@
 import type { Food } from './foods';
+import type { RoomSpotRow } from './supabase';
 import { distanceKm, type LatLng } from './geo';
+import { clockIn, openLabel, openState } from './hours';
+import { t, tk } from './i18n';
+import { SPOT_DETAILS, type SpotDetails } from './spotDetails';
 import type { FoodColor, FoodIconName } from './palette';
 
 /**
@@ -15,8 +19,8 @@ export interface Spot {
   name: string;
   area: string;
   knownFor: string;
-  /** 1 = under ~RM15, 2 = ~RM15–50, 3 = more. */
-  price: 1 | 2 | 3;
+  /** 1 = under ~RM15, 2 = ~RM15–50, 3 = more; null if a room spot didn't say. */
+  price: 1 | 2 | 3 | null;
   tags: string[];
   /** Words that tie the spot to a food on the list, e.g. "nasi lemak". */
   matches: string[];
@@ -24,6 +28,44 @@ export interface Spot {
   color: FoodColor;
   /** Only stated where a source does: on-campus halal, or a pork dish. */
   diet?: 'halal' | 'pork';
+  /** A place someone in the room added (see room_spots), with its pin if they set one. */
+  room?: { id: string; addedBy: string | null };
+  details?: SpotDetails;
+}
+
+/** What a room spot shows when its area or note was left out; kept in English and translated on display. */
+export const ROOM_SPOT_AREA = tk('Added by your room');
+const ROOM_SPOT_NOTE = tk('A place someone in your room added');
+
+/** The spot's area as shown: a room spot's fallback is translated, real places stay as they are. */
+export function spotArea(spot: Spot): string {
+  return spot.room && spot.area === ROOM_SPOT_AREA ? t(ROOM_SPOT_AREA) : spot.area;
+}
+
+/** What the spot is known for, as shown: a room spot's fallback is translated, anything typed is not. */
+export function spotKnownFor(spot: Spot): string {
+  return spot.room && spot.knownFor === ROOM_SPOT_NOTE ? t(ROOM_SPOT_NOTE) : spot.knownFor;
+}
+
+/** A room's own spot, shaped like the Sunway ones. */
+export function roomSpot(row: RoomSpotRow): Spot {
+  let hash = 0;
+  for (const ch of row.name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const colors: FoodColor[] = ['leaf', 'mustard', 'peach', 'tomato', 'sky', 'plum', 'sand', 'teal'];
+  return {
+    id: `room:${row.id}`,
+    name: row.name,
+    area: row.area?.trim() || ROOM_SPOT_AREA,
+    knownFor: row.note?.trim() || ROOM_SPOT_NOTE,
+    price: (row.price as 1 | 2 | 3 | null) ?? null,
+    tags: [],
+    matches: [row.name.toLowerCase()],
+    icon: 'bowl',
+    color: colors[hash % colors.length],
+    diet: row.diet ?? undefined,
+    room: { id: row.id, addedBy: row.added_by },
+    details: row.lat !== null && row.lng !== null ? { at: { lat: row.lat, lng: row.lng }, pin: 'exact' } : undefined,
+  };
 }
 
 export const SUNWAY_SPOTS: Spot[] = [
@@ -83,17 +125,7 @@ export const SUNWAY_SPOTS: Spot[] = [
     icon: 'rice',
     color: 'peach',
   },
-  {
-    id: 'teh-tarik-place',
-    name: 'Teh Tarik Place',
-    area: 'Sunway Pyramid',
-    knownFor: 'Mamak favourites: roti canai, nasi lemak ayam and teh tarik',
-    price: 1,
-    tags: ['cheap'],
-    matches: ['mamak', 'roti', 'teh tarik', 'nasi lemak'],
-    icon: 'cup',
-    color: 'teal',
-  },
+
   {
     id: 'powertea-lok-lok',
     name: 'POWERTEA Lok Lok',
@@ -263,17 +295,7 @@ export const SUNWAY_SPOTS: Spot[] = [
     color: 'tomato',
     diet: 'halal',
   },
-  {
-    id: 'kyochon',
-    name: 'KyoChon',
-    area: 'Sunway Pyramid',
-    knownFor: 'Korean fried chicken, best known for the Honey Garlic series',
-    price: 2,
-    tags: ['korean', 'sharing'],
-    matches: ['korean', 'fried chicken', 'chicken'],
-    icon: 'burger',
-    color: 'mustard',
-  },
+
   {
     id: 'tea-garden',
     name: 'Tea Garden',
@@ -358,7 +380,7 @@ export const SUNWAY_SPOTS: Spot[] = [
     id: 'burger-baek',
     name: 'Burger Baek',
     area: 'Sunway Mentari (PJS 8)',
-    knownFor: 'Supper burgers plus kam heong lala and fried rice, open 2pm to 3am',
+    knownFor: 'Supper burgers plus kam heong lala and fried rice, open 3pm to 3am',
     price: 1,
     tags: ['cheap', 'late night', 'western'],
     matches: ['burger', 'supper', 'late night', 'lala'],
@@ -510,8 +532,34 @@ export const SUNWAY_CENTRE = AREA_CENTRES['On campus'];
 /** Beyond this, the Sunway picks aren't "near you" and the app searches around you instead. */
 export const NEAR_SUNWAY_KM = 8;
 
+export function spotDetails(spot: Pick<Spot, 'id' | 'details'>): SpotDetails {
+  return spot.details ?? SPOT_DETAILS[spot.id] ?? {};
+}
+
+/** The spot's own pin, or the middle of its area. */
+export function spotPoint(spot: Spot): LatLng {
+  return spotDetails(spot).at ?? AREA_CENTRES[spot.area] ?? SUNWAY_CENTRE;
+}
+
+/** Whether the distance is only roughly right (pin on the street or area, not the shop). */
+export function spotDistanceIsRough(spot: Spot): boolean {
+  return spotDetails(spot).pin !== 'exact' && spotDetails(spot).pin !== 'building';
+}
+
 export function spotDistanceKm(spot: Spot, here: LatLng): number {
-  return distanceKm(here, AREA_CENTRES[spot.area] ?? SUNWAY_CENTRE);
+  return distanceKm(here, spotPoint(spot));
+}
+
+/** Spots are in Malaysia, so "open now" goes by Malaysian time wherever the phone is. */
+export const SPOT_TIME_ZONE = 'Asia/Kuala_Lumpur';
+
+/** Open/closed right now, or null when the spot's hours aren't known. */
+export function spotOpenNow(spot: Spot, now = new Date()): { open: boolean; label: string } | null {
+  const hours = spotDetails(spot).hours;
+  if (!hours) return null;
+  const at = clockIn(SPOT_TIME_ZONE, now);
+  const state = openState(hours, at);
+  return { open: state.open, label: openLabel(state, at) };
 }
 
 export function isNearSunway(here: LatLng): boolean {
@@ -526,31 +574,37 @@ export function byDistance(spots: Spot[], here: LatLng): Spot[] {
     .map((x) => x.spot);
 }
 
-/** Quick Google Maps searches around you, for anywhere the Sunway list doesn't cover. */
+/** Quick Google Maps searches around you, for anywhere the Sunway list doesn't cover. Labels are shown with t(); queries stay English. */
 export const NEAR_YOU_SEARCHES: { label: string; query: string; icon: FoodIconName; color: FoodColor }[] = [
-  { label: 'Anything good', query: 'restaurants', icon: 'bowl', color: 'tomato' },
-  { label: 'Mamak', query: 'mamak', icon: 'cup', color: 'mustard' },
-  { label: 'Nasi lemak', query: 'nasi lemak', icon: 'rice', color: 'leaf' },
-  { label: 'Chicken rice', query: 'chicken rice', icon: 'rice', color: 'mustard' },
-  { label: 'Noodles', query: 'noodles', icon: 'bowl', color: 'sand' },
-  { label: 'Korean', query: 'korean food', icon: 'bowl', color: 'plum' },
-  { label: 'Cafe', query: 'cafe', icon: 'cup', color: 'teal' },
-  { label: 'Dessert', query: 'dessert', icon: 'cup', color: 'peach' },
+  { label: tk('Anything good'), query: 'restaurants', icon: 'bowl', color: 'tomato' },
+  { label: tk('Mamak'), query: 'mamak', icon: 'cup', color: 'mustard' },
+  { label: tk('Nasi lemak'), query: 'nasi lemak', icon: 'rice', color: 'leaf' },
+  { label: tk('Chicken rice'), query: 'chicken rice', icon: 'rice', color: 'mustard' },
+  { label: tk('Noodles'), query: 'noodles', icon: 'bowl', color: 'sand' },
+  { label: tk('Korean'), query: 'korean food', icon: 'bowl', color: 'plum' },
+  { label: tk('Cafe'), query: 'cafe', icon: 'cup', color: 'teal' },
+  { label: tk('Dessert'), query: 'dessert', icon: 'cup', color: 'peach' },
 ];
 
 export function spotMapsUrl(spot: Spot): string {
+  if (spot.room) {
+    const at = spot.details?.at;
+    const query = at ? `${at.lat},${at.lng}` : `${spot.name} ${spot.area === ROOM_SPOT_AREA ? '' : spot.area}`.trim();
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
   const where = spot.area === 'On campus' ? 'Sunway University' : /sunway|subang/i.test(spot.area) ? spot.area : `${spot.area} Bandar Sunway`;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${spot.name} ${where}`)}`;
 }
 
 export function priceLabel(price: Spot['price']): string {
-  return price === 1 ? 'Under RM15' : price === 2 ? 'RM15–50' : 'RM50+';
+  if (price === null) return t('Price not set');
+  return price === 1 ? t('Under RM15') : price === 2 ? 'RM15–50' : 'RM50+';
 }
 
 /** Spots that fit a food: the longest dish-name match counts most, then shared tags. */
-export function spotsFor(food: Pick<Food, 'name' | 'tags'>, limit = 3): Spot[] {
+export function spotsFor(food: Pick<Food, 'name' | 'tags'>, limit = 3, pool: Spot[] = SUNWAY_SPOTS): Spot[] {
   const name = food.name.toLowerCase();
-  return SUNWAY_SPOTS.map((spot) => {
+  return pool.map((spot) => {
     const nameHit = Math.max(0, ...spot.matches.filter((m) => name.includes(m) || m.includes(name)).map((m) => m.length));
     const tagHits = spot.tags.filter((t) => food.tags.includes(t)).length;
     const exact = spot.name.toLowerCase() === name ? 10_000 : 0; // picked straight from Near Sunway

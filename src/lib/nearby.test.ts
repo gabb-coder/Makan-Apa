@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { STARTER_PACK } from './foods';
 import { ICONS, COLOR_KEYS } from './palette';
 import { distanceKm, formatDistance, mapsNearUrl } from './geo';
-import { AREA_CENTRES, SUNWAY_SPOTS, byDistance, isNearSunway, priceLabel, spotMapsUrl, spotsFor, spotsOfTheDay } from './nearby';
+import { clockIn, dayHoursLabel, openLabel, openState, timeLabel } from './hours';
+import { AREA_CENTRES, SUNWAY_SPOTS, byDistance, isNearSunway, roomSpot, spotDetails, spotOpenNow, priceLabel, spotMapsUrl, spotsFor, spotsOfTheDay } from './nearby';
 
 describe('Sunway spots data', () => {
   it('has unique ids and only icons and colours the food list accepts', () => {
@@ -91,5 +92,70 @@ describe('distances', () => {
 
   it('builds a Google Maps search around you', () => {
     expect(mapsNearUrl('nasi lemak', campus)).toBe('https://www.google.com/maps/search/nasi%20lemak/@3.06720,101.60360,15z');
+  });
+});
+
+describe('opening hours', () => {
+  const week = ['11:00-22:00', '', '11:00-22:00', '11:00-22:00', '11:00-22:00', '15:00-03:00', '10:00-14:00,17:00-22:00'];
+
+  it('knows open, closed and when it opens next', () => {
+    expect(openLabel(openState(week, { day: 0, minute: 12 * 60 }), { day: 0 })).toBe('Open · till 10pm');
+    expect(openLabel(openState(week, { day: 0, minute: 23 * 60 }), { day: 0 })).toBe('Closed · opens Wed 11am');
+    expect(openLabel(openState(week, { day: 2, minute: 9 * 60 }), { day: 2 })).toBe('Closed · opens 11am');
+    expect(openLabel(openState(week, { day: 6, minute: 15 * 60 }), { day: 6 })).toBe('Closed · opens 5pm');
+  });
+
+  it('handles ranges past midnight', () => {
+    // Saturday 3pm–3am: still open at 1am on Sunday.
+    expect(openState(week, { day: 6, minute: 60 })).toEqual({ open: true, allDay: false, closesAt: 180 });
+    expect(openLabel(openState(week, { day: 5, minute: 23 * 60 }), { day: 5 })).toBe('Open · till 3am');
+  });
+
+  it('labels 24-hour places and day summaries', () => {
+    const always = Array(7).fill('00:00-24:00');
+    expect(openLabel(openState(always, { day: 3, minute: 4 * 60 }), { day: 3 })).toBe('Open 24 hours');
+    expect(dayHoursLabel('10:00-14:00,17:30-22:00')).toBe('10am–2pm, 5:30pm–10pm');
+    expect(dayHoursLabel('')).toBe('Closed');
+    expect(timeLabel(0)).toBe('midnight');
+  });
+
+  it('reads the clock in Malaysia', () => {
+    // 2026-10-31 is a Saturday; 04:30 UTC is 12:30pm in Kuala Lumpur.
+    expect(clockIn('Asia/Kuala_Lumpur', new Date('2026-10-31T04:30:00Z'))).toEqual({ day: 5, minute: 12 * 60 + 30 });
+  });
+
+  it('has well-formed hours and pins inside Bandar Sunway / SS15 for every listed spot', () => {
+    for (const s of SUNWAY_SPOTS) {
+      const d = spotDetails(s);
+      if (d.hours) {
+        expect(d.hours).toHaveLength(7);
+        for (const day of d.hours) expect(day).toMatch(/^$|^(\d\d:\d\d-\d\d:\d\d)(,\d\d:\d\d-\d\d:\d\d)*$/);
+      }
+      if (d.at) {
+        expect(d.at.lat).toBeGreaterThan(3.055);
+        expect(d.at.lat).toBeLessThan(3.085);
+        expect(d.at.lng).toBeGreaterThan(101.58);
+        expect(d.at.lng).toBeLessThan(101.62);
+      }
+    }
+    expect(spotOpenNow(SUNWAY_SPOTS.find((s) => s.id === 'q-bistro')!, new Date('2026-10-31T04:30:00Z'))?.open).toBe(true);
+  });
+});
+
+describe('room spots', () => {
+  const row = { id: 'abc', room_id: 'r', name: 'Restoran Yong', area: 'SS15', note: 'Claypot chicken rice', price: 1, diet: 'pork' as const, lat: 3.0768, lng: 101.5875, added_by: 'wei', created_at: '' };
+
+  it('look like Sunway spots, with their own pin and maps link', () => {
+    const s = roomSpot(row);
+    expect(s).toMatchObject({ id: 'room:abc', name: 'Restoran Yong', area: 'SS15', knownFor: 'Claypot chicken rice', price: 1, diet: 'pork', room: { id: 'abc', addedBy: 'wei' } });
+    expect(spotMapsUrl(s)).toBe('https://www.google.com/maps/search/?api=1&query=3.0768%2C101.5875');
+    expect(spotsFor({ name: 'Restoran Yong', tags: [] }, 3, [s, ...SUNWAY_SPOTS])[0].id).toBe('room:abc');
+  });
+
+  it('fill in what was left out', () => {
+    const s = roomSpot({ ...row, area: null, note: null, price: null, diet: null, lat: null, lng: null });
+    expect(s.area).toBe('Added by your room');
+    expect(priceLabel(s.price)).toBe('Price not set');
+    expect(spotMapsUrl(s)).toBe('https://www.google.com/maps/search/?api=1&query=Restoran%20Yong');
   });
 });

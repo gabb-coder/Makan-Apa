@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { clashText, whoClashes, type Needs } from '../lib/diet';
 import { formatTag, isRecent, lastEatenLabel, type Food } from '../lib/foods';
+import { t } from '../lib/i18n';
 import { FoodTile } from './FoodTile';
 
 interface Props {
@@ -11,12 +13,14 @@ interface Props {
   sendTo: string | null;
   /** Secret picks mode: the pick stays hidden until everyone's in. */
   secret?: boolean;
+  /** People in the room, to flag foods that don't suit someone's diet or budget. */
+  members?: (Needs & { name: string })[];
   onClose: () => void;
   onPick: (pick: { food: Food } | { name: string }) => Promise<void>;
 }
 
 /** Bottom sheet for the decider: pick straight from the food list, or type a food. */
-export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose, onPick }: Props) {
+export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, members = [], onClose, onPick }: Props) {
   const [query, setQuery] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,7 +43,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
       await onPick(p);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send that.');
+      setError(e instanceof Error ? e.message : t('Could not send that.'));
       setBusy(false);
     }
   };
@@ -53,12 +57,12 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">{secret ? 'Secret pick · hidden until everyone’s in' : sendTo ? `Your turn · goes to ${sendTo}` : 'Your turn · this one’s final'}</span>
+            <span className="eyebrow">{secret ? t('Secret pick · hidden until everyone’s in') : sendTo ? t('Your turn · goes to {name}', { name: sendTo }) : t('Your turn · this one’s final')}</span>
             <h2 id="pick-title" className="title title--sm" style={{ fontSize: 24 }}>
-              {mode === 'list' ? 'Pick from list' : 'Type my own'}
+              {mode === 'list' ? t('Pick from list') : t('Type my own')}
             </h2>
           </div>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -68,12 +72,12 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
         {mode === 'list' ? (
           <>
             <div>
-              <label htmlFor="pick-search" className="sr-only">Search food</label>
+              <label htmlFor="pick-search" className="sr-only">{t('Search food')}</label>
               <input
                 id="pick-search"
                 type="search"
                 className="input"
-                placeholder="Search food or tags"
+                placeholder={t('Search food or tags')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -81,6 +85,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
             <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {shown.map((f) => {
                 const off = vetoedSet.has(f.name.toLowerCase());
+                const clash = clashText(whoClashes(f, members));
                 return (
                   <button
                     key={f.id}
@@ -94,18 +99,19 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
                     <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                       <span style={{ fontSize: 16, fontWeight: 700 }}>{f.name}</span>
                       <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                        {off ? 'Vetoed today' : f.tags.length ? f.tags.map(formatTag).join(' · ') : 'No tags'}
+                        {off ? t('Vetoed today') : f.tags.length ? f.tags.map(formatTag).join(' · ') : t('No tags')}
                       </span>
+                      {!off && clash && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger)' }}>{clash}</span>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                      {!off && isRecent(f) && <span className="badge badge--recent">Recent</span>}
+                      {!off && isRecent(f) && <span className="badge badge--recent">{t('Recent')}</span>}
                       <span style={{ fontSize: 12, color: 'var(--muted)' }}>{lastEatenLabel(f.daysSinceEaten)}</span>
                     </div>
                   </button>
                 );
               })}
               {shown.length === 0 && (
-                <p style={{ margin: 0, padding: 16, fontSize: 14, color: 'var(--muted)', textAlign: 'center' }}>Nothing matches.</p>
+                <p style={{ margin: 0, padding: 16, fontSize: 14, color: 'var(--muted)', textAlign: 'center' }}>{t('Nothing matches.')}</p>
               )}
             </div>
           </>
@@ -117,19 +123,19 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, onClose
               if (typedName && !typedVetoed) pick({ name: typedName });
             }}
           >
-            <label htmlFor="typed-food" className="field-label">What are we eating?</label>
+            <label htmlFor="typed-food" className="field-label">{t('What are we eating?')}</label>
             <input
               id="typed-food"
               className="input"
               autoFocus
               maxLength={40}
-              placeholder="e.g. Banana leaf rice"
+              placeholder={t('e.g. {food}', { food: 'Banana leaf rice' })}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
             />
-            {typedVetoed && <span style={{ fontSize: 13, color: 'var(--danger)' }}>{typedName} was vetoed today.</span>}
+            {typedVetoed && <span style={{ fontSize: 13, color: 'var(--danger)' }}>{t('{name} was vetoed today.', { name: typedName })}</span>}
             <button type="submit" className="btn btn--primary press" style={{ height: 52 }} disabled={!typedName || typedVetoed || busy}>
-              {secret ? 'Lock in my pick' : sendTo ? `Send to ${sendTo}` : 'Lock it in'}
+              {secret ? t('Lock in my pick') : sendTo ? t('Send to {name}', { name: sendTo }) : t('Lock it in')}
             </button>
           </form>
         )}

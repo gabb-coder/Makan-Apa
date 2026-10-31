@@ -1,3 +1,4 @@
+import { getLang, t } from './i18n';
 import { COLOR_KEYS, ICONS, type FoodColor, type FoodIconName } from './palette';
 import type { DayEntryRow, FoodOptionRow } from './supabase';
 
@@ -10,10 +11,16 @@ export interface Food {
   isActive: boolean;
   /** Days since this food was last accepted; null if never eaten. */
   daysSinceEaten: number | null;
+  /** halal, vegetarian, pork, beef (see diet.ts). */
+  diet: string[];
+  /** 1 under RM15, 2 RM15–50, 3 more; null if not set. */
+  price: number | null;
+  /** Thumbs up minus thumbs down across every time it was eaten. */
+  netRating?: number;
 }
 
 /** Fields the user edits on a food. */
-export type FoodDraft = Pick<Food, 'name' | 'tags' | 'icon' | 'color'>;
+export type FoodDraft = Pick<Food, 'name' | 'tags' | 'icon' | 'color'> & Partial<Pick<Food, 'diet' | 'price'>>;
 
 export function rowToFood(row: FoodOptionRow, daysSinceEaten: number | null): Food {
   return {
@@ -24,6 +31,8 @@ export function rowToFood(row: FoodOptionRow, daysSinceEaten: number | null): Fo
     color: (COLOR_KEYS as string[]).includes(row.color) ? (row.color as FoodColor) : 'leaf',
     isActive: row.is_active,
     daysSinceEaten,
+    diet: row.diet ?? [],
+    price: row.price ?? null,
   };
 }
 
@@ -47,19 +56,28 @@ export function isRecent(food: Food): boolean {
 }
 
 export function lastEatenLabel(days: number | null): string {
-  if (days === null) return 'Not yet';
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 14) return '1 week ago';
-  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
-  return `${Math.floor(days / 30)} months ago`;
+  if (days === null) return t('Not yet');
+  if (days <= 0) return t('Today');
+  if (days === 1) return t('Yesterday');
+  if (days < 7) return t('{n} days ago', { n: days });
+  if (days < 14) return t('1 week ago');
+  if (days < 60) return t('{n} weeks ago', { n: Math.floor(days / 7) });
+  return t('{n} months ago', { n: Math.floor(days / 30) });
 }
 
 /** Recently-eaten penalty from the spec: never eaten = 1, otherwise days/7 clamped to [0.1, 1]. */
 export function wheelWeight(food: Food): number {
+  return recencyWeight(food) * ratingFactor(food.netRating ?? 0);
+}
+
+function recencyWeight(food: Food): number {
   if (food.daysSinceEaten === null) return 1;
   return Math.max(0.1, Math.min(1, food.daysSinceEaten / 7));
+}
+
+/** Liked foods come up more (up to 2×), disliked ones less (down to 0.3×). */
+export function ratingFactor(net: number): number {
+  return net >= 0 ? Math.min(2, 1 + 0.25 * net) : Math.max(0.3, 1 + 0.25 * net);
 }
 
 /** Weighted random draw. Returns the index of the winner. */
@@ -95,7 +113,8 @@ export function popularTags(foods: Food[], limit = Infinity): string[] {
 /** "A", "A and B", "A, B and C" (or "A, B or C"). */
 export function joinNames(names: string[], conjunction: 'and' | 'or' = 'and'): string {
   if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} ${conjunction} ${names[names.length - 1]}`;
+  const vars = { rest: names.slice(0, -1).join(getLang() === 'zh' ? '、' : ', '), last: names[names.length - 1] };
+  return conjunction === 'and' ? t('{rest} and {last}', vars) : t('{rest} or {last}', vars);
 }
 
 export function filterByTags(foods: Food[], tags: string[], mode: 'and' | 'or'): Food[] {
@@ -117,12 +136,15 @@ export function customFood(name: string): Food {
     color: COLOR_KEYS[hash % COLOR_KEYS.length],
     isActive: true,
     daysSinceEaten: null,
+    diet: [],
+    price: null,
   };
 }
 
 /** The food a day entry points at, or null if it has none. */
 export function entryFood(entry: DayEntryRow, foodsById: Map<string, Food>): Food | null {
-  if (entry.food_option_id) return foodsById.get(entry.food_option_id) ?? customFood('A deleted food');
+  // Same id and colour in every language; only the shown name is translated.
+  if (entry.food_option_id) return foodsById.get(entry.food_option_id) ?? { ...customFood('A deleted food'), name: t('A deleted food') };
   if (entry.custom_food) {
     const lower = entry.custom_food.toLowerCase();
     return [...foodsById.values()].find((f) => f.name.toLowerCase() === lower) ?? customFood(entry.custom_food);
@@ -132,7 +154,7 @@ export function entryFood(entry: DayEntryRow, foodsById: Map<string, Food>): Foo
 
 /** "once", "twice", "3 times". */
 export function timesWord(n: number): string {
-  return n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`;
+  return n === 1 ? t('once') : n === 2 ? t('twice') : t('{n} times', { n });
 }
 
 export function mapsSearchUrl(food: string): string {

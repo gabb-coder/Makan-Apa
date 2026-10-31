@@ -21,13 +21,13 @@ describe('bestNoRepeatStreak', () => {
 
 describe('monthStats', () => {
   const members: MemberRow[] = [
-    { id: 'g', room_id: 'r', name: 'Gabriel', color: '#CC3F17', sort_order: 0, created_at: '1' },
-    { id: 'a', room_id: 'r', name: 'Alex', color: '#2F6FD6', sort_order: 1, created_at: '2' },
+    { id: 'g', room_id: 'r', name: 'Gabriel', color: '#CC3F17', sort_order: 0, diet: [], budget: null, created_at: '1' },
+    { id: 'a', room_id: 'r', name: 'Alex', color: '#2F6FD6', sort_order: 1, diet: [], budget: null, created_at: '2' },
   ];
   const foods = new Map<string, Food>(
     ['Nasi', 'Ramen', 'Pizza'].map((name) => [
       name.toLowerCase(),
-      { id: name.toLowerCase(), name, tags: name === 'Nasi' ? ['rice', 'cheap'] : ['other'], icon: 'rice', color: 'leaf', isActive: true, daysSinceEaten: null },
+      { id: name.toLowerCase(), name, tags: name === 'Nasi' ? ['rice', 'cheap'] : ['other'], icon: 'rice', color: 'leaf', isActive: true, daysSinceEaten: null, diet: [], price: null },
     ]),
   );
   const entry = (date: string, foodId: string | null, decider: string, status: DayEntryRow['status'] = 'accepted'): DayEntryRow => ({
@@ -39,6 +39,7 @@ describe('monthStats', () => {
     custom_food: null,
     method: 'direct',
     status,
+    meal: 'lunch',
     created_at: '',
   });
   const entries = [

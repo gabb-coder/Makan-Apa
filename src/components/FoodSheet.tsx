@@ -1,8 +1,31 @@
 import { useEffect, useState } from 'react';
+import { FOOD_MARKS, PRICES } from '../lib/diet';
 import { formatTag, normalizeTag, type Food, type FoodDraft } from '../lib/foods';
-import { COLOR_KEYS, FOOD_COLORS, ICONS } from '../lib/palette';
+import { t, tk } from '../lib/i18n';
+import { COLOR_KEYS, FOOD_COLORS, ICONS, type FoodColor, type FoodIconName } from '../lib/palette';
 import { FoodIcon } from './FoodIcon';
 import { FoodTile } from './FoodTile';
+
+// Screen-reader names for the icon and colour buttons.
+const ICON_LABELS: Record<FoodIconName, string> = {
+  rice: tk('rice'),
+  bowl: tk('bowl'),
+  pizza: tk('pizza'),
+  sushi: tk('sushi'),
+  burger: tk('burger'),
+  cup: tk('cup'),
+};
+
+const COLOR_LABELS: Record<FoodColor, string> = {
+  leaf: tk('leaf'),
+  mustard: tk('mustard'),
+  peach: tk('peach'),
+  tomato: tk('tomato'),
+  sky: tk('sky'),
+  plum: tk('plum'),
+  sand: tk('sand'),
+  teal: tk('teal'),
+};
 
 interface Props {
   /** The food being edited, or null when adding. */
@@ -43,7 +66,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
       await fn();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
+      setError(e instanceof Error ? e.message : t('Something went wrong.'));
       setBusy(false);
     }
   };
@@ -55,7 +78,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
     return act(() => onSave({ ...draft, name, tags }));
   };
 
-  const unusedSuggestions = suggestedTags.filter((t) => !draft.tags.includes(t)).slice(0, 8);
+  const unusedSuggestions = suggestedTags.filter((x) => !draft.tags.includes(x)).slice(0, 8);
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -71,12 +94,12 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
         <header style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <FoodTile food={draft} size={56} style={{ borderRadius: 16 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flexGrow: 1 }}>
-            <span className="eyebrow">{food ? (food.isActive ? 'Edit food' : 'Archived food') : 'New food'}</span>
+            <span className="eyebrow">{food ? (food.isActive ? t('Edit food') : t('Archived food')) : t('New food')}</span>
             <h2 id="food-sheet-title" className="title title--sm" style={{ fontSize: 24, overflowWrap: 'anywhere' }}>
-              {name || 'Untitled'}
+              {name || t('Untitled')}
             </h2>
           </div>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -92,32 +115,32 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="food-name" className="field-label">Name</label>
+            <label htmlFor="food-name" className="field-label">{t('Name')}</label>
             <input
               id="food-name"
               className="input"
               value={draft.name}
               maxLength={40}
-              placeholder="e.g. Banana Leaf"
+              placeholder={t('e.g. Banana Leaf')}
               autoFocus={!food}
               onChange={(e) => set('name', e.target.value)}
             />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label htmlFor="food-tag" className="field-label">Tags</label>
+            <label htmlFor="food-tag" className="field-label">{t('Tags')}</label>
             {draft.tags.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {draft.tags.map((t) => (
+                {draft.tags.map((tag) => (
                   <button
-                    key={t}
+                    key={tag}
                     type="button"
                     className="chip press"
                     aria-pressed="true"
-                    aria-label={`Remove tag ${t}`}
-                    onClick={() => set('tags', draft.tags.filter((x) => x !== t))}
+                    aria-label={t('Remove tag {tag}', { tag })}
+                    onClick={() => set('tags', draft.tags.filter((x) => x !== tag))}
                   >
-                    {formatTag(t)}
+                    {formatTag(tag)}
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
                       <path d="M6 6l12 12M18 6L6 18" />
                     </svg>
@@ -130,7 +153,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
               className="input"
               value={tagInput}
               maxLength={24}
-              placeholder="Add a tag, then press Enter"
+              placeholder={t('Add a tag, then press Enter')}
               enterKeyHint="done"
               onChange={(e) => (e.target.value.endsWith(',') ? addTag(e.target.value) : setTagInput(e.target.value))}
               onKeyDown={(e) => {
@@ -142,9 +165,9 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
             />
             {unusedSuggestions.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {unusedSuggestions.map((t) => (
-                  <button key={t} type="button" className="chip chip--ghost press" onClick={() => addTag(t)}>
-                    + {formatTag(t)}
+                {unusedSuggestions.map((tag) => (
+                  <button key={tag} type="button" className="chip chip--ghost press" onClick={() => addTag(tag)}>
+                    + {formatTag(tag)}
                   </button>
                 ))}
               </div>
@@ -152,7 +175,33 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
           </div>
 
           <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Icon</legend>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Diet')}</legend>
+            <div className="chip-row" style={{ flexWrap: 'wrap' }}>
+              {FOOD_MARKS.map((m) => {
+                const marks = draft.diet ?? [];
+                const on = marks.includes(m.key);
+                return (
+                  <button key={m.key} type="button" className="chip press" aria-pressed={on} onClick={() => set('diet', on ? marks.filter((x) => x !== m.key) : [...marks, m.key])}>
+                    {t(m.label)}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Price per person')}</legend>
+            <div className="segmented" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+              {PRICES.map((p) => (
+                <button key={p.label} type="button" aria-pressed={(draft.price ?? null) === p.value} onClick={() => set('price', p.value)} style={{ fontSize: 13 }}>
+                  {t(p.label)}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Icon')}</legend>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
               {ICONS.map((icon) => {
                 const on = draft.icon === icon;
@@ -162,7 +211,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
                     type="button"
                     className="press"
                     aria-pressed={on}
-                    aria-label={icon}
+                    aria-label={t(ICON_LABELS[icon])}
                     onClick={() => set('icon', icon)}
                     style={{
                       height: 48,
@@ -183,7 +232,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
           </fieldset>
 
           <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
-            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>Colour</legend>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Colour')}</legend>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: 6 }}>
               {COLOR_KEYS.map((c) => {
                 const on = draft.color === c;
@@ -193,7 +242,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
                     type="button"
                     className="press"
                     aria-pressed={on}
-                    aria-label={c}
+                    aria-label={t(COLOR_LABELS[c])}
                     onClick={() => set('color', c)}
                     style={{
                       height: 44,
@@ -218,11 +267,11 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button type="submit" form="food-form" className="btn btn--primary press" style={{ height: 52 }} disabled={!name || busy}>
-            {food ? 'Save changes' : 'Add to list'}
+            {food ? t('Save changes') : t('Add to list')}
           </button>
           {food && onArchive && (
             <button type="button" className="btn btn--secondary press" disabled={busy} onClick={() => act(() => onArchive(food.isActive))}>
-              {food.isActive ? 'Archive (hide from wheel)' : 'Restore to list'}
+              {food.isActive ? t('Archive (hide from wheel)') : t('Restore to list')}
             </button>
           )}
           {food && onDelete && (
@@ -233,7 +282,7 @@ export function FoodSheet({ food, initial, suggestedTags, onClose, onSave, onArc
               disabled={busy}
               onClick={() => (confirmDelete ? act(onDelete) : setConfirmDelete(true))}
             >
-              {confirmDelete ? 'Tap again to delete for good' : 'Delete'}
+              {confirmDelete ? t('Tap again to delete for good') : t('Delete')}
             </button>
           )}
         </div>

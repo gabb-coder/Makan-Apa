@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { t } from './i18n';
 import { deciderFor } from './rotation';
-import { supabase, type DayEntryRow, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
+import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
 
 /** What the decider is proposing: a pool food, or a name typed in. */
 export type Pick = { foodId: string; name: string } | { foodId: null; name: string };
@@ -22,7 +23,7 @@ function stripJoin({ day_entries: _, ...veto }: VetoWithEntry): VetoRow {
  * The room's day entries and vetoes, kept live, plus the propose / accept / veto actions
  * for today (SPEC.md section 6, day entry lifecycle).
  */
-export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string) {
+export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string, meal: Meal = 'lunch') {
   const [entries, setEntries] = useState<DayEntryRow[] | null>(null);
   const [vetoes, setVetoes] = useState<VetoRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -75,12 +76,12 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     };
   }, [room.id, load]);
 
-  const todayEntry = entries?.find((e) => e.entry_date === today) ?? null;
+  const todayEntry = entries?.find((e) => e.entry_date === today && (e.meal ?? 'lunch') === meal) ?? null;
   const todayVetoes = useMemo(
     () => (todayEntry ? vetoes.filter((v) => v.day_entry_id === todayEntry.id) : []),
     [vetoes, todayEntry],
   );
-  const computedDecider = deciderFor(members, room.rotation_start, today);
+  const computedDecider = deciderFor(members, room.rotation_start, today, meal);
 
   // Secret picks for today, live. Every phone holds them all, but the UI only shows
   // other people's picks once everyone is in (the room code is the only lock).
@@ -115,17 +116,17 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   }, [todayId]);
 
   // Step 1: the first visit of the day creates the entry. Both phones may race; the unique
-  // (room_id, entry_date) constraint keeps one row.
+  // (room_id, entry_date, meal) constraint keeps one row.
   useEffect(() => {
     if (!entries || todayEntry || !computedDecider) return;
     supabase
       .from('day_entries')
       .upsert(
-        { room_id: room.id, entry_date: today, decider_id: computedDecider.id, status: 'pending' },
-        { onConflict: 'room_id,entry_date', ignoreDuplicates: true },
+        { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'pending' },
+        { onConflict: 'room_id,entry_date,meal', ignoreDuplicates: true },
       )
       .then(({ error: err }) => (err ? setError(err.message) : load()));
-  }, [entries, todayEntry, computedDecider, room.id, today, load]);
+  }, [entries, todayEntry, computedDecider, room.id, today, meal, load]);
 
   // Until the day has a pick or a veto, follow changes to the member order or rotation start.
   useEffect(() => {
@@ -156,7 +157,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
 
   /** Run an update on today's entry; returns false if `guard` no longer matched (someone got there first). */
   const updateToday = async (patch: Partial<DayEntryRow>, guard: (q: any) => any = (q) => q): Promise<boolean> => {
-    if (!todayEntry) throw new Error('Today isn’t ready yet. Try again in a moment.');
+    if (!todayEntry) throw new Error(t('Today isn’t ready yet. Try again in a moment.'));
     const { data, error: err } = await guard(supabase.from('day_entries').update(patch).eq('id', todayEntry.id)).select();
     if (err) throw new Error(err.message);
     const rows = data as DayEntryRow[];
@@ -179,7 +180,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       // Only today's decider may pick, even if this phone's view of the rotation is a moment stale.
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
     );
-    if (!ok) throw new Error('It’s not your turn right now, or today’s already decided.');
+    if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
   };
 
   /** Decider takes back a proposal nobody has answered yet. */
@@ -193,7 +194,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** Step 3: a non-decider accepts. */
   const accept = async () => {
     const ok = await updateToday({ status: 'accepted' }, (q) => q.eq('status', 'proposed'));
-    if (!ok) throw new Error('That pick changed. Have another look.');
+    if (!ok) throw new Error(t('That pick changed. Have another look.'));
   };
 
   const undoAccept = async () => {
@@ -202,14 +203,14 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
 
   /** Step 4: a non-decider vetoes, if they have vetoes left. Returns the veto so it can be undone. */
   const veto = async (foodName: string): Promise<{ veto: VetoRow; previous: DayEntryRow }> => {
-    if (!todayEntry) throw new Error('Today isn’t ready yet.');
-    if (myVetoesToday >= room.veto_limit) throw new Error('No vetoes left today, so this pick stands.');
+    if (!todayEntry) throw new Error(t('Today isn’t ready yet.'));
+    if (myVetoesToday >= room.veto_limit) throw new Error(t('No vetoes left today, so this pick stands.'));
     const previous = todayEntry;
     const ok = await updateToday(
       { food_option_id: null, custom_food: null, method: null, status: 'pending' },
       (q) => q.eq('status', 'proposed'),
     );
-    if (!ok) throw new Error('That pick changed. Have another look.');
+    if (!ok) throw new Error(t('That pick changed. Have another look.'));
     const { data, error: err } = await supabase
       .from('vetoes')
       .insert({ day_entry_id: todayEntry.id, member_id: meId, rejected_food: foodName })
@@ -232,7 +233,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       },
       (q) => q.eq('status', 'pending').is('food_option_id', null).is('custom_food', null),
     );
-    if (!ok) throw new Error(`Too late, there's a new pick.`);
+    if (!ok) throw new Error(t("Too late, there's a new pick."));
     const { error: err } = await supabase.from('vetoes').delete().eq('id', vetoRow.id);
     if (err) throw new Error(err.message);
     setVetoes((cur) => cur.filter((x) => x.id !== vetoRow.id));
@@ -240,7 +241,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
 
   /** Secret picks mode: set or change my pick for today. */
   const submitSecretPick = async (foodText: string) => {
-    if (!todayEntry) throw new Error('Today isn’t ready yet. Try again in a moment.');
+    if (!todayEntry) throw new Error(t('Today isn’t ready yet. Try again in a moment.'));
     const { data, error: err } = await supabase
       .from('secret_picks')
       .upsert({ day_entry_id: todayEntry.id, member_id: meId, food_text: foodText }, { onConflict: 'day_entry_id,member_id' })

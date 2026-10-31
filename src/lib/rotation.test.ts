@@ -7,6 +7,8 @@ const member = (id: string, sort_order: number, created_at = '2026-01-01T00:00:0
   room_id: 'r',
   name: id,
   color: '#000',
+  diet: [],
+  budget: null,
   sort_order,
   created_at,
 });
@@ -43,5 +45,14 @@ describe('date helpers', () => {
   it('formats short day labels', () => {
     expect(dayLabel('2026-10-31')).toBe('Sat 31');
     expect(dayMonthLabel('2026-10-30')).toBe('Fri 30 Oct');
+  });
+});
+
+describe('dinner rotation', () => {
+  it('gives dinner to the next person, so nobody decides both', () => {
+    const ms = [member('a', 0), member('b', 1), member('c', 2)];
+    expect(deciderFor(ms, '2026-10-01', '2026-10-01')?.id).toBe('a');
+    expect(deciderFor(ms, '2026-10-01', '2026-10-01', 'dinner')?.id).toBe('b');
+    expect(deciderFor(ms, '2026-10-01', '2026-10-03', 'dinner')?.id).toBe('a');
   });
 });

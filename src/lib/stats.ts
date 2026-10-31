@@ -1,17 +1,18 @@
 import { daysBetween } from './dates';
 import { entryFood, type Food } from './foods';
 import type { DayEntryRow, MemberRow, VetoRow } from './supabase';
+import { locale } from './i18n';
 
 /** YYYY-MM for a YYYY-MM-DD date. */
 export function monthKey(date: string): string {
   return date.slice(0, 7);
 }
 
-/** "October", or "October 2025" when it isn't `currentYear`. */
+/** "October", or "October 2025" when it isn't `currentYear` (in the app's language: "Oktober 2025", "2025年10月"). */
 export function monthLabel(key: string, currentYear?: string): string {
   const d = new Date(`${key}-01T00:00:00Z`);
-  const month = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(d);
-  return currentYear && key.slice(0, 4) !== currentYear ? `${month} ${key.slice(0, 4)}` : month;
+  const withYear = !!currentYear && key.slice(0, 4) !== currentYear;
+  return new Intl.DateTimeFormat(locale(), { month: 'long', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' }).format(d);
 }
 
 /** Months with any day entry, plus the current one, newest first. */
@@ -72,7 +73,9 @@ export function bestNoRepeatStreak(meals: Pick<Meal, 'key' | 'entry'>[]): number
   let start = 0;
   const lastSeen = new Map<string, number>();
   for (let i = 0; i < meals.length; i++) {
-    if (i > 0 && daysBetween(meals[i - 1].entry.entry_date, meals[i].entry.entry_date) !== 1) start = i;
+    // Lunch and dinner on the same day count as back to back too.
+    const gap = i > 0 ? daysBetween(meals[i - 1].entry.entry_date, meals[i].entry.entry_date) : 1;
+    if (gap !== 1 && gap !== 0) start = i;
     const seen = lastSeen.get(meals[i].key);
     if (seen !== undefined && seen >= start) start = seen + 1;
     lastSeen.set(meals[i].key, i);

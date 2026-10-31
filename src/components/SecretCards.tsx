@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Food } from '../lib/foods';
+import { t } from '../lib/i18n';
 import type { MemberRow } from '../lib/supabase';
 import { useWheelSpin } from '../lib/useWheelSpin';
 import { Avatar } from './Avatar';
@@ -26,15 +27,15 @@ export function SecretCollectCard({ decider, members, me, pickedIds, myPick, onP
   const count = members.filter((m) => pickedIds.has(m.id)).length;
   const waitingOn = members.filter((m) => !pickedIds.has(m.id) && m.id !== me.id).map((m) => m.name);
   return (
-    <DeciderShell decider={decider} label="Secret picks">
+    <DeciderShell decider={decider} label={t('Secret picks')}>
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={{ ...display, fontSize: 30, letterSpacing: '-0.02em', lineHeight: 1.05 }}>{myPick ? 'You’re in!' : 'Pick in secret'}</span>
+        <span style={{ ...display, fontSize: 30, letterSpacing: '-0.02em', lineHeight: 1.05 }}>{myPick ? t('You’re in!') : t('Pick in secret')}</span>
         <span style={{ fontSize: 14, lineHeight: 1.4 }}>
-          {count} of {members.length} picked. Everything's revealed when everyone's in.
+          {t("{count} of {total} picked. Everything's revealed when everyone's in.", { count, total: members.length })}
         </span>
       </div>
 
-      <ul aria-label="Who has picked" style={{ position: 'relative', listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      <ul aria-label={t('Who has picked')} style={{ position: 'relative', listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         {members.map((m) => {
           const done = pickedIds.has(m.id);
           return (
@@ -66,8 +67,8 @@ export function SecretCollectCard({ decider, members, me, pickedIds, myPick, onP
                 )}
               </span>
               <span style={{ fontSize: 14, fontWeight: 700 }}>
-                {m.id === me.id ? 'You' : m.name}
-                <span className="sr-only">{done ? ' has picked' : ' hasn’t picked yet'}</span>
+                {m.id === me.id ? t('You') : m.name}
+                <span className="sr-only">{' ' + (done ? t('has picked') : t('hasn’t picked yet'))}</span>
               </span>
             </li>
           );
@@ -80,12 +81,12 @@ export function SecretCollectCard({ decider, members, me, pickedIds, myPick, onP
             <FoodTile food={myPick} size={44} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
               <span style={{ fontSize: 17, fontWeight: 800, overflowWrap: 'anywhere' }}>{myPick.name}</span>
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>Only you can see this until the reveal</span>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Only you can see this until the reveal')}</span>
             </div>
           </div>
-          <span style={{ fontSize: 14 }}>{waitingOn.length ? `Waiting for ${waitingOn.join(', ')}…` : 'Revealing…'}</span>
+          <span style={{ fontSize: 14 }}>{waitingOn.length ? t('Waiting for {names}…', { names: waitingOn.join(', ') }) : t('Revealing…')}</span>
           <button type="button" className="btn btn--ghost-light press" onClick={onPickList}>
-            Change my pick
+            {t('Change my pick')}
           </button>
         </div>
       ) : (
@@ -107,10 +108,10 @@ export function SecretCollectCard({ decider, members, me, pickedIds, myPick, onP
               animation: 'pulseWhite 2.2s ease-out infinite',
             }}
           >
-            Pick from list
+            {t('Pick from list')}
           </button>
           <button type="button" className="btn btn--ghost-light press" style={{ position: 'relative' }} onClick={onType}>
-            Type my own
+            {t('Type my own')}
           </button>
         </>
       )}
@@ -159,7 +160,7 @@ export function SecretRevealCard({ picks, me, result, onSpin, onDone, onError }:
       const winner = picks[Math.floor(Math.random() * picks.length)];
       await onSpin(winner);
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not spin.');
+      onError(e instanceof Error ? e.message : t('Could not spin.'));
       setBusy(false);
     }
   };
@@ -180,8 +181,8 @@ export function SecretRevealCard({ picks, me, result, onSpin, onDone, onError }:
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span className="section-label">The reveal</span>
-        <span style={{ ...display, fontSize: 28, letterSpacing: '-0.02em' }}>Everyone's in!</span>
+        <span className="section-label">{t('The reveal')}</span>
+        <span style={{ ...display, fontSize: 28, letterSpacing: '-0.02em' }}>{t("Everyone's in!")}</span>
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {picks.map((p, i) => (
@@ -232,10 +233,10 @@ export function SecretRevealCard({ picks, me, result, onSpin, onDone, onError }:
           opacity: started && !wheel.spinning && !result ? 0.6 : 1,
         }}
       >
-        {wheel.spinning ? 'Spinning…' : result ? `${result.name}!` : 'Spin for everyone'}
+        {wheel.spinning ? t('Spinning…') : result ? `${result.name}!` : t('Spin for everyone')}
       </button>
       <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-        Anyone can spin. Every phone sees the same wheel, and where it lands is final.
+        {t('Anyone can spin. Every phone sees the same wheel, and where it lands is final.')}
       </p>
     </section>
   );

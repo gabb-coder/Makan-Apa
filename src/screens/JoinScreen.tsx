@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CODE_LENGTH, createRoom, joinRoom, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
+import { t } from '../lib/i18n';
+import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, knownRoomTitle, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
 
 const SLICES = [
   ['M160 160L160 10A150 150 0 0 1 266.07 53.93Z', '#A8D8A0'],
@@ -14,7 +15,15 @@ const SLICES = [
 
 const fadeUp = (delay: number) => `fadeUpJoin 0.6s ${delay}s cubic-bezier(0.2, 0.8, 0.2, 1) both`;
 
-export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, message?: string) => void; notice?: string }) {
+interface Props {
+  onJoined: (s: Session, message?: string) => void;
+  notice?: string;
+  /** Rooms this phone is already in, to go back to. */
+  rooms?: KnownRoom[];
+  onOpenRoom?: (roomId: string) => void;
+}
+
+export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) {
   const [name, setName] = useState('');
   const [code, setCode] = useState(suggestedCode);
   const [busy, setBusy] = useState<'join' | 'create' | null>(null);
@@ -22,17 +31,20 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
   const [naming, setNaming] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [error, setError] = useState<string | null>(notice ?? null);
+  // Shown once the name turns out to be taken by someone with a PIN.
+  const [pinFor, setPinFor] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
 
   const trimmed = name.trim();
 
   const run = async (kind: 'join' | 'create') => {
     if (!trimmed) {
-      setError('Add your name first so your kakis know who’s deciding.');
+      setError(t('Add your name first so your kakis know who’s deciding.'));
       document.getElementById('join-name')?.focus();
       return;
     }
     if (kind === 'join' && code.length !== CODE_LENGTH) {
-      setError(`Room codes are ${CODE_LENGTH} characters. Or create a new room.`);
+      setError(t('Room codes are {n} characters. Or create a new room.', { n: CODE_LENGTH }));
       document.getElementById('join-code')?.focus();
       return;
     }
@@ -40,14 +52,31 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
     setError(null);
     try {
       if (kind === 'join') {
-        const s = await joinRoom(code, trimmed);
-        onJoined(s, s.rejoined ? `Welcome back, ${s.me.name}.` : `You're in ${s.room.name ? `“${s.room.name}”` : `room ${s.room.code}`}.`);
+        const s = await joinRoom(code, trimmed, pinFor ? pin : undefined);
+        onJoined(
+          s,
+          s.rejoined
+            ? t('Welcome back, {name}.', { name: s.me.name })
+            : s.room.name
+              ? t("You're in “{name}”.", { name: s.room.name })
+              : t("You're in room {code}.", { code: s.room.code }),
+        );
       } else {
         const s = await createRoom(trimmed, roomName);
-        onJoined(s, `${s.room.name ? `“${roomTitle(s.room)}”` : `Room ${s.room.code}`} created. Share code ${s.room.code} with your kakis.`);
+        onJoined(
+          s,
+          s.room.name
+            ? t('“{name}” created. Share code {code} with your kakis.', { name: roomTitle(s.room), code: s.room.code })
+            : t('Room {code} created. Share code {code} with your kakis.', { code: s.room.code }),
+        );
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+      if (e instanceof JoinError && (e.problem === 'pin_required' || e.problem === 'wrong_pin')) {
+        setPinFor(e.memberName);
+        setPin('');
+        setTimeout(() => document.getElementById('join-pin')?.focus(), 0);
+      }
+      setError(e instanceof Error ? e.message : t('Something went wrong. Try again.'));
       setBusy(null);
     }
   };
@@ -98,7 +127,7 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
           <span
             style={{
               display: 'inline-block',
-              color: 'var(--accent)',
+              color: 'var(--accent-text)',
               transformOrigin: '30% 90%',
               animation: 'popInTilt 0.65s 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both, wiggleSoft 4s 1.8s ease-in-out infinite',
             }}
@@ -107,7 +136,7 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
           </span>
         </h1>
         <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5, color: 'var(--ink-2)', animation: fadeUp(0.45) }}>
-          Take turns deciding what to eat, or let the wheel settle it.
+          {t('Take turns deciding what to eat, or let the wheel settle it.')}
         </p>
       </div>
 
@@ -133,7 +162,7 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="join-name" className="field-label">Your name</label>
+            <label htmlFor="join-name" className="field-label">{t('Your name')}</label>
             <input
               id="join-name"
               className="input"
@@ -141,12 +170,15 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
               autoComplete="nickname"
               maxLength={24}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setPinFor(null);
+              }}
               style={{ height: 52 }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="join-code" className="field-label">Room code</label>
+            <label htmlFor="join-code" className="field-label">{t('Room code')}</label>
             <input
               id="join-code"
               className="input"
@@ -160,6 +192,24 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
             />
           </div>
         </div>
+
+        {pinFor && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+            <label htmlFor="join-pin" className="field-label">{t("{name}'s PIN", { name: pinFor })}</label>
+            <input
+              id="join-pin"
+              className="input"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={4}
+              placeholder="••••"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              style={{ height: 52, fontWeight: 700, letterSpacing: '0.4em' }}
+            />
+          </div>
+        )}
 
         {error && (
           <p role="alert" style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--danger)' }}>
@@ -179,17 +229,17 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
             animation: 'glowSoft 2.4s ease-in-out 1.4s infinite',
           }}
         >
-          {busy === 'join' ? 'Joining…' : 'Join room'}
+          {busy === 'join' ? t('Joining…') : t('Join room')}
         </button>
         {naming && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
             <label htmlFor="room-name" className="field-label">
-              Room name <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(optional)</span>
+              {t('Room name')} <span style={{ fontWeight: 500, color: 'var(--muted)' }}>{t('(optional)')}</span>
             </label>
             <input
               id="room-name"
               className="input"
-              placeholder="e.g. Sunway lunch gang"
+              placeholder={t('e.g. Sunway lunch gang')}
               maxLength={ROOM_NAME_MAX}
               autoFocus
               value={roomName}
@@ -211,12 +261,31 @@ export function JoinScreen({ onJoined, notice }: { onJoined: (s: Session, messag
           onClick={() => (naming ? run('create') : setNaming(true))}
           style={{ height: 50, borderRadius: 16 }}
         >
-          {busy === 'create' ? 'Creating…' : naming ? 'Create room' : 'Create a new room'}
+          {busy === 'create' ? t('Creating…') : naming ? t('Create room') : t('Create a new room')}
         </button>
       </form>
 
+      {rooms.length > 0 && onOpenRoom && (
+        <section style={{ position: 'relative', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, animation: fadeUp(0.7) }}>
+          <span className="section-label">{t('Your rooms on this phone')}</span>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {rooms.map((r) => (
+              <button key={r.roomId} type="button" className="row" onClick={() => onOpenRoom(r.roomId)}>
+                <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{knownRoomTitle(r)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
+                  </span>
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-text)', flexShrink: 0 }}>{t('Open')}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <p style={{ position: 'relative', margin: '24px 0 0', textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-        No sign-up. Share the room code with your makan kakis.
+        {t('No sign-up. Share the room code with your makan kakis.')}
       </p>
     </div>
   );

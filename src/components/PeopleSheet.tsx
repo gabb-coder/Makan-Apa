@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
-import { hostOf, roomTitle } from '../lib/session';
+import { needsLabel } from '../lib/diet';
+import { t } from '../lib/i18n';
+import { hostOf, knownRooms, knownRoomTitle, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
 
@@ -14,15 +16,17 @@ interface Props {
   onClose: () => void;
   onInvite: () => void;
   onSettings: () => void;
+  onSwitchRoom: (roomId: string) => void;
+  onAddRoom: () => void;
 }
 
 /** When each member decides next, e.g. "Decides tomorrow". */
 function nextTurn(member: MemberRow, members: MemberRow[], room: RoomRow, today: string, todayDeciderId: string | null): string {
-  if (member.id === todayDeciderId) return 'Deciding today';
+  if (member.id === todayDeciderId) return t('Deciding today');
   for (let i = 1; i <= members.length; i++) {
     const date = addDays(today, i);
     if (deciderFor(members, room.rotation_start, date)?.id === member.id) {
-      return i === 1 ? 'Decides tomorrow' : `Decides ${dayLabel(date)}`;
+      return i === 1 ? t('Decides tomorrow') : t('Decides {day}', { day: dayLabel(date) });
     }
   }
   return '';
@@ -46,7 +50,8 @@ export function OnlineDot({ size = 12 }: { size?: number }) {
   );
 }
 
-export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings }: Props) {
+export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onSwitchRoom, onAddRoom }: Props) {
+  const otherRooms = knownRooms().filter((r) => r.roomId !== room.id);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -63,13 +68,13 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span className="eyebrow">
-              {roomTitle(room)} · {hereNow} here now
+              {roomTitle(room)} · {t('{n} here now', { n: hereNow })}
             </span>
             <h2 id="people-title" className="title title--sm" style={{ fontSize: 24 }}>
-              {members.length} {members.length === 1 ? 'person' : 'people'} in this room
+              {members.length === 1 ? t('{n} person in this room', { n: members.length }) : t('{n} people in this room', { n: members.length })}
             </h2>
           </div>
-          <button type="button" className="icon-btn press" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn press" aria-label={t('Close')} onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -95,18 +100,18 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
                     <span style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
                     {m.id === me.id && m.id !== host?.id && (
                       <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
-                        You
+                        {t('You')}
                       </span>
                     )}
                     {m.id === host?.id && <HostBadge you={m.id === me.id} />}
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                    {[here ? 'Here now' : null, turn].filter(Boolean).join(' · ') || 'Away'}
+                    {[here ? t('Here now') : null, turn, needsLabel(m)].filter(Boolean).join(' · ') || t('Away')}
                   </span>
                 </div>
                 {m.id === todayDeciderId && (
                   <span className="badge" style={{ background: 'var(--accent)', color: '#FFFFFF', flexShrink: 0 }}>
-                    Today
+                    {t('Today')}
                   </span>
                 )}
               </li>
@@ -116,13 +121,31 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <button type="button" className="btn btn--primary press" onClick={onInvite}>
-            Invite someone
+            {t('Invite someone')}
           </button>
           <button type="button" className="btn btn--secondary press" onClick={onSettings}>
-            Room settings
+            {t('Room settings')}
           </button>
         </div>
-        <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>A green dot means they have Makan apa? open right now.</p>
+        <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>{t('A green dot means they have Makan apa? open right now.')}</p>
+
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
+          <span className="section-label">{otherRooms.length ? t('Your other rooms') : t('Another group?')}</span>
+          {otherRooms.map((r) => (
+            <button key={r.roomId} type="button" className="row press" onClick={() => onSwitchRoom(r.roomId)} style={{ borderRadius: 14, background: 'var(--bg)' }}>
+              <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{knownRoomTitle(r)}</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
+                </span>
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-text)', flexShrink: 0 }}>{t('Switch')}</span>
+            </button>
+          ))}
+          <button type="button" className="btn btn--secondary press" onClick={onAddRoom}>
+            {t('Join or create another room')}
+          </button>
+        </section>
       </div>
     </div>
   );

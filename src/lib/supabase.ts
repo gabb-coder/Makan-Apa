@@ -18,6 +18,8 @@ export interface RoomRow {
   rotation_start: string;
   veto_limit: number;
   decision_mode: 'decider' | 'secret';
+  /** Decide lunch only, or lunch and dinner. */
+  meals: 'lunch' | 'both';
   created_at: string;
 }
 
@@ -30,6 +32,8 @@ export interface FoodOptionRow {
   color: string;
   added_by: string | null;
   is_active: boolean;
+  diet: string[];
+  price: number | null;
   created_at: string;
 }
 
@@ -39,10 +43,15 @@ export interface MemberRow {
   name: string;
   color: string;
   sort_order: number;
+  /** halal, no-pork, no-beef, vegetarian */
+  diet: string[];
+  /** Most they want to spend: 1 under RM15, 2 under RM50; null for any. */
+  budget: number | null;
   created_at: string;
 }
 
 export type DayStatus = 'pending' | 'proposed' | 'accepted';
+export type Meal = 'lunch' | 'dinner';
 
 export interface DayEntryRow {
   id: string;
@@ -53,6 +62,7 @@ export interface DayEntryRow {
   custom_food: string | null;
   method: 'direct' | 'wheel' | null;
   status: DayStatus;
+  meal: Meal;
   created_at: string;
 }
 
@@ -69,5 +79,44 @@ export interface SecretPickRow {
   day_entry_id: string;
   member_id: string;
   food_text: string;
+  created_at: string;
+}
+
+export interface MealRatingRow {
+  day_entry_id: string;
+  member_id: string;
+  rating: -1 | 1;
+  created_at: string;
+}
+
+export interface MealBillRow {
+  day_entry_id: string;
+  room_id: string;
+  paid_by: string;
+  amount_cents: number;
+  split_between: string[];
+  updated_at: string;
+}
+
+export interface SettlementRow {
+  id: string;
+  room_id: string;
+  from_member: string;
+  to_member: string;
+  amount_cents: number;
+  created_at: string;
+}
+
+export interface RoomSpotRow {
+  id: string;
+  room_id: string;
+  name: string;
+  area: string | null;
+  note: string | null;
+  price: number | null;
+  diet: 'halal' | 'pork' | null;
+  lat: number | null;
+  lng: number | null;
+  added_by: string | null;
   created_at: string;
 }

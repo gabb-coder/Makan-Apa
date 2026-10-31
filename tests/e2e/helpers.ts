@@ -53,10 +53,10 @@ export async function joinRoom(page: Page, code: string, name: string): Promise<
   await expect(page.locator('nav')).toBeVisible();
 }
 
-/** Host only: delete the room from Settings. */
-export async function deleteRoom(page: Page): Promise<void> {
+/** Host only: delete the room from Settings. With no other room on the phone, it shows Join. */
+export async function deleteRoom(page: Page, lastRoom = true): Promise<void> {
   await page.goto('/#settings');
   await page.click('text=Delete this room for everyone');
   await page.click('text=Tap again to delete everything');
-  await expect(page.locator('#join-name')).toBeVisible();
+  if (lastRoom) await expect(page.locator('#join-name')).toBeVisible();
 }
