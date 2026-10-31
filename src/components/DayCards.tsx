@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { formatTag, lastEatenLabel, mapsSearchUrl, type Food } from '../lib/foods';
 import { mapsNearUrl, type LatLng } from '../lib/geo';
+import { isNetworkError, isOffline, queueForOnline } from '../lib/offline';
 import { darken, FOOD_COLORS } from '../lib/palette';
 import type { MemberRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
@@ -15,11 +16,18 @@ export function useAction(onError: (message: string) => void) {
   const [busy, setBusy] = useState(false);
   const run = async (fn: () => Promise<unknown>) => {
     if (busy) return;
+    // Offline: hold the tap and send it when the connection's back.
+    const later = () => {
+      queueForOnline({ run: fn, onDone: (err) => onError(err ? `Couldn't send what you tapped offline: ${err}` : 'Back online. Sent what you tapped.') });
+      onError("You're offline. We'll send that when you're back (keep the app open).");
+    };
+    if (isOffline()) return later();
     setBusy(true);
     try {
       await fn();
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Something went wrong.');
+      if (isNetworkError(e)) later();
+      else onError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setBusy(false);
     }

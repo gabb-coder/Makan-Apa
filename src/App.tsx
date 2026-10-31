@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { disableReminders } from './lib/push';
 import { closeCurrentRoom, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
@@ -13,12 +13,27 @@ import { useToday } from './lib/useToday';
 import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
 import { useRoomExtras } from './lib/useRoomExtras';
-import { HistoryScreen } from './screens/HistoryScreen';
+import { useConnection } from './lib/offline';
 import { JoinScreen } from './screens/JoinScreen';
-import { PoolScreen } from './screens/PoolScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
 import { TodayScreen } from './screens/TodayScreen';
-import { WheelScreen, type WheelSend } from './screens/WheelScreen';
+import type { WheelSend } from './screens/WheelScreen';
+
+// Today and Join load with the app; the other tabs load when first opened (and in the background
+// once the app's idle, so they're cached for offline use).
+const loadWheel = () => import('./screens/WheelScreen');
+const loadPool = () => import('./screens/PoolScreen');
+const loadHistory = () => import('./screens/HistoryScreen');
+const loadSettings = () => import('./screens/SettingsScreen');
+const WheelScreen = lazy(() => loadWheel().then((m) => ({ default: m.WheelScreen })));
+const PoolScreen = lazy(() => loadPool().then((m) => ({ default: m.PoolScreen })));
+const HistoryScreen = lazy(() => loadHistory().then((m) => ({ default: m.HistoryScreen })));
+const SettingsScreen = lazy(() => loadSettings().then((m) => ({ default: m.SettingsScreen })));
+
+function preloadScreens() {
+  const go = () => [loadWheel, loadPool, loadHistory, loadSettings].forEach((load) => void load().catch(() => {}));
+  if ('requestIdleCallback' in window) window.requestIdleCallback(go, { timeout: 4000 });
+  else setTimeout(go, 2000);
+}
 
 type Route = Tab | 'settings';
 const ROUTES: Route[] = ['today', 'wheel', 'pool', 'history', 'settings'];
@@ -260,8 +275,17 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
     </main>
   );
 
+  useEffect(preloadScreens, []);
+  const connection = useConnection();
+
   return (
     <div className="app">
+      {connection.offline && (
+        <div role="status" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '8px 16px', background: 'var(--ink)', color: 'var(--on-ink)', fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
+          You're offline{connection.pending ? ` · ${connection.pending} waiting to send` : ''}. Changes from others will appear when you're back.
+        </div>
+      )}
+      <Suspense fallback={loading}>
       {route === 'today' &&
         (foods && notVetoed ? (
           <TodayScreen
@@ -343,6 +367,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
           loading
         ))}
 
+      </Suspense>
       <TabBar active={route === 'settings' ? 'today' : route} onChange={go} />
     </div>
   );
