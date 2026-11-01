@@ -108,23 +108,21 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
   );
 }
 
-/** One line on a spot card: "Menu: Nasi lemak, Rendang +3". */
+/** Two lines on a spot card: "Waffle + Double Scoop · Get Stuffed · Salted Caramel". */
 function MenuPreview({ spot }: { spot: Spot }) {
   const menu = spotMenu(spot);
   if (!menu.length) return null;
-  const more = menu.length - 2;
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, fontSize: 12, color: 'var(--ink-2)' }}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: 'var(--muted)' }}>
+    <span style={{ display: 'flex', alignItems: 'flex-start', gap: 5, minWidth: 0, fontSize: 12, lineHeight: 1.4, color: 'var(--ink-2)' }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 2, color: 'var(--muted)' }}>
         <path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4" />
       </svg>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontWeight: 600 }}>
         <span className="sr-only">{t('Menu')}: </span>
         {menu
-          .slice(0, 2)
+          .slice(0, 3)
           .map((m) => m.name)
-          .join(', ')}
-        {more > 0 && ` +${more}`}
+          .join(' · ')}
       </span>
     </span>
   );
