@@ -13,6 +13,11 @@ import {
 import { FoodTile } from '../components/FoodTile';
 import { BillLine, RatingRow } from '../components/MealExtras';
 import { BillSheet } from '../components/Bills';
+import { TapauLine, TapauSheet } from '../components/Tapau';
+import { WhosInCard } from '../components/WhosIn';
+import type { BillItem } from '../lib/money';
+import type { AttendanceApi } from '../lib/useAttendance';
+import { useTapau } from '../lib/useTapau';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
@@ -54,6 +59,10 @@ interface Props {
   onToast: (message: string) => void;
   /** Ratings, bills and the room's own spots. */
   extras: RoomExtras;
+  /** Who's in for each meal. */
+  attendance: AttendanceApi;
+  /** Who said they're out for this meal. */
+  away: ReadonlySet<string>;
   /** Which meal this is about; rooms deciding both get a lunch/dinner switch. */
   meal: Meal;
   onMealChange?: (meal: Meal) => void;
@@ -61,12 +70,16 @@ interface Props {
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast, extras, meal, onMealChange }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast, extras, attendance, away, meal, onMealChange }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
   const showNearby = usePref(nearbyPref) === 'on';
   const [billOpen, setBillOpen] = useState(false);
+  const [billStart, setBillStart] = useState<{ paidBy: string; items: BillItem[] } | undefined>(undefined);
+  const [tapauOpen, setTapauOpen] = useState(false);
+  // Whoever's in for this meal: they decide, answer, pick and pay.
+  const present = members.filter((m) => !away.has(m.id));
   const [addingSpot, setAddingSpot] = useState(false);
   const roomSpots = useMemo(() => extras.spots.map(roomSpot), [extras.spots]);
   const location = useLocation();
@@ -74,7 +87,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const nearSunway = !here || isNearSunway(here);
   // Places that suit everyone's diet and budget first; the rest only if nothing fits.
   const suiting = (spots: Spot[]) => {
-    const fit = spots.filter((sp) => suitsEveryone(spotSuitability(sp), members));
+    const fit = spots.filter((sp) => suitsEveryone(spotSuitability(sp), present));
     return fit.length ? fit : spots;
   };
   const [sheet, setSheet] = useState<'list' | 'type' | null>(null);
@@ -82,13 +95,14 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const { busy, run } = useAction(onToast);
 
   const { entries, todayEntry, todayVetoes, myVetoesToday } = days;
+  const tapau = useTapau(room.id, todayEntry?.status === 'accepted' ? todayEntry.id : null);
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const nameFor = (id: string | null, you = t('You')) => (id === me.id ? you : (id && memberById.get(id)?.name) || t('Someone'));
 
-  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal) || me;
+  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal, away) || me;
   const isDecider = decider.id === me.id;
-  const others = members.filter((m) => m.id !== decider.id);
+  const others = present.filter((m) => m.id !== decider.id);
   const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? t('nobody yet') : t('everyone');
   const todayFood = todayEntry ? entryFood(todayEntry, foodsById) : null;
   const vetoedNames = todayVetoes.map((v) => v.rejected_food);
@@ -113,7 +127,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     .filter((p): p is RevealedPick => !!p.member)
     .sort((a, b) => a.member.sort_order - b.member.sort_order);
   const pickedIds = new Set(revealed.map((p) => p.member.id));
-  const allIn = members.length > 0 && members.every((m) => pickedIds.has(m.id));
+  const allIn = present.length > 0 && present.every((m) => pickedIds.has(m.id));
   const myPick = revealed.find((p) => p.member.id === me.id)?.food ?? null;
   const showReveal = secret && !!todayEntry && ((todayEntry.status === 'pending' && allIn) || holdReveal);
 
@@ -129,7 +143,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     }
   }, [todayEntry, justVetoed]);
 
-  const tomorrow = deciderFor(members, room.rotation_start, addDays(today, 1), meal);
+  const tomorrow = deciderFor(members, room.rotation_start, addDays(today, 1), meal, attendance.awayOn(addDays(today, 1), meal));
   const tomorrowText = !tomorrow
     ? ''
     : tomorrow.id === me.id
@@ -175,6 +189,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 8 }}>
             <RatingRow entryId={todayEntry.id} ratings={extras.ratings} meId={me.id} onRate={(r) => run(() => extras.rate(todayEntry.id, r))} />
             <BillLine bill={extras.bills.find((b) => b.day_entry_id === todayEntry.id) ?? null} members={members} meId={me.id} onOpen={() => setBillOpen(true)} />
+            {!extras.bills.some((b) => b.day_entry_id === todayEntry.id) && <TapauLine tapau={tapau} members={members} meId={me.id} onOpen={() => setTapauOpen(true)} />}
           </div>
         }
         busy={busy}
@@ -186,7 +201,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     main = (
       <SecretCollectCard
         decider={decider}
-        members={members}
+        members={present}
         me={me}
         pickedIds={pickedIds}
         myPick={myPick}
@@ -295,7 +310,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
   const upNext = [1, 2, 3].map((i) => {
     const date = addDays(today, i);
-    return { date, member: deciderFor(members, room.rotation_start, date, meal) };
+    return { date, member: deciderFor(members, room.rotation_start, date, meal, attendance.awayOn(date, meal)) };
   });
 
   const recent = (entries ?? []).filter((e) => e.status === 'accepted' && e.entry_date < today).slice(0, 3);
@@ -397,6 +412,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       )}
 
       {main}
+
+      {!proposalView && members.length > 1 && todayEntry && (
+        <WhosInCard
+          me={me}
+          members={members}
+          meal={meal}
+          statusOf={(id) => attendance.statusOf(id, today, meal)}
+          onSet={(status) => run(() => attendance.setStatus(me.id, today, meal, status))}
+        />
+      )}
 
       {vetoedNames.length > 0 && isDecider && todayEntry?.status === 'pending' && (
         <p style={{ margin: '-6px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
@@ -525,8 +550,29 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           members={members}
           meId={me.id}
           extras={extras}
+          away={away}
+          start={billStart}
           onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved. See who owes what in Bills.'))}
-          onClose={() => setBillOpen(false)}
+          onClose={() => {
+            setBillOpen(false);
+            setBillStart(undefined);
+          }}
+        />
+      )}
+
+      {tapauOpen && todayEntry && todayFood && (
+        <TapauSheet
+          tapau={tapau}
+          foodName={todayFood.name}
+          members={members}
+          me={me}
+          onToast={onToast}
+          onMakeBill={(items, paidBy) => {
+            setTapauOpen(false);
+            setBillStart({ items, paidBy });
+            setBillOpen(true);
+          }}
+          onClose={() => setTapauOpen(false)}
         />
       )}
 
@@ -615,7 +661,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           vetoed={vetoedNames}
           sendTo={others.length === 0 ? null : waitingFor}
           secret={secret && todayEntry?.status === 'pending'}
-          members={members}
+          members={present}
           onClose={() => setSheet(null)}
           onPick={async (p) => {
             const name = 'food' in p ? p.food.name : p.name;

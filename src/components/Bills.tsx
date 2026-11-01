@@ -34,6 +34,8 @@ export function BillSheet({
   members,
   meId,
   extras,
+  away,
+  start,
   onSaved,
   onClose,
 }: {
@@ -42,6 +44,10 @@ export function BillSheet({
   members: MemberRow[];
   meId: string;
   extras: RoomExtras;
+  /** Who was out for this meal: left off a new bill's lines. */
+  away?: ReadonlySet<string>;
+  /** A new bill's starting point, e.g. a tapau run's orders. Ignored when there's a bill already. */
+  start?: { paidBy: string; items: BillItem[] };
   /** After a save (or removal, with removed true), before the sheet closes. */
   onSaved: (removed: boolean) => void;
   onClose: () => void;
@@ -49,11 +55,14 @@ export function BillSheet({
   const bill = extras.bills.find((b) => b.day_entry_id === dayEntryId) ?? null;
   const nextKey = useRef(0);
   const row = (r: Omit<Row, 'key'>): Row => ({ ...r, key: nextKey.current++ });
-  const [paidBy, setPaidBy] = useState(bill?.paid_by ?? meId);
+  const present = members.filter((m) => !away?.has(m.id));
+  const eaters = present.length ? present : members;
+  const [paidBy, setPaidBy] = useState(bill?.paid_by ?? start?.paidBy ?? meId);
   const [rows, setRows] = useState<Row[]>(() => {
     if (bill?.items?.length) return bill.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: i.people }));
     if (bill) return [row({ name: '', price: (bill.amount_cents / 100).toFixed(2), people: bill.split_between })];
-    return members.map((m) => row({ name: '', price: '', people: [m.id] }));
+    if (start?.items.length) return start.items.map((i) => row({ name: i.name, price: i.cents ? (i.cents / 100).toFixed(2) : '', people: i.people }));
+    return eaters.map((m) => row({ name: '', price: '', people: [m.id] }));
   });
   const [serviceOn, setServiceOn] = useState(Number(bill?.service_pct ?? 0) > 0);
   const [servicePct, setServicePct] = useState(pctText(bill?.service_pct, '10'));
@@ -98,7 +107,7 @@ export function BillSheet({
 
   const update = (key: number, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const togglePerson = (r: Row, id: string) => update(r.key, { people: r.people.includes(id) ? r.people.filter((p) => p !== id) : [...r.people, id] });
-  const everyone = members.map((m) => m.id);
+  const everyone = eaters.map((m) => m.id);
 
   const placeholder = (r: Row) =>
     r.people.length === 1 ? (r.people[0] === meId ? t('Your food') : t("{name}'s food", { name: nameOf(r.people[0]) })) : t('Shared item');
@@ -224,8 +233,8 @@ export function BillSheet({
                   <button
                     type="button"
                     className="chip press"
-                    aria-pressed={r.people.length === members.length}
-                    onClick={() => update(r.key, { people: r.people.length === members.length ? [] : everyone })}
+                    aria-pressed={everyone.every((id) => r.people.includes(id))}
+                    onClick={() => update(r.key, { people: everyone.every((id) => r.people.includes(id)) ? [] : everyone })}
                     style={{ height: 36, padding: '0 12px', fontSize: 13 }}
                   >
                     {t('Everyone')}

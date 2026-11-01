@@ -30,6 +30,13 @@ describe('deciderFor', () => {
     expect(deciderFor(tied, '2026-10-30', '2026-10-30')?.id).toBe('first');
   });
 
+  it('skips people who are out today', () => {
+    expect(deciderFor(members, '2026-10-30', '2026-10-30', 'lunch', new Set(['gabriel']))?.id).toBe('alex');
+    expect(deciderFor(members, '2026-10-30', '2026-11-01', 'lunch', new Set(['sam']))?.id).toBe('gabriel');
+    // Everyone out: the rotation stands.
+    expect(deciderFor(members, '2026-10-30', '2026-10-30', 'lunch', new Set(['gabriel', 'alex', 'sam']))?.id).toBe('gabriel');
+  });
+
   it('returns null for an empty room', () => {
     expect(deciderFor([], '2026-10-30', '2026-10-30')).toBeNull();
   });

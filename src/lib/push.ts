@@ -1,4 +1,4 @@
-import { t } from './i18n';
+import { getLang, t } from './i18n';
 import { isIOS, isStandalone } from './install';
 import { supabase } from './supabase';
 
@@ -26,14 +26,27 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
 }
 
 /** This browser's reminder for `memberId`, if it has one. */
-export async function reminderStatus(memberId: string): Promise<{ hour: number; recap: boolean } | null> {
+export async function reminderStatus(memberId: string): Promise<{ hour: number; recap: boolean; events: boolean } | null> {
   if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return null;
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return null;
   const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
-  const row = (data as { member_id: string; remind_hour: number; weekly_recap?: boolean }[] | null)?.[0];
-  return row && row.member_id === memberId ? { hour: row.remind_hour, recap: row.weekly_recap ?? true } : null;
+  const row = (data as { member_id: string; remind_hour: number; weekly_recap?: boolean; notify_events?: boolean }[] | null)?.[0];
+  return row && row.member_id === memberId ? { hour: row.remind_hour, recap: row.weekly_recap ?? true, events: row.notify_events ?? true } : null;
+}
+
+/**
+ * Alerts when things happen (picks, bills, tapau runs) on or off for this browser, and the
+ * language they're written in. Pass null to leave one as it is.
+ */
+export async function setPushPrefs(events: boolean | null, lang: string | null = getLang()): Promise<void> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager?.getSubscription();
+  if (!sub) return;
+  const { error } = await supabase.rpc('set_push_prefs', { p_endpoint: sub.endpoint, p_events: events, p_lang: lang });
+  if (error) throw new Error(error.message);
 }
 
 /** Turn the Sunday-evening weekly recap on or off for this browser. */
@@ -70,6 +83,8 @@ export async function enableReminders(memberId: string, hour: number): Promise<v
     p_remind_hour: hour,
   });
   if (error) throw new Error(error.message);
+  // Notifications come in the app's language.
+  await setPushPrefs(null).catch(() => {});
 }
 
 /** Stop reminders on this browser. */

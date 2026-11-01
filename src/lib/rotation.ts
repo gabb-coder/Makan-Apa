@@ -30,11 +30,16 @@ export function dayMonthLabel(date: string, loc = locale()): string {
  * Who decides on `date`: members sorted by sort_order, then
  * daysBetween(rotation_start, date) mod member count (SPEC.md section 6).
  */
-export function deciderFor(members: MemberRow[], rotationStart: string, date: string, meal: Meal = 'lunch'): MemberRow | null {
+export function deciderFor(members: MemberRow[], rotationStart: string, date: string, meal: Meal = 'lunch', away?: ReadonlySet<string>): MemberRow | null {
   if (members.length === 0) return null;
   const sorted = [...members].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
   const n = sorted.length;
   // Dinner goes to the next person along, so nobody decides both meals.
   const i = (((daysBetween(rotationStart, date) + (meal === 'dinner' ? 1 : 0)) % n) + n) % n;
+  // Someone who's out today is skipped: the next person along who's in decides instead.
+  for (let k = 0; k < n; k++) {
+    const m = sorted[(i + k) % n];
+    if (!away?.has(m.id)) return m;
+  }
   return sorted[i];
 }

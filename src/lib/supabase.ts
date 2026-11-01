@@ -130,3 +130,37 @@ export interface RoomSpotRow {
   added_by: string | null;
   created_at: string;
 }
+
+export type Attendance = 'in' | 'late' | 'out';
+
+/** Someone's answer to "Who's in?" for a meal. No row means in. */
+export interface AttendanceRow {
+  room_id: string;
+  entry_date: string;
+  meal: Meal;
+  member_id: string;
+  status: Attendance;
+  updated_at: string;
+}
+
+/** Someone's going to buy the meal and take everyone's orders. One per meal. */
+export interface TapauRunRow {
+  id: string;
+  room_id: string;
+  day_entry_id: string;
+  runner_id: string;
+  place: string;
+  status: 'open' | 'closed';
+  created_at: string;
+}
+
+export interface TapauOrderRow {
+  id: string;
+  run_id: string;
+  member_id: string;
+  item: string;
+  qty: number;
+  price_cents: number | null;
+  note: string | null;
+  created_at: string;
+}

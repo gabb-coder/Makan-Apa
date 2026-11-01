@@ -1,0 +1,137 @@
+// notify: called by database triggers (migrations/*_attendance_tapau_alerts.sql) when something
+// happens in a room, and pushes it to the other phones that have notifications on:
+//   proposed  the decider sent a pick         → everyone else who's in: accept or veto
+//   decided   the meal was agreed             → everyone else who's in
+//   bill      a bill was added or changed     → everyone with a share, but not the payer
+//   tapau     someone started a tapau run     → everyone else who's in: add your order
+//   order     someone added a tapau order     → the runner
+// The person who did it (actor) never gets their own alert.
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import webpush from 'npm:web-push@3.6.7';
+import { message, type Event, type Lang, type Meal } from '../_shared/messages.ts';
+import { formatRM, shares, type Bill } from '../_shared/money.ts';
+
+const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+const VAPID_SUBJECT = 'https://github.com/gabb-coder/Makan-Apa';
+
+interface Sub {
+  id: string;
+  member_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  lang: Lang;
+}
+interface Entry {
+  id: string;
+  room_id: string;
+  entry_date: string;
+  meal: Meal | null;
+  decider_id: string | null;
+  status: string;
+  food_option_id: string | null;
+  custom_food: string | null;
+}
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+async function foodName(entry: Entry): Promise<string> {
+  if (entry.food_option_id) {
+    const { data } = await db.from('food_options').select('name').eq('id', entry.food_option_id).maybeSingle();
+    if (data) return (data as { name: string }).name;
+  }
+  return entry.custom_food ?? 'Lunch';
+}
+
+async function entry(id: string): Promise<Entry | null> {
+  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food').eq('id', id).maybeSingle();
+  return (data as Entry | null) ?? null;
+}
+
+/** Who said they're out for that meal. */
+async function awayFor(e: Entry): Promise<Set<string>> {
+  const { data } = await db.from('attendance').select('member_id').eq('room_id', e.room_id).eq('entry_date', e.entry_date).eq('meal', e.meal ?? 'lunch').eq('status', 'out');
+  return new Set(((data ?? []) as { member_id: string }[]).map((r) => r.member_id));
+}
+
+Deno.serve(async (req) => {
+  const { data: config, error: configError } = await db.rpc('push_config');
+  if (configError) return json({ error: configError.message }, 500);
+  if (!config?.cron_secret || req.headers.get('x-cron-secret') !== config.cron_secret) return json({ error: 'forbidden' }, 403);
+  if (!config.vapid) return json({ skipped: 'no vapid keys yet' });
+  const keys = JSON.parse(config.vapid) as { publicKey: string; privateKey: string };
+  webpush.setVapidDetails(VAPID_SUBJECT, keys.publicKey, keys.privateKey);
+
+  const { type, room_id: roomId, id, actor } = (await req.json()) as { type: string; room_id: string; id: string; actor: string | null };
+  const [subsRes, membersRes] = await Promise.all([
+    db.from('push_subscriptions').select('id, member_id, endpoint, p256dh, auth, lang').eq('room_id', roomId).eq('notify_events', true),
+    db.from('members').select('id, name').eq('room_id', roomId),
+  ]);
+  const subs = (subsRes.data ?? []) as Sub[];
+  if (!subs.length) return json({ sent: 0 });
+  const nameOf = (mid: string | null) => ((membersRes.data ?? []) as { id: string; name: string }[]).find((m) => m.id === mid)?.name ?? 'Someone';
+
+  // Each recipient's event (their share differs on a bill), plus where a tap goes.
+  const recipients = new Map<string, Event>();
+  let url = '/#today';
+  let tag = `makan-${type}-${id}`;
+
+  if (type === 'proposed' || type === 'decided') {
+    const e = await entry(id);
+    if (!e || e.status !== (type === 'proposed' ? 'proposed' : 'accepted')) return json({ skipped: 'stale' });
+    const [food, away] = await Promise.all([foodName(e), awayFor(e)]);
+    const meal = e.meal ?? 'lunch';
+    const ev: Event = type === 'proposed' ? { type, decider: nameOf(e.decider_id), food, meal } : { type, food, meal };
+    for (const s of subs) if (s.member_id !== actor && s.member_id !== (type === 'proposed' ? e.decider_id : null) && !away.has(s.member_id)) recipients.set(s.member_id, ev);
+    tag = `makan-day-${id}`;
+  } else if (type === 'bill') {
+    const { data } = await db.from('meal_bills').select('*').eq('day_entry_id', id).maybeSingle();
+    const bill = data as (Bill & { day_entry_id: string }) | null;
+    const e = bill && (await entry(bill.day_entry_id));
+    if (!bill || !e) return json({ skipped: 'stale' });
+    const food = await foodName(e);
+    const each = shares(bill);
+    for (const [mid, cents] of each) {
+      if (mid === bill.paid_by || mid === actor || cents <= 0) continue;
+      recipients.set(mid, { type: 'bill', payer: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents), food, share: formatRM(cents) });
+    }
+    url = '/#bills';
+    tag = `makan-bill-${id}`;
+  } else if (type === 'tapau') {
+    const { data } = await db.from('tapau_runs').select('id, runner_id, place, day_entry_id').eq('id', id).maybeSingle();
+    const run = data as { runner_id: string; place: string; day_entry_id: string } | null;
+    const e = run && (await entry(run.day_entry_id));
+    if (!run || !e) return json({ skipped: 'stale' });
+    const away = await awayFor(e);
+    for (const s of subs) if (s.member_id !== run.runner_id && s.member_id !== actor && !away.has(s.member_id)) recipients.set(s.member_id, { type: 'tapau', runner: nameOf(run.runner_id), place: run.place });
+  } else if (type === 'order') {
+    const { data } = await db.from('tapau_orders').select('member_id, item, qty, run_id, tapau_runs(runner_id)').eq('id', id).maybeSingle();
+    const order = data as { member_id: string; item: string; qty: number; run_id: string; tapau_runs: { runner_id: string } | null } | null;
+    const runner = order?.tapau_runs?.runner_id;
+    if (!order || !runner || runner === actor) return json({ skipped: 'own order' });
+    recipients.set(runner, { type: 'order', who: nameOf(order.member_id), item: order.qty > 1 ? `${order.qty}× ${order.item}` : order.item });
+    tag = `makan-orders-${order.run_id}`;
+  } else {
+    return json({ error: 'unknown type' }, 400);
+  }
+
+  let sent = 0;
+  let removed = 0;
+  for (const s of subs) {
+    const ev = recipients.get(s.member_id);
+    if (!ev) continue;
+    const text = message(ev, s.lang);
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ ...text, url, tag }), { TTL: 3 * 60 * 60 });
+      sent++;
+    } catch (e) {
+      const status = (e as { statusCode?: number }).statusCode;
+      if (status === 404 || status === 410) {
+        await db.from('push_subscriptions').delete().eq('id', s.id);
+        removed++;
+      } else console.error('send failed', status, String(e).slice(0, 200));
+    }
+  }
+  console.log('notify', JSON.stringify({ type, recipients: recipients.size, sent, removed }));
+  return json({ sent, removed });
+});

@@ -14,6 +14,7 @@ import { useToday } from './lib/useToday';
 import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
 import { useRoomExtras } from './lib/useRoomExtras';
+import { useAttendance } from './lib/useAttendance';
 import { useConnection } from './lib/offline';
 import { JoinScreen } from './screens/JoinScreen';
 import { TodayScreen } from './screens/TodayScreen';
@@ -215,7 +216,10 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   // Lunch or dinner, for rooms that decide both: dinner from 3pm in the room's timezone.
   const [mealChoice, setMeal] = useState<Meal>(() => (localHour(room.timezone) >= 15 ? 'dinner' : 'lunch'));
   const meal: Meal = room.meals === 'both' ? mealChoice : 'lunch';
-  const days = useDays(room, members, me.id, today, meal);
+  const attendance = useAttendance(room.id, today);
+  const away = attendance.awayOn(today, meal);
+  const present = members.filter((m) => !away.has(m.id));
+  const days = useDays(room, members, me.id, today, meal, away);
   const extras = useRoomExtras(room.id, me.id);
   const foodsApi = useFoods(room, me.id, days.entries, today, extras.ratings);
   const online = usePresence(room.id, me.id);
@@ -235,15 +239,15 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
   // Today's decider and what the wheel may do about it.
   const memberById = new Map(members.map((m) => [m.id, m]));
   const entry = days.todayEntry;
-  const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal);
+  const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal, away);
   const isDecider = decider?.id === me.id;
-  const others = members.filter((m) => m.id !== decider?.id);
+  const others = present.filter((m) => m.id !== decider?.id);
   const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : t('everyone');
   const vetoedNames = days.todayVetoes.map((v) => v.rejected_food);
   const vetoed = new Set(vetoedNames.map((n) => n.toLowerCase()));
   const notVetoed = active?.filter((f) => !vetoed.has(f.name.toLowerCase())) ?? null;
   // Keep foods that clash with someone's diet or budget off, unless that leaves too few to spin.
-  const suiting = notVetoed?.filter((f) => suitsEveryone(f, members)) ?? null;
+  const suiting = notVetoed?.filter((f) => suitsEveryone(f, present)) ?? null;
   const pickable = suiting && suiting.length >= 2 ? suiting : notVetoed;
   const leftOut = notVetoed && suiting && pickable === suiting ? notVetoed.length - suiting.length : 0;
   const dietNote =
@@ -312,6 +316,8 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
             onSwitchRoom={onSwitchRoom}
             onAddRoom={onAddRoom}
             extras={extras}
+            attendance={attendance}
+            away={away}
             meal={meal}
             onMealChange={room.meals === 'both' ? setMeal : undefined}
             onToast={onToast}
@@ -362,6 +368,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
       {route === 'bills' &&
         (foods && days.entries ? (
           <BillsScreen
+            attendance={attendance}
             room={room}
             me={me}
             members={members}

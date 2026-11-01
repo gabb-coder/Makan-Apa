@@ -23,7 +23,7 @@ function stripJoin({ day_entries: _, ...veto }: VetoWithEntry): VetoRow {
  * The room's day entries and vetoes, kept live, plus the propose / accept / veto actions
  * for today (SPEC.md section 6, day entry lifecycle).
  */
-export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string, meal: Meal = 'lunch') {
+export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string, meal: Meal = 'lunch', away?: ReadonlySet<string>) {
   const [entries, setEntries] = useState<DayEntryRow[] | null>(null);
   const [vetoes, setVetoes] = useState<VetoRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +81,8 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     () => (todayEntry ? vetoes.filter((v) => v.day_entry_id === todayEntry.id) : []),
     [vetoes, todayEntry],
   );
-  const computedDecider = deciderFor(members, room.rotation_start, today, meal);
+  // Whoever's out today is skipped; until the day has a pick, the turn follows them coming and going.
+  const computedDecider = deciderFor(members, room.rotation_start, today, meal, away);
 
   // Secret picks for today, live. Every phone holds them all, but the UI only shows
   // other people's picks once everyone is in (the room code is the only lock).
@@ -165,7 +166,8 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     return rows.length > 0;
   };
 
-  const soloRoom = members.length < 2;
+  // Nobody else in today: there's nobody to ask, so a pick is final.
+  const soloRoom = members.filter((m) => !away?.has(m.id)).length < 2;
   const myVetoesToday = todayVetoes.filter((v) => v.member_id === meId).length;
 
   /** Step 2: the decider picks or spins. In a room of one there's nobody to ask, so it's final. */
