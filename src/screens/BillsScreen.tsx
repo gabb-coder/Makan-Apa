@@ -8,6 +8,7 @@ import { roomTitle } from '../lib/session';
 import type { DayEntryRow, MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch } from '../lib/useRoomData';
 import type { RoomExtras } from '../lib/useRoomExtras';
+import type { AttendanceApi } from '../lib/useAttendance';
 
 interface Props {
   room: RoomRow;
@@ -19,13 +20,15 @@ interface Props {
   extras: RoomExtras;
   updateMember: (id: string, patch: MemberPatch) => Promise<void>;
   onToast: (message: string) => void;
+  /** Who was out for each meal, left off new bills. */
+  attendance: AttendanceApi;
 }
 
 const PAGE = 10;
 
 /** Who owes whom, the meals to add bills to, and how to pay you back. */
-export function BillsScreen({ room, me, members, entries, foods, extras, updateMember, onToast }: Props) {
-  const [open, setOpen] = useState<{ id: string; food: string } | null>(null);
+export function BillsScreen({ room, me, members, entries, foods, extras, updateMember, onToast, attendance }: Props) {
+  const [open, setOpen] = useState<{ id: string; food: string; away: ReadonlySet<string> } | null>(null);
   const [shown, setShown] = useState(PAGE);
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const nameOf = (id: string) => (id === me.id ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
@@ -79,7 +82,7 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
                   key={e.id}
                   type="button"
                   className="press"
-                  onClick={() => setOpen({ id: e.id, food })}
+                  onClick={() => setOpen({ id: e.id, food, away: attendance.awayOn(e.entry_date, e.meal ?? 'lunch') })}
                   aria-label={bill ? t('{food}, {when}: edit bill', { food, when }) : t('{food}, {when}: add bill', { food, when })}
                   style={{
                     display: 'flex',
@@ -140,7 +143,7 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
       </section>
 
       {open && (
-        <BillSheet dayEntryId={open.id} foodName={open.food} members={members} meId={me.id} extras={extras} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
+        <BillSheet dayEntryId={open.id} foodName={open.food} members={members} meId={me.id} extras={extras} away={open.away} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
       )}
     </main>
   );

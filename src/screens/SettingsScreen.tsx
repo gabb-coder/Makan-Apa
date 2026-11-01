@@ -7,7 +7,7 @@ import { getLang, LANGS, locale, setLang, t, tk, tNodes, useLang } from '../lib/
 import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
 import { NEARBY_LABEL } from '../lib/nearby';
 import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
-import { disableReminders, enableReminders, pushSupport, reminderStatus, setWeeklyRecap } from '../lib/push';
+import { disableReminders, enableReminders, pushSupport, reminderStatus, setPushPrefs, setWeeklyRecap } from '../lib/push';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
@@ -502,7 +502,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           <span id="language-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Language')}</span>
           <div className="segmented" role="group" aria-labelledby="language-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
             {LANGS.map((l) => (
-              <button key={l.key} type="button" lang={l.key === 'zh' ? 'zh-Hans' : l.key} aria-pressed={lang === l.key} onClick={() => setLang(l.key)} style={{ fontSize: 13 }}>
+              <button key={l.key} type="button" lang={l.key === 'zh' ? 'zh-Hans' : l.key} aria-pressed={lang === l.key} onClick={() => {
+                setLang(l.key);
+                void setPushPrefs(null, l.key).catch(() => {});
+              }} style={{ fontSize: 13 }}>
                 {l.label}
               </button>
             ))}
@@ -738,7 +741,7 @@ function hourLabel(h: number): string {
 /** Daily push reminder for this phone (sent by the send-reminders Edge Function). */
 function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; onToast: (m: string) => void }) {
   const support = pushSupport();
-  const [status, setStatus] = useState<{ hour: number; recap?: boolean } | null | 'loading'>('loading');
+  const [status, setStatus] = useState<{ hour: number; recap?: boolean; events?: boolean } | null | 'loading'>('loading');
   const [hour, setHour] = useState(11);
   const [busy, setBusy] = useState(false);
 
@@ -776,7 +779,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
       async () => {
         if (next) {
           await enableReminders(me.id, hour);
-          setStatus({ hour, recap: true });
+          setStatus({ hour, recap: true, events: true });
         } else {
           await disableReminders();
           setStatus(null);
@@ -789,12 +792,10 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: support === 'ok' ? 'pointer' : 'default' }}>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Daily reminder')}</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Notifications')}</span>
           <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>
             {support === 'ok'
-              ? room.decision_mode === 'secret'
-                ? t('A notification to make your secret pick, if it’s not decided yet.')
-                : t('A notification when it’s your turn to choose, if it’s not decided yet.')
+              ? `${room.decision_mode === 'secret' ? t('A notification to make your secret pick, if it’s not decided yet.') : t('A notification when it’s your turn to choose, if it’s not decided yet.')} ${t('Plus alerts when things happen.')}`
               : support === 'needs-install'
                 ? t('On iPhone, add Makan apa? to your Home Screen first (below), then turn this on from there.')
                 : t('This browser can’t show notifications.')}
@@ -824,7 +825,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
               setHour(h);
               run(async () => {
                 await enableReminders(me.id, h);
-                setStatus((s) => ({ hour: h, recap: s !== 'loading' && s ? s.recap : true }));
+                setStatus((s) => ({ ...(s !== 'loading' && s ? s : {}), hour: h }));
               }, t('Reminder moved to {time}.', { time: hourLabel(h) }));
             }}
             style={{ width: 'auto', height: 44 }}
@@ -855,6 +856,30 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
                 await setWeeklyRecap(next);
                 setStatus({ ...status, recap: next });
               }, next ? t('Weekly recap on.') : t('Weekly recap off.'));
+            }}
+          />
+        </label>
+      )}
+      {on && typeof status === 'object' && status && (
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{t('Alerts when things happen')}</span>
+            <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>
+              {t('A pick to answer, the meal decided, a bill with your share, a tapau run, and a nudge every few days if you owe someone.')}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={status.events !== false}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.checked;
+              run(async () => {
+                await setPushPrefs(next);
+                setStatus({ ...status, events: next });
+              }, next ? t('Alerts on.') : t('Alerts off.'));
             }}
           />
         </label>

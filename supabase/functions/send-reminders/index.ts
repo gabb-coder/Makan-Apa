@@ -4,13 +4,18 @@
 // timezone, it sends:
 //   - decider mode: "It's your turn to choose" to today's decider, if nothing's been picked yet
 //   - secret picks: "Secret picks are open" to anyone who hasn't picked yet
-// Nothing is sent once the day is decided. Rooms deciding lunch and dinner are reminded about
-// lunch only.
+// Nothing is sent once the day is decided, or to someone who said they're out. Rooms deciding
+// lunch and dinner are reminded about lunch only. Reminders are in each phone's language.
+//
+// Paybacks: phones with alerts on whose person still owes money get a nudge at their reminder
+// hour, at most every 3 days.
 //
 // Weekly recap: on Sunday from 8pm (room's time), phones with reminders on that haven't turned
 // the recap off get a summary of the past 7 days: meals, the favourite, vetoes and who paid most.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
+import { message, type Lang } from '../_shared/messages.ts';
+import { balances, formatRM, settleUp, type Bill, type Payment } from '../_shared/money.ts';
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const VAPID_SUBJECT = 'https://github.com/gabb-coder/Makan-Apa';
@@ -26,6 +31,9 @@ interface Sub {
   last_sent_on: string | null;
   weekly_recap: boolean;
   last_recap_on: string | null;
+  notify_events: boolean;
+  lang: Lang;
+  last_nudge_on: string | null;
 }
 interface Room {
   id: string;
@@ -79,13 +87,17 @@ function daysBetween(a: string, b: string) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
-/** Same rule as the app (src/lib/rotation.ts). */
-function deciderFor(members: Member[], rotationStart: string, date: string): string | null {
+/** Same rule as the app (src/lib/rotation.ts): lunch, skipping whoever's out. */
+function deciderFor(members: Member[], rotationStart: string, date: string, away: Set<string>): string | null {
   if (!members.length) return null;
   const sorted = [...members].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
   const n = sorted.length;
-  return sorted[((daysBetween(rotationStart, date) % n) + n) % n].id;
+  const i = ((daysBetween(rotationStart, date) % n) + n) % n;
+  for (let k = 0; k < n; k++) if (!away.has(sorted[(i + k) % n].id)) return sorted[(i + k) % n].id;
+  return sorted[i].id;
 }
+
+const NUDGE_EVERY_DAYS = 3;
 
 async function vapidKeys(config: Record<string, string>) {
   if (config.vapid) return JSON.parse(config.vapid) as { publicKey: string; privateKey: string };
@@ -203,6 +215,23 @@ Deno.serve(async (req) => {
   const picks = entryIds.length
     ? await db.from('secret_picks').select('day_entry_id, member_id').in('day_entry_id', entryIds)
     : { data: [] as { day_entry_id: string; member_id: string }[], error: null };
+  const since = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+  const [attendance, bills, settlements] = await Promise.all([
+    db.from('attendance').select('room_id, entry_date, member_id').in('room_id', roomIds).eq('meal', 'lunch').eq('status', 'out').gte('entry_date', since),
+    db.from('meal_bills').select('room_id, paid_by, amount_cents, split_between, items').in('room_id', roomIds),
+    db.from('settlements').select('room_id, from_member, to_member, amount_cents').in('room_id', roomIds),
+  ]);
+  const outOn = (roomId: string, date: string) =>
+    new Set(((attendance.data ?? []) as { room_id: string; entry_date: string; member_id: string }[]).filter((a) => a.room_id === roomId && a.entry_date === date).map((a) => a.member_id));
+  const roomDebts = new Map<string, Payment[]>();
+  const debtsIn = (roomId: string) => {
+    if (!roomDebts.has(roomId)) {
+      const b = ((bills.data ?? []) as (Bill & { room_id: string })[]).filter((x) => x.room_id === roomId);
+      const p = ((settlements.data ?? []) as (Payment & { room_id: string })[]).filter((x) => x.room_id === roomId);
+      roomDebts.set(roomId, b.length ? settleUp(balances(b, p)) : []);
+    }
+    return roomDebts.get(roomId)!;
+  };
   const now = new Date();
   const recapFor = await weeklyRecaps(entries.data as Entry[], members.data as Member[]);
 
@@ -230,22 +259,37 @@ Deno.serve(async (req) => {
 
     const entry = (entries.data as Entry[]).find((e) => e.room_id === room.id && e.entry_date === local.date && (e.meal ?? 'lunch') === 'lunch');
     const roomMembers = (members.data as Member[]).filter((m) => m.room_id === room.id);
-    let message: { title: string; body: string } | null = null;
+    let reminder: { title: string; body: string } | null = null;
+    const away = outOn(room.id, local.date);
 
-    if (entry?.status !== 'accepted') {
+    // Nothing for someone who said they're out today.
+    if (entry?.status !== 'accepted' && !away.has(sub.member_id)) {
       if (room.decision_mode === 'secret') {
         const picked = (picks.data ?? []).some((p) => p.day_entry_id === entry?.id && p.member_id === sub.member_id);
-        if (!picked) message = { title: 'Secret picks are open', body: 'Make your pick so the wheel can spin.' };
+        if (!picked) reminder = message({ type: 'secret-open' }, sub.lang);
       } else {
-        const decider = entry?.decider_id ?? deciderFor(roomMembers, room.rotation_start, local.date);
-        if (decider === sub.member_id && entry?.status !== 'proposed') {
-          message = { title: 'It’s your turn to choose', body: 'Makan apa? Spin the wheel or pick something for today.' };
-        }
+        const decider = entry?.decider_id ?? deciderFor(roomMembers, room.rotation_start, local.date, away);
+        if (decider === sub.member_id && entry?.status !== 'proposed') reminder = message({ type: 'your-turn' }, sub.lang);
       }
     }
 
-    if (message) {
-      const result = await send(sub, { ...message, url: '/#today', tag: `makan-${local.date}` });
+    // Every few days, a gentle note to anyone who still owes money (alerts on only).
+    const owed = debtsIn(room.id).filter((p) => p.from_member === sub.member_id);
+    if (sub.notify_events && owed.length && (!sub.last_nudge_on || daysBetween(sub.last_nudge_on, local.date) >= NUDGE_EVERY_DAYS)) {
+      const total = owed.reduce((n, p) => n + p.amount_cents, 0);
+      const to = roomMembers.find((m) => m.id === owed[0].to_member)?.name ?? 'someone';
+      const nudge = message({ type: 'nudge', to, amount: formatRM(total), several: owed.length > 1 }, sub.lang);
+      const result = await send(sub, { ...nudge, url: '/#bills', tag: `makan-owe-${local.date}` });
+      if (result === 'gone') {
+        summary.removed++;
+        continue;
+      }
+      summary[result]++;
+      await db.from('push_subscriptions').update({ last_nudge_on: local.date }).eq('id', sub.id);
+    }
+
+    if (reminder) {
+      const result = await send(sub, { ...reminder, url: '/#today', tag: `makan-${local.date}` });
       if (result === 'gone') {
         summary.removed++;
         continue;
