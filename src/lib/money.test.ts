@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { balances, formatRM, parseRM, settleUp, shares } from './money';
+import { allocate, balances, billTotals, formatRM, itemSubtotals, parsePct, parseRM, settleUp, shares } from './money';
 
 describe('money', () => {
   it('formats and parses ringgit', () => {
@@ -13,6 +13,38 @@ describe('money', () => {
 
   it('splits bills to the sen', () => {
     expect([...shares({ paid_by: 'a', amount_cents: 1000, split_between: ['a', 'b', 'c'] }).values()]).toEqual([334, 333, 333]);
+  });
+
+  it('adds service charge, then SST on top, like a Malaysian receipt', () => {
+    const items = [{ name: 'Nasi lemak', cents: 1000, people: ['a'] }];
+    expect(billTotals(items, 10, 6)).toEqual({ subtotal: 1000, service: 100, sst: 66, total: 1166 });
+    expect(billTotals(items, 0, 0).total).toBe(1000);
+  });
+
+  it('splits itemised bills by what each person had, shared items included', () => {
+    const items = [
+      { name: 'Chicken rice', cents: 1200, people: ['a'] },
+      { name: 'Laksa', cents: 1500, people: ['b'] },
+      { name: 'Teh tarik jug', cents: 900, people: ['a', 'b', 'c'] },
+    ];
+    expect(Object.fromEntries(itemSubtotals(items))).toEqual({ a: 1500, b: 1800, c: 300 });
+    const total = billTotals(items, 10, 6).total;
+    const each = shares({ paid_by: 'a', amount_cents: total, split_between: ['a', 'b', 'c'], items, service_pct: 10, sst_pct: 6 });
+    expect([...each.values()].reduce((n, c) => n + c, 0)).toBe(total);
+    expect(Object.fromEntries(each)).toEqual({ a: 1749, b: 2099, c: 350 });
+  });
+
+  it('allocates to the sen with the biggest remainders', () => {
+    expect(Object.fromEntries(allocate(100, new Map([['a', 1], ['b', 1], ['c', 1]])))).toEqual({ a: 34, b: 33, c: 33 });
+    expect(allocate(100, new Map([['a', 0]])).size).toBe(0);
+  });
+
+  it('reads percentages', () => {
+    expect(parsePct('6')).toBe(6);
+    expect(parsePct('6.5%')).toBe(6.5);
+    expect(parsePct('')).toBe(0);
+    expect(parsePct('31')).toBeNull();
+    expect(parsePct('x')).toBeNull();
   });
 
   it('works out who owes whom, and settles in few payments', () => {

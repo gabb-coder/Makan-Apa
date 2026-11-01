@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { createRoom, deleteRoom, joinRoom, newPhone } from './helpers';
+
+const bills = (page: Page) => page.locator('main', { has: page.locator('h1:text-is("Bills")') });
 
 test('diet needs, ratings, who paid, dinner and room spots', async ({ browser }) => {
   const wei = await newPhone(browser);
@@ -30,11 +33,34 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
     await wei.click('button[aria-label^="Liked it"]');
     await expect(wei.locator('button[aria-label^="Liked it"]')).toHaveAttribute('aria-pressed', 'true');
     await wei.click('text=Who paid? Split the bill');
-    await wei.fill('#bill-amount', '30');
-    await wei.click('.sheet button:text-is("Save")');
-    await expect(wei.getByText('You paid RM30.00 · split 2 ways · Edit')).toBeVisible();
+    // Itemised: one line each, plus 10% service charge, shared by what each person had
+    await wei.fill('input[aria-label="Line 1: price (RM)"]', '12');
+    await wei.fill('input[aria-label="Line 2: price (RM)"]', '18');
+    await wei.click('.sheet label:has-text("Service charge")');
+    await expect(wei.getByTestId('bill-total')).toHaveText('RM33.00');
+    await wei.getByTestId('receipt-input').setInputFiles({
+      name: 'receipt.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+    });
+    await wei.click('.sheet button:text-is("Save bill")');
+    await expect(wei.getByText('You paid RM33.00 · split 2 ways · Edit')).toBeVisible();
+
+    // Bills tab: Wei adds DuitNow; Alex sees what to pay and where
+    await wei.click('nav >> text=Bills');
+    await expect(bills(wei)).toContainText('Alex owes You RM19.80');
+    await expect(bills(wei)).toContainText('receipt');
+    await wei.click('main button:text-is("Add")');
+    await wei.fill('#pay-duitnow', '012-345 6789');
+    await wei.click('main button:text-is("Save")');
+    await expect(bills(wei)).toContainText('DuitNow: 012-345 6789');
+    await alex.goto('/#bills');
+    await expect(bills(alex)).toContainText('You owe RM19.80');
+    await expect(bills(alex)).toContainText('DuitNow: 012-345 6789');
+    await expect(alex.locator('a:has-text("Share to WhatsApp")')).toHaveAttribute('href', /wa\.me.*RM19\.80/);
+    await alex.click('button:text-is("Mark paid")');
+    await expect(bills(alex)).toContainText("Everyone's settled up.");
     await wei.click('nav >> text=History');
-    await expect(wei.getByText('RM15.00')).toBeVisible();
     await expect(wei.getByText('Room favourites')).toBeVisible();
 
     // Lunch and dinner: dinner goes to the next person, Alex

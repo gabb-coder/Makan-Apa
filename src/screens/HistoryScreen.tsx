@@ -3,7 +3,6 @@ import { FoodTile } from '../components/FoodTile';
 import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
 import { dayLabel } from '../lib/rotation';
-import { MoneyCard } from '../components/MealExtras';
 import type { RoomExtras } from '../lib/useRoomExtras';
 import { exportFileName, historyFile, historySheet, loadHistory, saveFile } from '../lib/exportHistory';
 import { roomTitle } from '../lib/session';
@@ -296,17 +295,6 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         )}
       </section>
 
-      <MoneyCard
-        bills={extras.bills}
-        settlements={extras.settlements}
-        members={members}
-        meId={me.id}
-        onRecord={async (p) => {
-          await extras.recordPayment(p);
-          onToast(t('Payment recorded.'));
-        }}
-        onUndo={extras.removePayment}
-      />
 
       {(stats.mostVetoed.length > 0 || stats.tags.length > 0 || longAgo.length > 0 || favourites.length > 0) && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, paddingBottom: 8 }}>

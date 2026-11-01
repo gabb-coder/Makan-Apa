@@ -3,7 +3,7 @@ import { hostOf } from './session';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
 
 export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode' | 'name' | 'meals'>>;
-export type MemberPatch = Partial<Pick<MemberRow, 'name' | 'color' | 'sort_order' | 'diet' | 'budget'>>;
+export type MemberPatch = Partial<Pick<MemberRow, 'name' | 'color' | 'sort_order' | 'diet' | 'budget' | 'pay_duitnow' | 'pay_bank'>>;
 
 function upsert(rows: MemberRow[], row: MemberRow): MemberRow[] {
   const next = rows.some((r) => r.id === row.id) ? rows.map((r) => (r.id === row.id ? row : r)) : [...rows, row];

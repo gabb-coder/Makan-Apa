@@ -48,6 +48,22 @@ test('rooms are private to their members', async () => {
     const drop = await outsider.from('rooms').delete().eq('id', room.id).select('id');
     expect(drop.data ?? []).toHaveLength(0);
     const guestId = (joined.data as { member: { id: string } }).member.id;
+
+    // Payment details: only you can set yours, so nobody can redirect your paybacks.
+    const ownPay = await outsider.from('members').update({ pay_duitnow: '012-345 6789' }).eq('id', guestId).select('pay_duitnow');
+    expect(ownPay.data?.[0]?.pay_duitnow).toBe('012-345 6789');
+    const swapPay = await outsider.from('members').update({ pay_duitnow: '019-999 9999' }).eq('id', hostMember.id);
+    expect(swapPay.error?.message).toContain('payment details');
+
+    // Receipt photos: only the room's members can read or add them.
+    const path = `${room.id}/test-${Date.now()}.png`;
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    expect((await host.storage.from('receipts').upload(path, png, { contentType: 'image/png' })).error).toBeNull();
+    const stranger = await signedInClient();
+    expect((await stranger.storage.from('receipts').download(path)).error).not.toBeNull();
+    expect((await stranger.storage.from('receipts').upload(`${room.id}/sneaky.png`, png, { contentType: 'image/png' })).error).not.toBeNull();
+    expect((await outsider.storage.from('receipts').download(path)).error).toBeNull();
+    await host.storage.from('receipts').remove([path]);
     const hostKick = await host.from('members').delete().eq('id', guestId).select('id');
     expect(hostKick.data).toHaveLength(1);
   } finally {

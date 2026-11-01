@@ -1,3 +1,4 @@
+import { formatRM, shares } from './money';
 import { customFood, entryFood, formatTag, type Food } from './foods';
 import { SUNWAY_SPOTS } from './nearby';
 import { dayLabel } from './rotation';
@@ -63,7 +64,7 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
         })(),
         ...(() => {
           const bill = bills.find((b) => b.day_entry_id === e.id);
-          return bill ? [who(bill.paid_by), bill.amount_cents / 100, bill.split_between.map(who).join(', ')] : [null, null, null];
+          return bill ? [who(bill.paid_by), bill.amount_cents / 100, bill.items?.length ? [...shares(bill)].map(([id, c]) => `${who(id)} ${formatRM(c)}`).join(', ') : bill.split_between.map(who).join(', ')] : [null, null, null];
         })(),
       ];
     });

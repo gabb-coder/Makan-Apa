@@ -347,8 +347,8 @@ input[type='date'].input::-webkit-date-and-time-value {
   background: var(--surface);
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 8px 8px calc(14px + env(safe-area-inset-bottom));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 8px 4px calc(14px + env(safe-area-inset-bottom));
 }
 
 .tabbar button {
