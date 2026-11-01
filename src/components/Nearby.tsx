@@ -17,6 +17,8 @@ import {
   spotDistanceIsRough,
   spotDistanceKm,
   spotKnownFor,
+  spotMenu,
+  menuPrice,
   spotOpenNow,
   spotMapsUrl,
   SUNWAY_CENTRE,
@@ -95,6 +97,7 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
           >
             {spotKnownFor(s)}
           </span>
+          <MenuPreview spot={s} />
           <span style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-ink)', whiteSpace: 'nowrap' }}>{priceLabel(s.price)}</span>
             <OpenText spot={s} short />
@@ -102,6 +105,50 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
         </button>
       ))}
     </div>
+  );
+}
+
+/** Two lines on a spot card: "Waffle + Double Scoop · Get Stuffed · Salted Caramel". */
+function MenuPreview({ spot }: { spot: Spot }) {
+  const menu = spotMenu(spot);
+  if (!menu.length) return null;
+  return (
+    <span style={{ display: 'flex', alignItems: 'flex-start', gap: 5, minWidth: 0, fontSize: 12, lineHeight: 1.4, color: 'var(--ink-2)' }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 2, color: 'var(--muted)' }}>
+        <path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4" />
+      </svg>
+      <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontWeight: 600 }}>
+        <span className="sr-only">{t('Menu')}: </span>
+        {menu
+          .slice(0, 3)
+          .map((m) => m.name)
+          .join(' · ')}
+      </span>
+    </span>
+  );
+}
+
+/** The spot sheet's menu: dish names with approximate prices. */
+function SpotMenu({ spot }: { spot: Spot }) {
+  const menu = spotMenu(spot);
+  if (!menu.length) return null;
+  return (
+    <section aria-labelledby="spot-menu" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <h3 id="spot-menu" className="field-label" style={{ margin: 0 }}>
+        {t('On the menu')}
+      </h3>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', borderRadius: 14, background: 'var(--bg)' }}>
+        {menu.map((m, i) => (
+          <li key={m.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 12px', fontSize: 14, borderTop: i ? '1px solid var(--divider)' : 'none' }}>
+            <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{m.name}</span>
+            {m.price !== null && <span style={{ flexShrink: 0, color: 'var(--ink-2)', fontWeight: 700 }}>~{menuPrice(m.price)}</span>}
+          </li>
+        ))}
+      </ul>
+      {menu.some((m) => m.price !== null) && (
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('Prices are from online menus and may have changed.')}</span>
+      )}
+    </section>
   );
 }
 
@@ -298,6 +345,7 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
           ))}
         </div>
         {spot.room ? <span style={{ fontSize: 13, color: 'var(--muted)' }}>{spotArea(spot)}</span> : <SpotHours spot={spot} />}
+        <SpotMenu spot={spot} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {onPick && pickLabel && (
             <button type="button" className="btn btn--primary press" style={{ height: 52 }} onClick={onPick}>

@@ -4,6 +4,9 @@ import type { Translations } from '../lib/i18n';
 export const translations: Translations = {
   ms: {
     // Nearby
+    Menu: 'Menu',
+    'On the menu': 'Dalam menu',
+    'Prices are from online menus and may have changed.': 'Harga dari menu dalam talian dan mungkin dah berubah.',
     Halal: 'Halal',
     'Serves pork': 'Ada babi',
     'Open now': 'Buka sekarang',
@@ -135,6 +138,9 @@ export const translations: Translations = {
   },
   zh: {
     // Nearby
+    Menu: '菜单',
+    'On the menu': '菜单推荐',
+    'Prices are from online menus and may have changed.': '价格来自网上菜单，可能已有变动。',
     Halal: '清真',
     'Serves pork': '有猪肉',
     'Open now': '营业中',

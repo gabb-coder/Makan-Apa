@@ -3,7 +3,8 @@ import { STARTER_PACK } from './foods';
 import { ICONS, COLOR_KEYS } from './palette';
 import { distanceKm, formatDistance, mapsNearUrl } from './geo';
 import { clockIn, dayHoursLabel, openLabel, openState, timeLabel } from './hours';
-import { AREA_CENTRES, SUNWAY_SPOTS, byDistance, isNearSunway, roomSpot, spotDetails, spotOpenNow, priceLabel, spotMapsUrl, spotsFor, spotsOfTheDay } from './nearby';
+import { AREA_CENTRES, SUNWAY_SPOTS, byDistance, isNearSunway, menuPrice, roomSpot, spotDetails, spotMenu, spotOpenNow, priceLabel, spotMapsUrl, spotsFor, spotsOfTheDay } from './nearby';
+import { SPOT_MENUS } from './spotMenus';
 
 describe('Sunway spots data', () => {
   it('has unique ids and only icons and colours the food list accepts', () => {
@@ -157,5 +158,22 @@ describe('room spots', () => {
     expect(s.area).toBe('Added by your room');
     expect(priceLabel(s.price)).toBe('Price not set');
     expect(spotMapsUrl(s)).toBe('https://www.google.com/maps/search/?api=1&query=Restoran%20Yong');
+  });
+});
+
+describe('spot menus', () => {
+  it('lists dishes for every Sunway spot except the campus cafeterias', () => {
+    for (const spot of SUNWAY_SPOTS) {
+      if (spot.id === 'campus-cafeterias') expect(spotMenu(spot)).toEqual([]);
+      else expect(spotMenu(spot).length, spot.id).toBeGreaterThanOrEqual(3);
+    }
+    const ids = new Set(SUNWAY_SPOTS.map((s) => s.id));
+    expect(Object.keys(SPOT_MENUS).filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  it('formats menu prices', () => {
+    expect(menuPrice(9.99)).toBe('RM9.99');
+    expect(menuPrice(5.9)).toBe('RM5.90');
+    expect(menuPrice(31)).toBe('RM31');
   });
 });
