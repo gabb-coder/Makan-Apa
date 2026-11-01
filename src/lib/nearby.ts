@@ -4,6 +4,7 @@ import { distanceKm, type LatLng } from './geo';
 import { clockIn, openLabel, openState } from './hours';
 import { t, tk } from './i18n';
 import { SPOT_DETAILS, type SpotDetails } from './spotDetails';
+import { SPOT_MENUS, type MenuItem } from './spotMenus';
 import type { FoodColor, FoodIconName } from './palette';
 
 /**
@@ -531,6 +532,16 @@ export const SUNWAY_CENTRE = AREA_CENTRES['On campus'];
 
 /** Beyond this, the Sunway picks aren't "near you" and the app searches around you instead. */
 export const NEAR_SUNWAY_KM = 8;
+
+/** A few dishes from the spot's menu; empty for room spots and places without one. */
+export function spotMenu(spot: Pick<Spot, 'id' | 'room'>): MenuItem[] {
+  return spot.room ? [] : (SPOT_MENUS[spot.id] ?? []);
+}
+
+/** "RM12.90"; menu prices are whole ringgit or have sen. */
+export function menuPrice(price: number): string {
+  return `RM${Number.isInteger(price) ? price : price.toFixed(2)}`;
+}
 
 export function spotDetails(spot: Pick<Spot, 'id' | 'details'>): SpotDetails {
   return spot.details ?? SPOT_DETAILS[spot.id] ?? {};
