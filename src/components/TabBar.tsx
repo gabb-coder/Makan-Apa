@@ -1,5 +1,5 @@
 import { t, tk } from '../lib/i18n';
-export type Tab = 'today' | 'wheel' | 'pool' | 'history';
+export type Tab = 'today' | 'wheel' | 'pool' | 'bills' | 'history';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -31,6 +31,16 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
         <circle cx="4" cy="6" r="1" />
         <circle cx="4" cy="12" r="1" />
         <circle cx="4" cy="18" r="1" />
+      </>
+    ),
+  },
+  {
+    id: 'bills',
+    label: tk('Bills'),
+    icon: (
+      <>
+        <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+        <path d="M9 8h6M9 12h6M9 16h3" />
       </>
     ),
   },

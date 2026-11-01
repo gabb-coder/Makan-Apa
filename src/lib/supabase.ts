@@ -1,3 +1,4 @@
+import type { BillItem } from './money';
 import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -47,6 +48,9 @@ export interface MemberRow {
   diet: string[];
   /** Most they want to spend: 1 under RM15, 2 under RM50; null for any. */
   budget: number | null;
+  /** How to pay them back: a DuitNow phone or ID, and/or a bank account. Only they can set it. */
+  pay_duitnow?: string | null;
+  pay_bank?: string | null;
   created_at: string;
 }
 
@@ -95,6 +99,12 @@ export interface MealBillRow {
   paid_by: string;
   amount_cents: number;
   split_between: string[];
+  /** Itemised bills: each item shared between its people. Null for an equal split. */
+  items?: BillItem[] | null;
+  service_pct?: number | string;
+  sst_pct?: number | string;
+  /** A photo in the private receipts bucket, under <room id>/. */
+  receipt_path?: string | null;
   updated_at: string;
 }
 

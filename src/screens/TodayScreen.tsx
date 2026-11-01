@@ -11,7 +11,8 @@ import {
   YourTurnCard,
 } from '../components/DayCards';
 import { FoodTile } from '../components/FoodTile';
-import { BillLine, BillSheet, RatingRow } from '../components/MealExtras';
+import { BillLine, RatingRow } from '../components/MealExtras';
+import { BillSheet } from '../components/Bills';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
@@ -519,15 +520,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
       {billOpen && todayEntry && todayFood && (
         <BillSheet
+          dayEntryId={todayEntry.id}
           foodName={todayFood.name}
-          bill={extras.bills.find((b) => b.day_entry_id === todayEntry.id) ?? null}
           members={members}
           meId={me.id}
-          onSave={async (bill) => {
-            await extras.saveBill({ ...bill, day_entry_id: todayEntry.id });
-            onToast(t('Bill saved. See who owes what in History.'));
-          }}
-          onRemove={() => extras.removeBill(todayEntry.id)}
+          extras={extras}
+          onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved. See who owes what in Bills.'))}
           onClose={() => setBillOpen(false)}
         />
       )}

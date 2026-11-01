@@ -31,7 +31,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await host.waitForTimeout(800);
       await scan(host, 'today');
 
-      for (const route of ['wheel', 'pool', 'history', 'settings']) {
+      for (const route of ['wheel', 'pool', 'bills', 'history', 'settings']) {
         await host.goto(`/#${route}`);
         await host.waitForTimeout(1200);
         await scan(host, route);

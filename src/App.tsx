@@ -24,20 +24,22 @@ import type { WheelSend } from './screens/WheelScreen';
 const loadWheel = () => import('./screens/WheelScreen');
 const loadPool = () => import('./screens/PoolScreen');
 const loadHistory = () => import('./screens/HistoryScreen');
+const loadBills = () => import('./screens/BillsScreen');
 const loadSettings = () => import('./screens/SettingsScreen');
 const WheelScreen = lazy(() => loadWheel().then((m) => ({ default: m.WheelScreen })));
 const PoolScreen = lazy(() => loadPool().then((m) => ({ default: m.PoolScreen })));
 const HistoryScreen = lazy(() => loadHistory().then((m) => ({ default: m.HistoryScreen })));
+const BillsScreen = lazy(() => loadBills().then((m) => ({ default: m.BillsScreen })));
 const SettingsScreen = lazy(() => loadSettings().then((m) => ({ default: m.SettingsScreen })));
 
 function preloadScreens() {
-  const go = () => [loadWheel, loadPool, loadHistory, loadSettings].forEach((load) => void load().catch(() => {}));
+  const go = () => [loadWheel, loadPool, loadBills, loadHistory, loadSettings].forEach((load) => void load().catch(() => {}));
   if ('requestIdleCallback' in window) window.requestIdleCallback(go, { timeout: 4000 });
   else setTimeout(go, 2000);
 }
 
 type Route = Tab | 'settings';
-const ROUTES: Route[] = ['today', 'wheel', 'pool', 'history', 'settings'];
+const ROUTES: Route[] = ['today', 'wheel', 'pool', 'bills', 'history', 'settings'];
 
 function routeFromHash(): Route {
   const h = window.location.hash.replace('#', '') as Route;
@@ -328,6 +330,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
           removeMember={removeMember}
           onBack={() => go('today')}
           deleteRoom={async () => {
+            await extras.clearReceipts().catch(() => {});
             await deleteRoom();
             onToast(t('{room} deleted.', { room: roomTitle(room) }));
             void leaveRoom(room.id).catch(() => {});
@@ -356,6 +359,21 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
           loading
         ))}
       {route === 'pool' && (foods ? <PoolScreen foods={foods} api={foodsApi} onError={onToast} /> : loading)}
+      {route === 'bills' &&
+        (foods && days.entries ? (
+          <BillsScreen
+            room={room}
+            me={me}
+            members={members}
+            entries={days.entries}
+            foods={foods}
+            extras={extras}
+            updateMember={updateMember}
+            onToast={onToast}
+          />
+        ) : (
+          loading
+        ))}
       {route === 'history' &&
         (foods && days.entries ? (
           <HistoryScreen
