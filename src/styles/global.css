@@ -349,14 +349,115 @@ input[type='date'].input::-webkit-date-and-time-value {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 8px 4px calc(14px + env(safe-area-inset-bottom));
+  position: relative;
+}
+
+/* The sliding pill behind the active icon: one tab wide, moved along by whole tabs. */
+.tabbar-track {
+  position: absolute;
+  top: 12px;
+  left: 4px;
+  right: 4px;
+  height: 32px;
+  pointer-events: none;
+}
+
+.tabbar-pill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 20%;
+  display: flex;
+  justify-content: center;
+  transition: transform 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
+  will-change: transform;
+}
+
+.tabbar-pill span {
+  width: 56px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+}
+
+.tabbar-icon {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabbar-hop {
+  animation: tabHop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tabHop {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-4px) scale(1.15);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* A tab's screen arriving from the side it's on. */
+.tab-stage {
+  position: relative;
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.tab-pane {
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-in-right {
+  animation: tabInRight 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.tab-in-left {
+  animation: tabInLeft 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes tabInRight {
+  from {
+    transform: translateX(36%);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes tabInLeft {
+  from {
+    transform: translateX(-36%);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 .tabbar button {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  justify-content: flex-start;
+  padding-top: 4px;
+  gap: 2px;
   border: none;
   background: none;
   font-size: 12px;

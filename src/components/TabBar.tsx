@@ -56,32 +56,54 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
+export const TAB_ORDER: Tab[] = TABS.map((tab) => tab.id);
+
+/**
+ * The bottom bar. A pill slides behind the active tab's icon (following the finger while the
+ * screen is swiped), and the icon gives a little hop when it's picked.
+ */
+export function TabBar({ active, onChange, dragFraction = 0 }: { active: Tab; onChange: (tab: Tab) => void; dragFraction?: number }) {
+  const index = Math.max(0, TAB_ORDER.indexOf(active));
+  const position = Math.min(TABS.length - 1, Math.max(0, index + dragFraction));
+  const dragging = dragFraction !== 0;
   return (
     <nav aria-label={t('Main')} className="tabbar">
-      {TABS.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          aria-current={active === tab.id ? 'page' : undefined}
-          onClick={() => onChange(tab.id)}
+      <span aria-hidden="true" className="tabbar-track">
+        <span
+          className="tabbar-pill"
+          style={{
+            transform: `translateX(${position * 100}%)`,
+            transition: dragging ? 'none' : undefined,
+          }}
         >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            {tab.icon}
-          </svg>
-          {t(tab.label)}
-        </button>
-      ))}
+          <span />
+        </span>
+      </span>
+      {TABS.map((tab) => {
+        const on = active === tab.id;
+        return (
+          <button key={tab.id} type="button" aria-current={on ? 'page' : undefined} onClick={() => onChange(tab.id)}>
+            <span className="tabbar-icon">
+              <svg
+                key={on ? 'on' : 'off'}
+                className={on ? 'tabbar-hop' : undefined}
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={on ? 2.1 : 1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                {tab.icon}
+              </svg>
+            </span>
+            {t(tab.label)}
+          </button>
+        );
+      })}
     </nav>
   );
 }
