@@ -57,6 +57,29 @@ type State =
   | { status: 'ready'; session: Session };
 
 /** Drop ?room= (and optionally ?join=) from the address bar once used, keeping the tab. */
+/**
+ * The room this browser tab is inside, kept for the tab's life only (sessionStorage). A reload
+ * stays in the room; opening the app afresh (a new launch or tab) starts on the main menu.
+ */
+const IN_ROOM_KEY = 'makan.inRoom';
+const tabRoom = {
+  get(): string | null {
+    try {
+      return window.sessionStorage.getItem(IN_ROOM_KEY);
+    } catch {
+      return null;
+    }
+  },
+  set(roomId: string | null) {
+    try {
+      if (roomId) window.sessionStorage.setItem(IN_ROOM_KEY, roomId);
+      else window.sessionStorage.removeItem(IN_ROOM_KEY);
+    } catch {
+      /* private mode: every launch starts on the main menu */
+    }
+  },
+};
+
 function clearParam(...names: string[]) {
   const url = new URL(window.location.href);
   names.forEach((n) => url.searchParams.delete(n));
@@ -104,9 +127,11 @@ export default function App() {
       generation.current++;
       return setState({ status: 'join' });
     }
-    // A reload inside a room (the address has a tab, like #bills) stays in that room.
-    const inRoom = (ROUTES as string[]).includes(window.location.hash.replace('#', ''));
-    if (knownRooms().length && !(inRoom && currentRoomId())) {
+    // A reload inside a room (this tab was in it, and the address has a tab like #bills) stays
+    // there. Anything else, including a fresh launch of the installed app, opens the main menu.
+    const onTab = (ROUTES as string[]).includes(window.location.hash.replace('#', ''));
+    const reloadInRoom = onTab && !!currentRoomId() && tabRoom.get() === currentRoomId();
+    if (knownRooms().length && !reloadInRoom) {
       generation.current++;
       closeCurrentRoom();
       return setState({ status: 'home' });
@@ -114,9 +139,16 @@ export default function App() {
     restore();
   };
   useEffect(start, []);
+  // Remember, for this tab only, which room it's inside.
+  const readyRoom = state.status === 'ready' ? state.session.room.id : null;
+  useEffect(() => {
+    if (readyRoom) tabRoom.set(readyRoom);
+    else if (state.status === 'home') tabRoom.set(null);
+  }, [readyRoom, state.status]);
 
   const goHome = () => {
     generation.current++;
+    tabRoom.set(null);
     closeCurrentRoom();
     // A room opened from home starts on Today.
     window.history.replaceState(null, '', window.location.pathname);

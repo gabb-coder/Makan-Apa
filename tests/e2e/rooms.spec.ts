@@ -23,6 +23,12 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   await phone.reload();
   await expect(phone.locator('header .eyebrow')).toContainText('Lunch gang');
 
+  // Opening the app afresh (a new launch, even at #today) starts on the main menu
+  const fresh = await phone.context().newPage();
+  await fresh.goto('/#today');
+  await expect(fresh.getByRole('heading', { name: '2 rooms' })).toBeVisible();
+  await fresh.close();
+
   // Home: every room, like a list of group chats; open one and come back
   await phone.goto('/');
   await expect(phone.getByRole('heading', { name: '2 rooms' })).toBeVisible();
