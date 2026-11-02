@@ -36,6 +36,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await host.waitForTimeout(1200);
         await scan(host, route);
       }
+
+      // The home screen with every room, then back into the room
+      await host.goto('/');
+      await expect(host.locator('main li button').first()).toBeVisible();
+      await host.waitForTimeout(1200);
+      await scan(host, 'home');
+      await host.locator('main li button').first().click();
+      await expect(host.locator('nav')).toBeVisible();
     } finally {
       await deleteRoom(host);
     }

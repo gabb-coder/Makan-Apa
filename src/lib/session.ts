@@ -130,7 +130,7 @@ async function loadSession(roomId: string, memberId: string): Promise<Session | 
   return { room: room.data as RoomRow, me, members: members.data as MemberRow[] };
 }
 
-async function openRoom(roomId: string, memberId: string): Promise<Session | null> {
+export async function openRoom(roomId: string, memberId: string): Promise<Session | null> {
   let session = await loadSession(roomId, memberId);
   if (!session) {
     // A phone from before accounts (or a fresh sign-in): its saved ids prove who it is.

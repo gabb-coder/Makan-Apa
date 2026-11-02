@@ -781,7 +781,7 @@ function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; 
           await enableReminders(me.id, hour);
           setStatus({ hour, recap: true, events: true });
         } else {
-          await disableReminders();
+          await disableReminders(me.id);
           setStatus(null);
         }
       },

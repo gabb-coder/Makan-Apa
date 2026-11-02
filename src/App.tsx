@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { TabBar, type Tab } from './components/TabBar';
 import { t } from './lib/i18n';
-import { disableReminders } from './lib/push';
-import { closeCurrentRoom, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
+import { disableReminders, followRoom } from './lib/push';
+import { HomeScreen } from './screens/HomeScreen';
+import { closeCurrentRoom, currentRoomId, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
@@ -47,7 +48,19 @@ function routeFromHash(): Route {
   return ROUTES.includes(h) ? h : 'today';
 }
 
-type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'join'; notice?: string } | { status: 'ready'; session: Session };
+type State =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'home' }
+  | { status: 'join'; notice?: string; creating?: boolean }
+  | { status: 'ready'; session: Session };
+
+/** Drop ?room= (and optionally ?join=) from the address bar once used, keeping the tab. */
+function clearParam(...names: string[]) {
+  const url = new URL(window.location.href);
+  names.forEach((n) => url.searchParams.delete(n));
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
 
 export default function App() {
   const [state, setState] = useState<State>({ status: 'loading' });
@@ -64,17 +77,62 @@ export default function App() {
     }
     setState({ status: 'loading' });
     restoreSession().then(
-      (session) => gen === generation.current && setState(session ? { status: 'ready', session } : { status: 'join' }),
+      (session) => gen === generation.current && setState(session ? { status: 'ready', session } : knownRooms().length ? { status: 'home' } : { status: 'join' }),
       (e: unknown) => gen === generation.current && setState({ status: 'error', message: e instanceof Error ? e.message : String(e) }),
     );
   };
-  useEffect(restore, []);
+
+  /**
+   * Opening the app: a notification's ?room= goes straight into that room, an invite link's
+   * ?join= to its room (or the join screen), otherwise the home screen with every room.
+   */
+  const start = () => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    if (roomParam) {
+      clearParam('room');
+      if (selectRoom(roomParam)) return restore();
+    }
+    const joinCode = params.get('join')?.toUpperCase();
+    if (joinCode) {
+      const known = knownRooms().find((r) => r.code === joinCode);
+      if (known && selectRoom(known.roomId)) {
+        clearParam('join');
+        return restore();
+      }
+      generation.current++;
+      return setState({ status: 'join' });
+    }
+    // A reload inside a room (the address has a tab, like #bills) stays in that room.
+    const inRoom = (ROUTES as string[]).includes(window.location.hash.replace('#', ''));
+    if (knownRooms().length && !(inRoom && currentRoomId())) {
+      generation.current++;
+      closeCurrentRoom();
+      return setState({ status: 'home' });
+    }
+    restore();
+  };
+  useEffect(start, []);
+
+  const goHome = () => {
+    generation.current++;
+    closeCurrentRoom();
+    // A room opened from home starts on Today.
+    window.history.replaceState(null, '', window.location.pathname);
+    setState(knownRooms().length ? { status: 'home' } : { status: 'join' });
+  };
+  const openRoomFromHome = (roomId: string) => {
+    if (selectRoom(roomId)) {
+      window.history.replaceState(null, '', `${window.location.pathname}#today`);
+      restore();
+    }
+  };
 
   // Coming back online after an offline start: try again without a tap.
   const status = useRef(state.status);
   status.current = state.status;
   useEffect(() => {
-    const onOnline = () => status.current === 'error' && restore();
+    const onOnline = () => status.current === 'error' && start();
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
   }, []);
@@ -101,10 +159,21 @@ export default function App() {
         </button>
       </Splash>
     );
+  } else if (state.status === 'home') {
+    body = (
+      <HomeScreen
+        onOpen={openRoomFromHome}
+        onNew={() => setState({ status: 'join', creating: true })}
+        onJoin={() => setState({ status: 'join' })}
+      />
+    );
   } else if (state.status === 'join') {
     body = (
       <JoinScreen
+        key={state.creating ? 'create' : 'join'}
         notice={state.notice}
+        creating={state.creating}
+        onBack={knownRooms().length ? goHome : undefined}
         rooms={knownRooms()}
         onOpenRoom={(roomId) => {
           if (selectRoom(roomId)) restore();
@@ -115,6 +184,8 @@ export default function App() {
           window.history.replaceState(null, '', `${window.location.pathname}#today`);
           setState({ status: 'ready', session });
           if (message) setToast(message);
+          // Phones with notifications on get them for the new room too.
+          void followRoom(session.me.id).catch(() => {});
         }}
       />
     );
@@ -126,19 +197,19 @@ export default function App() {
         onToast={setToast}
         onLeave={() => {
           generation.current++;
-          void disableReminders().catch(() => {});
+          void disableReminders(state.session.me.id).catch(() => {});
           forgetSession();
-          // Open another room on this phone if there is one.
-          if (knownRooms().length) restore();
-          else setState({ status: 'join' });
+          // Back to the other rooms on this phone, if there are any.
+          setState(knownRooms().length ? { status: 'home' } : { status: 'join' });
         }}
+        onHome={goHome}
         onSwitchRoom={(roomId) => {
           if (selectRoom(roomId)) restore();
         }}
         onAddRoom={() => {
           generation.current++;
           closeCurrentRoom();
-          setState({ status: 'join' });
+          setState({ status: 'join', creating: false });
         }}
       />
     );
@@ -197,9 +268,11 @@ interface RoomAppProps {
   onLeave: () => void;
   onSwitchRoom: (roomId: string) => void;
   onAddRoom: () => void;
+  /** Back to the home screen with every room. */
+  onHome: () => void;
 }
 
-function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomAppProps) {
+function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }: RoomAppProps) {
   const [route, setRoute] = useState<Route>(routeFromHash);
   const { room, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom } = useRoomData(session.room, session.members, session.me.id);
   const me = members.find((m) => m.id === session.me.id) ?? session.me;
@@ -315,6 +388,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom }: RoomApp
             onSeeAll={() => go('history')}
             onSwitchRoom={onSwitchRoom}
             onAddRoom={onAddRoom}
+            onHome={onHome}
             extras={extras}
             attendance={attendance}
             away={away}

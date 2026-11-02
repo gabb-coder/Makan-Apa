@@ -21,14 +21,19 @@ interface Props {
   /** Rooms this phone is already in, to go back to. */
   rooms?: KnownRoom[];
   onOpenRoom?: (roomId: string) => void;
+  /** Back to the home screen (when this phone already has rooms). */
+  onBack?: () => void;
+  /** Opened from "Create a new room": show the room name field straight away. */
+  creating?: boolean;
 }
 
-export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) {
-  const [name, setName] = useState('');
+export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, creating = false }: Props) {
+  // Your name from your other rooms, so a new room doesn't ask again.
+  const [name, setName] = useState(() => rooms[0]?.name ?? '');
   const [code, setCode] = useState(suggestedCode);
   const [busy, setBusy] = useState<'join' | 'create' | null>(null);
   // "Create a new room" first reveals an optional room name, then creates.
-  const [naming, setNaming] = useState(false);
+  const [naming, setNaming] = useState(creating);
   const [roomName, setRoomName] = useState('');
   const [error, setError] = useState<string | null>(notice ?? null);
   // Shown once the name turns out to be taken by someone with a PIN.
@@ -109,6 +114,20 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
         <circle cx="160" cy="160" r="30" fill="#FFFFFF" stroke="#18181B" strokeWidth="5" />
         <circle cx="160" cy="160" r="12" fill="#CC3F17" />
       </svg>
+
+      {onBack && (
+        <button
+          type="button"
+          className="press"
+          onClick={onBack}
+          style={{ position: 'absolute', top: 16, left: 12, zIndex: 2, display: 'flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 12px', border: 'none', borderRadius: 999, background: 'var(--surface)', color: 'var(--ink)', fontSize: 15, fontWeight: 700 }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          {t('Your rooms')}
+        </button>
+      )}
 
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, marginTop: 150 }}>
         <h1
@@ -265,7 +284,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom }: Props) 
         </button>
       </form>
 
-      {rooms.length > 0 && onOpenRoom && (
+      {rooms.length > 0 && onOpenRoom && !onBack && (
         <section style={{ position: 'relative', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, animation: fadeUp(0.7) }}>
           <span className="section-label">{t('Your rooms on this phone')}</span>
           <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

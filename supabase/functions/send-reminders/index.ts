@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
     if (sub.weekly_recap && local.weekday === 0 && local.hour >= RECAP_HOUR && sub.last_recap_on !== local.date) {
       const recap = recapFor(room.id, local.date);
       if (recap) {
-        const result = await send(sub, { ...recap, url: '/#history', tag: `makan-recap-${local.date}` });
+        const result = await send(sub, { ...recap, url: `/?room=${room.id}#history`, tag: `makan-recap-${room.id}-${local.date}` });
         if (result === 'gone') {
           summary.removed++;
           continue;
@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
       const total = owed.reduce((n, p) => n + p.amount_cents, 0);
       const to = roomMembers.find((m) => m.id === owed[0].to_member)?.name ?? 'someone';
       const nudge = message({ type: 'nudge', to, amount: formatRM(total), several: owed.length > 1 }, sub.lang);
-      const result = await send(sub, { ...nudge, url: '/#bills', tag: `makan-owe-${local.date}` });
+      const result = await send(sub, { ...nudge, url: `/?room=${room.id}#bills`, tag: `makan-owe-${room.id}-${local.date}` });
       if (result === 'gone') {
         summary.removed++;
         continue;
@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
     }
 
     if (reminder) {
-      const result = await send(sub, { ...reminder, url: '/#today', tag: `makan-${local.date}` });
+      const result = await send(sub, { ...reminder, url: `/?room=${room.id}#today`, tag: `makan-${room.id}-${local.date}` });
       if (result === 'gone') {
         summary.removed++;
         continue;

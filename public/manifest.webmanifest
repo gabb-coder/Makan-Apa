@@ -3,7 +3,7 @@
   "short_name": "Makan apa?",
   "description": "Take turns deciding what to eat, or let the wheel settle it.",
   "id": "/",
-  "start_url": "/#today",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
