@@ -3,13 +3,62 @@ import { Avatar } from '../components/Avatar';
 import { locale, t } from '../lib/i18n';
 import { formatRM } from '../lib/money';
 import { loadRoomSummaries, type RoomSummary } from '../lib/roomSummaries';
-import { knownRooms, knownRoomTitle, MEMBER_COLORS, roomTitle, type KnownRoom } from '../lib/session';
-import { supabase } from '../lib/supabase';
+import { knownRooms, knownRoomTitle, leaveRoom, MEMBER_COLORS, roomTitle, type KnownRoom } from '../lib/session';
+import { MoneyCard, RoomActionsSheet, TodayCard } from '../components/HomeCards';
+import { shareInvite } from '../lib/invite';
+import { disableReminders, notifiedMembers, notifyRoom } from '../lib/push';
+import { storage } from '../lib/storage';
+import { supabase, type Meal } from '../lib/supabase';
 
 interface Props {
   onOpen: (roomId: string) => void;
   onNew: () => void;
   onJoin: () => void;
+  onToast: (message: string) => void;
+  /** After leaving the last room on this phone. */
+  onNoRooms: () => void;
+}
+
+const PINNED_KEY = 'makan.pinnedRooms';
+function loadPinned(): string[] {
+  try {
+    const list = JSON.parse(storage.get(PINNED_KEY) ?? '[]');
+    return Array.isArray(list) ? list.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Long press: open the room's actions instead of the room. */
+function useLongPress(onLong: () => void, ms = 500) {
+  const timer = useRef<number | undefined>(undefined);
+  const fired = useRef(false);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const cancel = () => {
+    window.clearTimeout(timer.current);
+    start.current = null;
+  };
+  return {
+    fired,
+    handlers: {
+      onPointerDown: (e: React.PointerEvent) => {
+        fired.current = false;
+        start.current = { x: e.clientX, y: e.clientY };
+        timer.current = window.setTimeout(() => {
+          fired.current = true;
+          navigator.vibrate?.(15);
+          onLong();
+        }, ms);
+      },
+      onPointerMove: (e: React.PointerEvent) => {
+        if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel();
+      },
+      onPointerUp: cancel,
+      onPointerLeave: cancel,
+      onPointerCancel: cancel,
+      onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    },
+  };
 }
 
 /** A steady colour per room, from its code. */
@@ -51,13 +100,19 @@ function extrasText(s: RoomSummary): string[] {
 }
 
 /** The main menu: every room on this phone, like a list of group chats. */
-export function HomeScreen({ onOpen, onNew, onJoin }: Props) {
-  const [known] = useState<KnownRoom[]>(knownRooms);
+export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms }: Props) {
+  const [known, setKnown] = useState<KnownRoom[]>(knownRooms);
+  const [pinned, setPinned] = useState<string[]>(loadPinned);
+  const [notified, setNotified] = useState<Set<string> | null>(null);
+  const [actionsFor, setActionsFor] = useState<RoomSummary | null>(null);
   const [summaries, setSummaries] = useState<RoomSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
   const load = useCallback(() => {
+    void notifiedMembers()
+      .then(setNotified)
+      .catch(() => {});
     loadRoomSummaries().then(
       (s) => {
         setSummaries(s);
@@ -96,10 +151,37 @@ export function HomeScreen({ onOpen, onNew, onJoin }: Props) {
     };
   }, [known, load, soon]);
 
-  // Rooms that need you first, then the most recently opened.
+  // Pinned rooms first, then rooms that need you, then the most recently opened.
+  const rank = (roomId: string, needsYou: boolean) => (pinned.includes(roomId) ? 2 : 0) + (needsYou ? 1 : 0);
   const rows: { known: KnownRoom; summary: RoomSummary | null }[] = summaries
-    ? [...summaries].sort((a, b) => Number(b.needsYou) - Number(a.needsYou)).map((s) => ({ known: s.known, summary: s }))
-    : known.map((k) => ({ known: k, summary: null }));
+    ? [...summaries].sort((a, b) => rank(b.room.id, b.needsYou) - rank(a.room.id, a.needsYou)).map((s) => ({ known: s.known, summary: s }))
+    : [...known].sort((a, b) => rank(b.roomId, false) - rank(a.roomId, false)).map((k) => ({ known: k, summary: null }));
+
+  const togglePinOff = (roomId: string) => {
+    const next = pinned.filter((id) => id !== roomId);
+    setPinned(next);
+    storage.set(PINNED_KEY, JSON.stringify(next));
+  };
+  const togglePin = (roomId: string) => {
+    const next = pinned.includes(roomId) ? pinned.filter((id) => id !== roomId) : [roomId, ...pinned];
+    setPinned(next);
+    storage.set(PINNED_KEY, JSON.stringify(next));
+  };
+  const setOut = async (s: RoomSummary, meal: Meal, out: boolean) => {
+    const { error: err } = await supabase
+      .from('attendance')
+      .upsert({ room_id: s.room.id, entry_date: s.date, meal, member_id: s.meId, status: out ? 'out' : 'in', updated_at: new Date().toISOString() });
+    if (err) throw new Error(err.message);
+    load();
+  };
+  const guard = async (fn: () => Promise<void>, ok?: string) => {
+    try {
+      await fn();
+      if (ok) onToast(ok);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : t('Something went wrong. Try again.'));
+    }
+  };
   const waiting = summaries?.filter((s) => s.needsYou).length ?? 0;
 
   return (
@@ -123,6 +205,28 @@ export function HomeScreen({ onOpen, onNew, onJoin }: Props) {
           </p>
         </header>
 
+        {summaries && summaries.length > 1 && (
+          <TodayCard
+            summaries={summaries}
+            onSkip={(s, meal) =>
+              guard(() => setOut(s, meal, true), t('Skipped {meal} in {room}.', { meal: (meal === 'dinner' ? t('Dinner') : t('Lunch')).toLowerCase(), room: roomTitle(s.room) }))
+            }
+          />
+        )}
+        {summaries && (
+          <MoneyCard
+            summaries={summaries}
+            onToast={onToast}
+            onPaid={(s, p) =>
+              guard(async () => {
+                const { error: err } = await supabase.from('settlements').insert({ ...p, room_id: s.room.id });
+                if (err) throw new Error(err.message);
+                load();
+              }, t('Payment recorded.'))
+            }
+          />
+        )}
+
         <section aria-labelledby="rooms-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
           <h2 id="rooms-label" className="section-label" style={{ margin: 0 }}>
             {rows.length === 1 ? t('{n} room', { n: rows.length }) : t('{n} rooms', { n: rows.length })}
@@ -137,17 +241,24 @@ export function HomeScreen({ onOpen, onNew, onJoin }: Props) {
                 const title = s ? roomTitle(s.room) : knownRoomTitle(k);
                 const extras = s ? extrasText(s) : [];
                 return (
-                  <li key={k.roomId} style={{ borderTop: i ? '1px solid var(--divider)' : 'none' }}>
-                    <button
-                      type="button"
-                      className="press"
-                      onClick={() => onOpen(k.roomId)}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: 'none', background: 'none', color: 'var(--ink)', textAlign: 'left', minHeight: 72 }}
-                    >
+                  <RoomRow
+                    key={k.roomId}
+                    first={i === 0}
+                    title={title}
+                    onOpen={() => onOpen(k.roomId)}
+                    onActions={s ? () => setActionsFor(s) : undefined}
+                  >
                       <Avatar name={title} color={roomColor(k.code)} size={46} />
                       <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                          <span style={{ fontSize: 16, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1, minWidth: 0 }}>{title}</span>
+                          <span style={{ fontSize: 16, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1, minWidth: 0 }}>
+                            {pinned.includes(k.roomId) && (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label={t('Pinned')} style={{ marginRight: 5, color: 'var(--muted)', verticalAlign: '-1px' }}>
+                                <path d="M14 3l7 7-3 1-4 4 1 5-2 1-4-5-5 5-1-1 5-5-5-4 1-2 5 1 4-4z" />
+                              </svg>
+                            )}
+                            {title}
+                          </span>
                           <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>
                             {s ? (s.members.length === 1 ? t('{n} person', { n: 1 }) : t('{n} people', { n: s.members.length })) : k.code}
                           </span>
@@ -175,8 +286,7 @@ export function HomeScreen({ onOpen, onNew, onJoin }: Props) {
                       {s?.needsYou && (
                         <span aria-label={t('Needs you')} role="img" style={{ width: 12, height: 12, borderRadius: 999, background: 'var(--accent)', flexShrink: 0 }} />
                       )}
-                    </button>
-                  </li>
+                  </RoomRow>
                 );
               })}
             </ul>
@@ -196,6 +306,71 @@ export function HomeScreen({ onOpen, onNew, onJoin }: Props) {
           {t('One room for each group you eat with: classmates, office, family. Each room has its own turns, food list and bills.')}
         </p>
       </main>
+      {actionsFor && (
+        <RoomActionsSheet
+          summary={actionsFor}
+          pinned={pinned.includes(actionsFor.room.id)}
+          notified={notified ? notified.has(actionsFor.meId) : null}
+          onPin={() => togglePin(actionsFor.room.id)}
+          onNotify={(on) =>
+            guard(async () => {
+              if (on) await notifyRoom(actionsFor.meId);
+              else await disableReminders(actionsFor.meId);
+              setNotified(await notifiedMembers());
+            }, on ? t('Notifications on for {room}.', { room: roomTitle(actionsFor.room) }) : t('{room} muted on this phone.', { room: roomTitle(actionsFor.room) }))
+          }
+          onInvite={() =>
+            guard(async () => {
+              const msg = await shareInvite(actionsFor.room.code, actionsFor.room.name);
+              if (msg) onToast(msg);
+            })
+          }
+          onOut={(out) => guard(() => setOut(actionsFor, actionsFor.meal, out))}
+          onLeave={() =>
+            guard(async () => {
+              const s = actionsFor;
+              void disableReminders(s.meId).catch(() => {});
+              await leaveRoom(s.room.id);
+              togglePinOff(s.room.id);
+              const left = knownRooms();
+              if (!left.length) return onNoRooms();
+              setKnown(left);
+              setSummaries((cur) => cur?.filter((x) => x.room.id !== s.room.id) ?? null);
+            }, t('You left {room}.', { room: roomTitle(actionsFor.room) }))
+          }
+          onClose={() => setActionsFor(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/** A room in the list: tap to open, long-press or ⋯ for its actions. */
+function RoomRow({ first, title, onOpen, onActions, children }: { first: boolean; title: string; onOpen: () => void; onActions?: () => void; children: React.ReactNode }) {
+  const press = useLongPress(() => onActions?.());
+  return (
+    <li style={{ borderTop: first ? 'none' : '1px solid var(--divider)', display: 'flex', alignItems: 'stretch' }}>
+      <button
+        type="button"
+        className="press"
+        {...(onActions ? press.handlers : {})}
+        onClick={() => {
+          if (press.fired.current) return;
+          onOpen();
+        }}
+        style={{ flexGrow: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px 12px 16px', border: 'none', background: 'none', color: 'var(--ink)', textAlign: 'left', minHeight: 72, WebkitTouchCallout: 'none', userSelect: 'none' }}
+      >
+        {children}
+      </button>
+      {onActions && (
+        <button type="button" className="press" aria-label={t('More for {room}', { room: title })} onClick={onActions} style={{ width: 44, flexShrink: 0, border: 'none', background: 'none', color: 'var(--muted)' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="12" cy="19" r="1.8" />
+          </svg>
+        </button>
+      )}
+    </li>
   );
 }

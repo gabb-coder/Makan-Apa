@@ -132,3 +132,23 @@ export async function disableReminders(memberId?: string): Promise<void> {
   await supabase.rpc('unsubscribe_push', { p_endpoint: sub.endpoint, p_member_id: memberId ?? null });
   if (!memberId || (await subscribedMembers(sub.endpoint)).size === 0) await sub.unsubscribe();
 }
+
+/** The members (one per room) this phone gets notifications for, or null if it has none on. */
+export async function notifiedMembers(): Promise<Set<string> | null> {
+  if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  return sub ? subscribedMembers(sub.endpoint) : null;
+}
+
+/** Unmute one room: sign it up alongside the others, or turn notifications on from scratch. */
+export async function notifyRoom(memberId: string): Promise<void> {
+  const reg = pushSupport() === 'ok' && Notification.permission === 'granted' ? await navigator.serviceWorker.getRegistration() : undefined;
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return enableReminders(memberId, 11);
+  const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
+  const hour = ((data as { remind_hour: number }[] | null) ?? [])[0]?.remind_hour ?? 11;
+  const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };
+  const { error } = await supabase.rpc('subscribe_push', { p_member_id: memberId, p_endpoint: sub.endpoint, p_p256dh: keys.p256dh, p_auth: keys.auth, p_remind_hour: hour });
+  if (error) throw new Error(error.message);
+}
