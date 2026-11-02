@@ -9,9 +9,8 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   // Add a second room without leaving the first
   await people();
   await phone.click('button:text-is("Join or create another room")');
-  await expect(phone.getByText('Your rooms on this phone')).toBeVisible();
-  await expect(phone.locator('button.row', { hasText: 'Lunch gang' })).toBeVisible();
-  await phone.fill('#join-name', 'Wei');
+  // Your name carries over from your other room
+  await expect(phone.locator('#join-name')).toHaveValue('Wei');
   await phone.click('text=Create a new room');
   await phone.fill('#room-name', 'Housemates');
   await phone.click('button:text-is("Create room")');
@@ -24,8 +23,19 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   await phone.reload();
   await expect(phone.locator('header .eyebrow')).toContainText('Lunch gang');
 
-  // Deleting one room opens the other
-  await deleteRoom(phone, false);
+  // Home: every room, like a list of group chats; open one and come back
+  await phone.goto('/');
+  await expect(phone.getByRole('heading', { name: '2 rooms' })).toBeVisible();
+  await expect(phone.locator('main li', { hasText: 'Housemates' })).toContainText('Your turn to choose');
+  await phone.locator('main li button', { hasText: 'Housemates' }).click();
   await expect(phone.locator('header .eyebrow')).toContainText('Housemates');
+  await phone.click('button[aria-label="All rooms"]');
+  await expect(phone.locator('main li', { hasText: 'Lunch gang' })).toBeVisible();
+
+  // Deleting one room goes back home, with the other still there
+  await phone.locator('main li button', { hasText: 'Lunch gang' }).click();
+  await deleteRoom(phone, false);
+  await expect(phone.getByRole('heading', { name: '1 room' })).toBeVisible();
+  await phone.locator('main li button', { hasText: 'Housemates' }).click();
   await deleteRoom(phone);
 });

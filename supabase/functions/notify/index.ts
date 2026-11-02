@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
 
   // Each recipient's event (their share differs on a bill), plus where a tap goes.
   const recipients = new Map<string, Event>();
-  let url = '/#today';
+  // Tapping it opens this room (the home screen otherwise).
+  let url = `/?room=${roomId}#today`;
   let tag = `makan-${type}-${id}`;
 
   if (type === 'proposed' || type === 'decided') {
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
       if (mid === bill.paid_by || mid === actor || cents <= 0) continue;
       recipients.set(mid, { type: 'bill', payer: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents), food, share: formatRM(cents) });
     }
-    url = '/#bills';
+    url = `/?room=${roomId}#bills`;
     tag = `makan-bill-${id}`;
   } else if (type === 'tapau') {
     const { data } = await db.from('tapau_runs').select('id, runner_id, place, day_entry_id').eq('id', id).maybeSingle();

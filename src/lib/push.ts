@@ -1,5 +1,6 @@
 import { getLang, t } from './i18n';
 import { isIOS, isStandalone } from './install';
+import { knownRooms } from './session';
 import { supabase } from './supabase';
 
 export type PushSupport = 'ok' | 'needs-install' | 'unsupported';
@@ -32,8 +33,9 @@ export async function reminderStatus(memberId: string): Promise<{ hour: number; 
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return null;
   const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
-  const row = (data as { member_id: string; remind_hour: number; weekly_recap?: boolean; notify_events?: boolean }[] | null)?.[0];
-  return row && row.member_id === memberId ? { hour: row.remind_hour, recap: row.weekly_recap ?? true, events: row.notify_events ?? true } : null;
+  // One row per room this phone gets notifications for.
+  const row = (data as { member_id: string; remind_hour: number; weekly_recap?: boolean; notify_events?: boolean }[] | null)?.find((r) => r.member_id === memberId);
+  return row ? { hour: row.remind_hour, recap: row.weekly_recap ?? true, events: row.notify_events ?? true } : null;
 }
 
 /**
@@ -83,15 +85,50 @@ export async function enableReminders(memberId: string, hour: number): Promise<v
     p_remind_hour: hour,
   });
   if (error) throw new Error(error.message);
-  // Notifications come in the app's language.
+  // Notifications come in the app's language, and cover every room on this phone.
   await setPushPrefs(null).catch(() => {});
+  await followAllRooms(hour).catch(() => {});
 }
 
-/** Stop reminders on this browser. */
-export async function disableReminders(): Promise<void> {
+async function subscribedMembers(endpoint: string): Promise<Set<string>> {
+  const { data } = await supabase.rpc('push_status', { p_endpoint: endpoint });
+  return new Set(((data as { member_id: string }[] | null) ?? []).map((r) => r.member_id));
+}
+
+/** Sign up this phone's other rooms that don't have notifications yet. */
+async function followAllRooms(hour: number): Promise<void> {
   const reg = await navigator.serviceWorker?.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return;
-  await supabase.rpc('unsubscribe_push', { p_endpoint: sub.endpoint });
-  await sub.unsubscribe();
+  const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };
+  const have = await subscribedMembers(sub.endpoint);
+  for (const r of knownRooms()) {
+    if (have.has(r.memberId)) continue;
+    await supabase.rpc('subscribe_push', { p_member_id: r.memberId, p_endpoint: sub.endpoint, p_p256dh: keys.p256dh, p_auth: keys.auth, p_remind_hour: hour });
+  }
+}
+
+/** A room just joined on a phone that already has notifications: include it. */
+export async function followRoom(memberId: string): Promise<void> {
+  if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return;
+  const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
+  const rows = (data as { member_id: string; remind_hour: number }[] | null) ?? [];
+  if (!rows.length || rows.some((r) => r.member_id === memberId)) return;
+  const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };
+  await supabase.rpc('subscribe_push', { p_member_id: memberId, p_endpoint: sub.endpoint, p_p256dh: keys.p256dh, p_auth: keys.auth, p_remind_hour: rows[0].remind_hour });
+}
+
+/**
+ * Stop notifications for one room on this phone (or every room without a member). The browser
+ * subscription itself goes once no room uses it.
+ */
+export async function disableReminders(memberId?: string): Promise<void> {
+  const reg = await navigator.serviceWorker?.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return;
+  await supabase.rpc('unsubscribe_push', { p_endpoint: sub.endpoint, p_member_id: memberId ?? null });
+  if (!memberId || (await subscribedMembers(sub.endpoint)).size === 0) await sub.unsubscribe();
 }

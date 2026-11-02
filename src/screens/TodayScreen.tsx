@@ -56,6 +56,8 @@ interface Props {
   onSeeAll: () => void;
   onSwitchRoom: (roomId: string) => void;
   onAddRoom: () => void;
+  /** Back to the home screen with every room. */
+  onHome?: () => void;
   onToast: (message: string) => void;
   /** Ratings, bills and the room's own spots. */
   extras: RoomExtras;
@@ -70,7 +72,7 @@ interface Props {
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onToast, extras, attendance, away, meal, onMealChange }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onHome, onToast, extras, attendance, away, meal, onMealChange }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
@@ -313,12 +315,21 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     return { date, member: deciderFor(members, room.rotation_start, date, meal, attendance.awayOn(date, meal)) };
   });
 
+  const backHome = onHome && (
+    <button type="button" className="icon-btn press" aria-label={t('All rooms')} onClick={onHome} style={{ flexShrink: 0, alignSelf: 'center' }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+    </button>
+  );
+
   const recent = (entries ?? []).filter((e) => e.status === 'accepted' && e.entry_date < today).slice(0, 3);
 
   return (
     <main className="screen" style={{ gap: proposalView ? 20 : 18 }}>
       {proposalView ? (
         <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {backHome}
           <Avatar name={decider.name} color={decider.color} size={44} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -331,7 +342,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         </header>
       ) : (
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          {backHome}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flexGrow: 1 }}>
             <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
                 new Date(`${today}T00:00:00Z`),
