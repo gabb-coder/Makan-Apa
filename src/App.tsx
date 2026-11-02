@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { TabBar, type Tab } from './components/TabBar';
+import { TAB_ORDER, TabBar, type Tab } from './components/TabBar';
+import { useTabSwipe } from './lib/useTabSwipe';
 import { t } from './lib/i18n';
 import { disableReminders, followRoom } from './lib/push';
 import { HomeScreen } from './screens/HomeScreen';
@@ -309,6 +310,15 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
     setRoute(next);
   };
 
+  // Which way a new tab's screen slides in: from the right when it's further along the bar.
+  const tab: Tab = route === 'settings' ? 'today' : route;
+  const tabIndex = TAB_ORDER.indexOf(tab);
+  // Worked out while rendering, so the new screen mounts already knowing its side.
+  const tabEntry = useRef<{ index: number; from: 'left' | 'right' | null }>({ index: tabIndex, from: null });
+  if (tabEntry.current.index !== tabIndex) tabEntry.current = { index: tabIndex, from: tabIndex > tabEntry.current.index ? 'right' : 'left' };
+  const enterFrom = tabEntry.current.from;
+  const swipe = useTabSwipe(tabIndex, TAB_ORDER.length, (to) => go(TAB_ORDER[to]), route !== 'settings');
+
   // Today's decider and what the wheel may do about it.
   const memberById = new Map(members.map((m) => [m.id, m]));
   const entry = days.todayEntry;
@@ -370,6 +380,17 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
             : t("You're offline. Changes from others will appear when you're back.")}
         </div>
       )}
+      <div className="tab-stage" {...swipe.handlers}>
+      {/* The finger moves this layer; the keyed one inside slides in when the tab changes. */}
+      <div
+        className="tab-pane"
+        style={{
+          transform: swipe.dragX ? `translateX(${swipe.dragX}px)` : undefined,
+          opacity: swipe.dragX ? 1 - Math.min(0.45, Math.abs(swipe.dragFraction) * 0.6) : undefined,
+          transition: swipe.settling ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s' : 'none',
+        }}
+      >
+      <div key={route} className={`tab-pane${enterFrom ? ` tab-in-${enterFrom}` : ''}`}>
       <Suspense fallback={loading}>
       {route === 'today' &&
         (foods && notVetoed ? (
@@ -473,7 +494,10 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
         ))}
 
       </Suspense>
-      <TabBar active={route === 'settings' ? 'today' : route} onChange={go} />
+      </div>
+      </div>
+      </div>
+      <TabBar active={tab} onChange={go} dragFraction={swipe.dragFraction} />
     </div>
   );
 }
