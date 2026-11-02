@@ -50,6 +50,15 @@ test("who's in, and a tapau run that becomes the bill", async ({ browser }) => {
     await expect(wei.getByTestId('bill-total')).toHaveText('RM13.00');
     await wei.click('.sheet button:text-is("Save bill")');
     await expect(wei.getByText('You paid RM13.00 · split 2 ways · Edit')).toBeVisible();
+
+    // Alex pays back from the home screen's money card
+    await alex.goto('/');
+    const money = alex.locator('section[aria-labelledby="money-label"]');
+    await expect(money).toContainText('You owe RM8.00');
+    await money.locator('button[aria-expanded]').click();
+    await expect(money).toContainText('You owe Wei RM8.00');
+    await money.locator('button:text-is("Mark paid")').click();
+    await expect(money).toBeHidden();
   } finally {
     await deleteRoom(wei);
   }

@@ -166,6 +166,8 @@ export default function App() {
         onOpen={openRoomFromHome}
         onNew={() => setState({ status: 'join', creating: true })}
         onJoin={() => setState({ status: 'join' })}
+        onToast={setToast}
+        onNoRooms={() => setState({ status: 'join' })}
       />
     );
   } else if (state.status === 'join') {

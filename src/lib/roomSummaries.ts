@@ -1,8 +1,17 @@
 import { localHour, todayIn } from './dates';
-import { balances } from './money';
+import { balances, settleUp, type Payment } from './money';
 import { deciderFor } from './rotation';
 import { ensureSignedIn, forgetSession, knownRooms, openRoom, type KnownRoom } from './session';
 import { supabase, type DayEntryRow, type Meal, type MealBillRow, type MemberRow, type RoomRow, type SettlementRow } from './supabase';
+
+export type MealStatus =
+  | { kind: 'your-turn' }
+  | { kind: 'choosing'; decider: string }
+  | { kind: 'sent'; food: string }
+  | { kind: 'answer'; decider: string; food: string }
+  | { kind: 'decided'; food: string }
+  | { kind: 'secret'; picked: number; total: number; mine: boolean }
+  | { kind: 'out' };
 
 /** What the home screen shows for one room: like a chat list's last message. */
 export interface RoomSummary {
@@ -10,16 +19,16 @@ export interface RoomSummary {
   room: RoomRow;
   members: MemberRow[];
   meId: string;
+  /** Today in the room's timezone. */
+  date: string;
+  /** The meal that's on now (dinner from 3pm in rooms that decide both). */
   meal: Meal;
   /** What's happening now, from this person's point of view. */
-  status:
-    | { kind: 'your-turn' }
-    | { kind: 'choosing'; decider: string }
-    | { kind: 'sent'; food: string }
-    | { kind: 'answer'; decider: string; food: string }
-    | { kind: 'decided'; food: string }
-    | { kind: 'secret'; picked: number; total: number; mine: boolean }
-    | { kind: 'out' };
+  status: MealStatus;
+  /** Every meal the room decides today: lunch, and dinner in rooms that decide both. */
+  meals: { meal: Meal; status: MealStatus }[];
+  /** The payments that would settle up, where you pay or get paid. */
+  debts: Payment[];
   /** A tapau run that's open for orders, and who's buying. */
   tapau: { runner: string; mine: boolean } | null;
   /** Your balance in sen: negative means you owe. */
@@ -57,33 +66,37 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
     const name = (id: string | null) => (id && members.find((m) => m.id === id)?.name) || '?';
     const date = today(room);
     const meal = mealNow(room);
-    const away = new Set(b.attendance.filter((a) => a.room_id === room.id && a.entry_date === date && a.meal === meal && a.status === 'out').map((a) => a.member_id));
-    const present = members.filter((m) => !away.has(m.id));
-    const entry = b.entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === meal) ?? null;
-    const food = entry ? (entry.food_option_id && foodName.get(entry.food_option_id)) || entry.custom_food || '' : '';
 
-    let status: RoomSummary['status'];
-    if (entry?.status === 'accepted') status = { kind: 'decided', food };
-    else if (away.has(meId)) status = { kind: 'out' };
-    else if (room.decision_mode === 'secret') {
-      const picked = new Set(b.picks.filter((p) => p.day_entry_id === entry?.id).map((p) => p.member_id));
-      status = { kind: 'secret', picked: present.filter((m) => picked.has(m.id)).length, total: present.length, mine: picked.has(meId) };
-    } else {
-      const decider = entry?.decider_id ?? deciderFor(members, room.rotation_start, date, meal, away)?.id ?? null;
-      if (entry?.status === 'proposed') status = decider === meId ? { kind: 'sent', food } : { kind: 'answer', decider: name(decider), food };
-      else status = decider === meId ? { kind: 'your-turn' } : { kind: 'choosing', decider: name(decider) };
-    }
+    const statusFor = (m: Meal): { status: MealStatus; entry: DayEntryRow | null } => {
+      const away = new Set(b.attendance.filter((a) => a.room_id === room.id && a.entry_date === date && a.meal === m && a.status === 'out').map((a) => a.member_id));
+      const present = members.filter((x) => !away.has(x.id));
+      const entry = b.entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === m) ?? null;
+      const food = entry ? (entry.food_option_id && foodName.get(entry.food_option_id)) || entry.custom_food || '' : '';
+      if (entry?.status === 'accepted') return { entry, status: away.has(meId) ? { kind: 'out' } : { kind: 'decided', food } };
+      if (away.has(meId)) return { entry, status: { kind: 'out' } };
+      if (room.decision_mode === 'secret') {
+        const picked = new Set(b.picks.filter((p) => p.day_entry_id === entry?.id).map((p) => p.member_id));
+        return { entry, status: { kind: 'secret', picked: present.filter((x) => picked.has(x.id)).length, total: present.length, mine: picked.has(meId) } };
+      }
+      const decider = entry?.decider_id ?? deciderFor(members, room.rotation_start, date, m, away)?.id ?? null;
+      if (entry?.status === 'proposed') return { entry, status: decider === meId ? { kind: 'sent', food } : { kind: 'answer', decider: name(decider), food } };
+      return { entry, status: decider === meId ? { kind: 'your-turn' } : { kind: 'choosing', decider: name(decider) } };
+    };
+    const meals = (room.meals === 'both' ? (['lunch', 'dinner'] as const) : (['lunch'] as const)).map((m) => ({ meal: m, ...statusFor(m) }));
+    const now = meals.find((x) => x.meal === meal) ?? meals[0];
+    const { status, entry } = now;
 
     const run = entry && b.runs.find((r) => r.day_entry_id === entry.id && r.status === 'open');
-    const balance =
-      balances(
-        b.bills.filter((x) => x.room_id === room.id),
-        b.settlements.filter((x) => x.room_id === room.id),
-      ).get(meId) ?? 0;
+    const net = balances(
+      b.bills.filter((x) => x.room_id === room.id),
+      b.settlements.filter((x) => x.room_id === room.id),
+    );
+    const balance = net.get(meId) ?? 0;
+    const debts = settleUp(net).filter((p) => p.from_member === meId || p.to_member === meId);
 
     const needsYou =
       status.kind === 'your-turn' || status.kind === 'answer' || (status.kind === 'secret' && !status.mine) || balance < 0 || (!!run && run.runner_id !== meId);
-    out.push({ known: k, room, members, meId, meal, status, tapau: run ? { runner: name(run.runner_id), mine: run.runner_id === meId } : null, balance, needsYou });
+    out.push({ known: k, room, members, meId, date, meal, status, meals: meals.map((x) => ({ meal: x.meal, status: x.status })), debts, tapau: run ? { runner: name(run.runner_id), mine: run.runner_id === meId } : null, balance, needsYou });
   }
   return out;
 }

@@ -40,4 +40,14 @@ describe('room summaries', () => {
     const s = summarize([known('lunch', 'alex')], { ...empty, rooms, members, entries: [], attendance }, today);
     expect(s[0].status).toEqual({ kind: 'your-turn' });
   });
+
+  it('covers both meals in rooms that decide dinner too, and lists who owes whom', () => {
+    const both = [room('lunch', { meals: 'both' }), room('family')];
+    const entries = [{ id: 'd1', room_id: 'lunch', entry_date: '2026-11-02', meal: 'dinner', decider_id: 'alex', status: 'accepted', custom_food: 'Ramen', food_option_id: null }] as DayEntryRow[];
+    const bills = [{ day_entry_id: 'd1', room_id: 'lunch', paid_by: 'alex', amount_cents: 3000, split_between: ['alex', 'wei'], updated_at: '' }];
+    const s = summarize([known('lunch', 'wei')], { ...empty, rooms: both, members, entries, bills }, today);
+    expect(s[0].meals.map((m) => m.meal)).toEqual(['lunch', 'dinner']);
+    expect(s[0].meals[1].status).toEqual({ kind: 'decided', food: 'Ramen' });
+    expect(s[0].debts).toEqual([{ from_member: 'wei', to_member: 'alex', amount_cents: 1500 }]);
+  });
 });

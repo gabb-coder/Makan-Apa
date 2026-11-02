@@ -32,6 +32,19 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   await phone.click('button[aria-label="All rooms"]');
   await expect(phone.locator('main li', { hasText: 'Lunch gang' })).toBeVisible();
 
+  // Today: down for lunch in both rooms, so skip one
+  const today = phone.locator('section[aria-labelledby="today-label"]');
+  await expect(today).toContainText('in 2 rooms');
+  await today.locator('button[aria-label="Skip Lunch in Lunch gang"]').click();
+  await expect(phone.locator('main li', { hasText: 'Lunch gang' })).toContainText('You’re out today');
+  await expect(today).not.toContainText('in 2 rooms');
+
+  // ⋯ on a room: pin it to the top
+  await phone.click('button[aria-label="More for Lunch gang"]');
+  await phone.click('.sheet button:text-is("Pin to top")');
+  await expect(phone.locator('main li').first()).toContainText('Lunch gang');
+  await expect(phone.locator('main li').first().getByRole('img', { name: 'Pinned' })).toBeVisible();
+
   // Deleting one room goes back home, with the other still there
   await phone.locator('main li button', { hasText: 'Lunch gang' }).click();
   await deleteRoom(phone, false);
