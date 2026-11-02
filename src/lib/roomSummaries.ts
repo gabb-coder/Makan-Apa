@@ -18,6 +18,8 @@ export interface RoomSummary {
   known: KnownRoom;
   room: RoomRow;
   members: MemberRow[];
+  /** Everyone who's been in the room, people who left included, for names on old bills. */
+  everyone: MemberRow[];
   meId: string;
   /** Today in the room's timezone. */
   date: string;
@@ -61,9 +63,10 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
   for (const k of known) {
     const room = b.rooms.find((r) => r.id === k.roomId);
     if (!room) continue;
-    const members = b.members.filter((m) => m.room_id === room.id).sort((x, y) => x.sort_order - y.sort_order || x.created_at.localeCompare(y.created_at));
+    const everyone = b.members.filter((m) => m.room_id === room.id);
+    const members = everyone.filter((m) => !m.left_at || m.id === k.memberId).sort((x, y) => x.sort_order - y.sort_order || x.created_at.localeCompare(y.created_at));
     const meId = k.memberId;
-    const name = (id: string | null) => (id && members.find((m) => m.id === id)?.name) || '?';
+    const name = (id: string | null) => (id && everyone.find((m) => m.id === id)?.name) || '?';
     const date = today(room);
     const meal = mealNow(room);
 
@@ -96,7 +99,7 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
 
     const needsYou =
       status.kind === 'your-turn' || status.kind === 'answer' || (status.kind === 'secret' && !status.mine) || balance < 0 || (!!run && run.runner_id !== meId);
-    out.push({ known: k, room, members, meId, date, meal, status, meals: meals.map((x) => ({ meal: x.meal, status: x.status })), debts, tapau: run ? { runner: name(run.runner_id), mine: run.runner_id === meId } : null, balance, needsYou });
+    out.push({ known: k, room, members, everyone, meId, date, meal, status, meals: meals.map((x) => ({ meal: x.meal, status: x.status })), debts, tapau: run ? { runner: name(run.runner_id), mine: run.runner_id === meId } : null, balance, needsYou });
   }
   return out;
 }

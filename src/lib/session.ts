@@ -265,7 +265,8 @@ export async function createRoom(rawName: string, roomName = ''): Promise<Sessio
  * remove people or delete the room (enforced by the database's row-level security).
  */
 export function hostOf(members: MemberRow[]): MemberRow | null {
-  return members.reduce<MemberRow | null>(
+  // Someone who left can't be host: it passes to the next longest-standing member.
+  return members.filter((m) => !m.left_at).reduce<MemberRow | null>(
     (first, m) => (!first || m.created_at < first.created_at || (m.created_at === first.created_at && m.id < first.id) ? m : first),
     null,
   );

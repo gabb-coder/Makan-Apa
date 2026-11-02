@@ -4,6 +4,8 @@ import { useTabSwipe } from './lib/useTabSwipe';
 import { t } from './lib/i18n';
 import { disableReminders, followRoom } from './lib/push';
 import { HomeScreen } from './screens/HomeScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
+import { carryProfile } from './lib/profile';
 import { closeCurrentRoom, currentRoomId, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
@@ -53,6 +55,7 @@ type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'home' }
+  | { status: 'profile' }
   | { status: 'join'; notice?: string; creating?: boolean }
   | { status: 'ready'; session: Session };
 
@@ -200,8 +203,11 @@ export default function App() {
         onJoin={() => setState({ status: 'join' })}
         onToast={setToast}
         onNoRooms={() => setState({ status: 'join' })}
+        onProfile={() => setState({ status: 'profile' })}
       />
     );
+  } else if (state.status === 'profile') {
+    body = <ProfileScreen onBack={() => setState({ status: 'home' })} onToast={setToast} />;
   } else if (state.status === 'join') {
     body = (
       <JoinScreen
@@ -219,8 +225,10 @@ export default function App() {
           window.history.replaceState(null, '', `${window.location.pathname}#today`);
           setState({ status: 'ready', session });
           if (message) setToast(message);
-          // Phones with notifications on get them for the new room too.
+          // Phones with notifications on get them for the new room too, and your food needs and
+          // DuitNow come along from your other rooms.
           void followRoom(session.me.id).catch(() => {});
+          void carryProfile(session.me.id).catch(() => {});
         }}
       />
     );
@@ -238,13 +246,9 @@ export default function App() {
           setState(knownRooms().length ? { status: 'home' } : { status: 'join' });
         }}
         onHome={goHome}
-        onSwitchRoom={(roomId) => {
-          if (selectRoom(roomId)) restore();
-        }}
-        onAddRoom={() => {
-          generation.current++;
-          closeCurrentRoom();
-          setState({ status: 'join', creating: false });
+        onProfile={() => {
+          goHome();
+          setState({ status: 'profile' });
         }}
       />
     );
@@ -301,17 +305,19 @@ interface RoomAppProps {
   session: Session;
   onToast: (m: string) => void;
   onLeave: () => void;
-  onSwitchRoom: (roomId: string) => void;
-  onAddRoom: () => void;
   /** Back to the home screen with every room. */
   onHome: () => void;
+  /** The main menu's You & this phone page. */
+  onProfile: () => void;
 }
 
-function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }: RoomAppProps) {
+function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps) {
   const [route, setRoute] = useState<Route>(routeFromHash);
-  const { room, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom } = useRoomData(session.room, session.members, session.me.id);
-  const me = members.find((m) => m.id === session.me.id) ?? session.me;
-  const removed = !members.some((m) => m.id === session.me.id);
+  const { room, members: everyone, updateRoom, updateMember, moveMember, removeMember, deleteRoom } = useRoomData(session.room, session.members, session.me.id);
+  // People who left stay in the room's history and money, but not in its turns, Who's in or new bills.
+  const members = everyone.filter((m) => !m.left_at || m.id === session.me.id);
+  const me = everyone.find((m) => m.id === session.me.id) ?? session.me;
+  const removed = !everyone.some((m) => m.id === session.me.id);
 
   // Someone removed this phone's member from the room.
   useEffect(() => {
@@ -441,8 +447,6 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
             onOpenSettings={() => go('settings')}
             onSpin={() => go('wheel')}
             onSeeAll={() => go('history')}
-            onSwitchRoom={onSwitchRoom}
-            onAddRoom={onAddRoom}
             onHome={onHome}
             extras={extras}
             attendance={attendance}
@@ -476,6 +480,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
             onLeave();
           }}
           onToast={onToast}
+          onOpenProfile={onProfile}
         />
       )}
       {route === 'wheel' &&
@@ -500,7 +505,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
             attendance={attendance}
             room={room}
             me={me}
-            members={members}
+            members={everyone}
             entries={days.entries}
             foods={foods}
             extras={extras}
@@ -515,7 +520,7 @@ function RoomApp({ session, onToast, onLeave, onSwitchRoom, onAddRoom, onHome }:
           <HistoryScreen
             room={room}
             me={me}
-            members={members}
+            members={everyone}
             today={today}
             entries={days.entries}
             vetoes={days.vetoes}

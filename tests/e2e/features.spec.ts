@@ -18,9 +18,13 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
     await wei.click('button:text-is("Save changes")');
     const alex = await newPhone(browser);
     await joinRoom(alex, code, 'Alex');
-    await alex.goto('/#settings');
+    // Food needs live on the main menu's You page and apply to every room
+    await alex.goto('/');
+    await alex.click('button:text-is("You")');
     await alex.click('button.chip:text-is("Halal")');
     await expect(alex.locator('button.chip:text-is("Halal")')).toHaveAttribute('aria-pressed', 'true');
+    await alex.click('button[aria-label="Your rooms"]');
+    await alex.locator('main li button').first().click();
     await wei.click('nav >> text=Today');
     await wei.click('text=Pick from list');
     await expect(wei.locator('.sheet button.row', { hasText: 'Pizza' })).toContainText('Not for Alex (halal)');

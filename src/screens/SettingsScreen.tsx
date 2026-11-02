@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, HostBadge } from '../components/Avatar';
-import { isIOS, isStandalone, useInstallPrompt } from '../lib/install';
 import { shareInvite } from '../lib/invite';
-import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
-import { getLang, LANGS, locale, setLang, t, tk, tNodes, useLang } from '../lib/i18n';
-import { turnOffLocation, turnOnLocation, useLocation } from '../lib/location';
-import { NEARBY_LABEL } from '../lib/nearby';
-import { nearbyPref, soundPref, themePref, usePref, type ThemePref } from '../lib/prefs';
-import { disableReminders, enableReminders, pushSupport, reminderStatus, setPushPrefs, setWeeklyRecap } from '../lib/push';
+import { t, tk } from '../lib/i18n';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
@@ -24,6 +18,8 @@ interface Props {
   onBack: () => void;
   onLeave: () => void;
   onToast: (message: string) => void;
+  /** The main menu's You & this phone page. */
+  onOpenProfile?: () => void;
 }
 
 const VETO_MAX = 3;
@@ -40,7 +36,7 @@ function timeZones(current: string): string[] {
 
 const cardStyle = { padding: 16, display: 'flex', flexDirection: 'column', gap: 14 } as const;
 
-export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom, onBack, onLeave, onToast }: Props) {
+export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom, onBack, onLeave, onToast, onOpenProfile }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -63,13 +59,6 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
     if (next !== (room.name ?? null)) attempt(() => updateRoom({ name: next }), next ? t('Room renamed.') : t('Room name removed.'));
   };
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
-  const theme = usePref(themePref);
-  const lang = useLang();
-  const sound = usePref(soundPref);
-  const nearby = usePref(nearbyPref);
-  const location = useLocation();
-  const install = useInstallPrompt();
-  const installed = isStandalone();
 
   const attempt = async (fn: () => Promise<void>, ok?: string) => {
     try {
@@ -348,41 +337,6 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         />
       </section>
 
-      <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.12s' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="section-label">{t('Your food needs')}</span>
-          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {t("Foods that clash with anyone in the room stay off the wheel, and nearby ideas skip places that don't fit.")}
-          </span>
-        </div>
-        <div className="chip-row" role="group" aria-label={t('Diet')} style={{ flexWrap: 'wrap' }}>
-          {MEMBER_NEEDS.map((n) => {
-            const myDiet = me.diet ?? [];
-            const on = myDiet.includes(n.key);
-            return (
-              <button
-                key={n.key}
-                type="button"
-                className="chip press"
-                aria-pressed={on}
-                onClick={() => attempt(() => updateMember(me.id, { diet: on ? myDiet.filter((d) => d !== n.key) : [...myDiet, n.key] }))}
-              >
-                {t(n.label)}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Budget per meal')}</span>
-          <div className="segmented" role="group" aria-labelledby="budget-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-            {BUDGETS.map((b) => (
-              <button key={b.label} type="button" aria-pressed={me.budget === b.value} onClick={() => me.budget !== b.value && attempt(() => updateMember(me.id, { budget: b.value }))}>
-                {t(b.label)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
         <span className="section-label">{t('Rules')}</span>
@@ -466,6 +420,9 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           </div>
         </div>
 
+        <details className="advanced">
+          <summary style={{ minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>{t('Advanced')}</summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 6 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label htmlFor="rotation-start" className="field-label">{t('Rotation start date')}</label>
           <input
@@ -493,131 +450,19 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           </select>
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Decides when “today” starts for the rotation.')}</span>
         </div>
+          </div>
+        </details>
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.24s' }}>
-        <span className="section-label">{t('This phone')}</span>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="language-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Language')}</span>
-          <div className="segmented" role="group" aria-labelledby="language-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-            {LANGS.map((l) => (
-              <button key={l.key} type="button" lang={l.key === 'zh' ? 'zh-Hans' : l.key} aria-pressed={lang === l.key} onClick={() => {
-                setLang(l.key);
-                void setPushPrefs(null, l.key).catch(() => {});
-              }} style={{ fontSize: 13 }}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="appearance-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Appearance')}</span>
-          <div className="segmented" role="group" aria-labelledby="appearance-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-            {(
-              [
-                ['system', tk('System')],
-                ['light', tk('Light')],
-                ['dark', tk('Dark')],
-              ] as [ThemePref, string][]
-            ).map(([value, label]) => (
-              <button key={value} type="button" aria-pressed={theme === value} onClick={() => themePref.set(value)}>
-                {t(label)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Wheel sounds')}</span>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('A tick per slice and a chime on landing')}</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={sound === 'on'}
-            onChange={(e) => soundPref.set(e.target.checked ? 'on' : 'off')}
-            className="switch"
-          />
-        </label>
-
-        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Food ideas near {place}', { place: NEARBY_LABEL })}</span>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Places around Bandar Sunway on Today and with each result')}</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            className="switch"
-            checked={nearby === 'on'}
-            onChange={(e) => nearbyPref.set(e.target.checked ? 'on' : 'off')}
-          />
-        </label>
-
-        {nearby === 'on' && (
-          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Use my location')}</span>
-              <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-                {location.status === 'denied'
-                  ? t('Blocked by your browser. Allow location for this site in your phone settings, then turn this on.')
-                  : location.status === 'unavailable'
-                    ? t("Couldn't get your location. Turn it off and on to try again.")
-                    : t('Show the closest places first, and search near you when you’re away from Sunway. Stays on this phone; never shared with the room.')}
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              className="switch"
-              checked={location.status !== 'off' && location.status !== 'denied'}
-              onChange={(e) => (e.target.checked ? void turnOnLocation() : turnOffLocation())}
-            />
-          </label>
-        )}
-
-        <ReminderSetting room={room} me={me} onToast={onToast} />
-
-        {!installed && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4, borderTop: '1px solid var(--divider)' }}>
-            <span style={{ fontSize: 15, fontWeight: 700, paddingTop: 10 }}>{t('Add to Home Screen')}</span>
-            {install.available ? (
-              <>
-                <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{t('Open Makan apa? like an app, full screen.')}</span>
-                <button
-                  type="button"
-                  className="btn btn--primary press"
-                  onClick={async () => {
-                    if (await install.prompt()) onToast(t('Added. Look for Makan apa? on your home screen.'));
-                  }}
-                >
-                  {t('Install app')}
-                </button>
-              </>
-            ) : isIOS() ? (
-              <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-                {tNodes('In Safari, tap {icon} Share, then {add}.', {
-                  icon: (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label={t('Share')} style={{ verticalAlign: '-2px' }}>
-                      <path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" />
-                      <path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
-                    </svg>
-                  ),
-                  add: <strong style={{ color: 'var(--ink)' }}>{t('Add to Home Screen')}</strong>,
-                })}
-              </span>
-            ) : (
-              <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-                {tNodes('Open your browser menu and choose {install} or {add}.', {
-                  install: <strong style={{ color: 'var(--ink)' }}>{t('Install app')}</strong>,
-                  add: <strong style={{ color: 'var(--ink)' }}>{t('Add to Home screen')}</strong>,
-                })}
-              </span>
-            )}
-          </div>
+        <span className="section-label">{t('You & this phone')}</span>
+        <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+          {t('Your food needs, DuitNow, language, notifications and more are set once for all your rooms.')}
+        </span>
+        {onOpenProfile && (
+          <button type="button" className="btn btn--secondary press" onClick={onOpenProfile} style={{ height: 44 }}>
+            {t('Open You & this phone')}
+          </button>
         )}
       </section>
 
@@ -628,10 +473,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           data-armed={confirmLeave}
           onClick={() => (confirmLeave ? onLeave() : setConfirmLeave(true))}
         >
-          {confirmLeave ? t('Tap again to leave this room') : t('Leave room on this phone')}
+          {confirmLeave ? t('Tap again to leave this room') : t('Leave room')}
         </button>
         <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-          {t('You stay in the rotation. Rejoin any time with code {code} and the same name.', { code: room.code })}
+          {t('You’re taken out of the turns and Who’s in. Your old meals and bills stay. Rejoin any time with code {code} and the same name.', { code: room.code })}
         </p>
         {iAmHost && (
           <>
@@ -653,8 +498,6 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
     </main>
   );
 }
-
-const REMINDER_HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6am to 10pm
 
 /** Your PIN: needed to continue as you on another phone, so the room code alone isn't enough. */
 function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; me: MemberRow; hasPin: boolean | null; onSaved: () => Promise<void>; onToast: (m: string) => void }) {
@@ -726,166 +569,6 @@ function PinSetting({ roomId, me, hasPin, onSaved, onToast }: { roomId: string; 
             </button>
           )}
         </form>
-      )}
-    </div>
-  );
-}
-
-function hourLabel(h: number): string {
-  // English keeps "11:00 am"; Malay and Chinese use their own clock style.
-  if (getLang() !== 'en') return new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(Date.UTC(2000, 0, 1, h));
-  const suffix = h < 12 ? 'am' : 'pm';
-  return `${h % 12 === 0 ? 12 : h % 12}:00 ${suffix}`;
-}
-
-/** Daily push reminder for this phone (sent by the send-reminders Edge Function). */
-function ReminderSetting({ room, me, onToast }: { room: RoomRow; me: MemberRow; onToast: (m: string) => void }) {
-  const support = pushSupport();
-  const [status, setStatus] = useState<{ hour: number; recap?: boolean; events?: boolean } | null | 'loading'>('loading');
-  const [hour, setHour] = useState(11);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    reminderStatus(me.id).then(
-      (s) => {
-        if (!live) return;
-        setStatus(s);
-        if (s) setHour(s.hour);
-      },
-      () => live && setStatus(null),
-    );
-    return () => {
-      live = false;
-    };
-  }, [me.id]);
-
-  const on = status !== 'loading' && status !== null;
-
-  const run = async (fn: () => Promise<void>, ok: string) => {
-    setBusy(true);
-    try {
-      await fn();
-      onToast(ok);
-    } catch (e) {
-      onToast(e instanceof Error ? e.message : t('Could not change reminders.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggle = (next: boolean) =>
-    run(
-      async () => {
-        if (next) {
-          await enableReminders(me.id, hour);
-          setStatus({ hour, recap: true, events: true });
-        } else {
-          await disableReminders(me.id);
-          setStatus(null);
-        }
-      },
-      next ? t("Reminders on. We'll nudge you at {time}.", { time: hourLabel(hour) }) : t('Reminders off on this phone.'),
-    );
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: support === 'ok' ? 'pointer' : 'default' }}>
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Notifications')}</span>
-          <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>
-            {support === 'ok'
-              ? `${room.decision_mode === 'secret' ? t('A notification to make your secret pick, if it’s not decided yet.') : t('A notification when it’s your turn to choose, if it’s not decided yet.')} ${t('Plus alerts when things happen.')}`
-              : support === 'needs-install'
-                ? t('On iPhone, add Makan apa? to your Home Screen first (below), then turn this on from there.')
-                : t('This browser can’t show notifications.')}
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          role="switch"
-          className="switch"
-          checked={on}
-          disabled={support !== 'ok' || busy || status === 'loading'}
-          onChange={(e) => toggle(e.target.checked)}
-        />
-      </label>
-      {on && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <label htmlFor="reminder-hour" style={{ fontSize: 14, fontWeight: 600 }}>
-            {t('Remind me at')}
-          </label>
-          <select
-            id="reminder-hour"
-            className="input"
-            value={hour}
-            disabled={busy}
-            onChange={(e) => {
-              const h = Number(e.target.value);
-              setHour(h);
-              run(async () => {
-                await enableReminders(me.id, h);
-                setStatus((s) => ({ ...(s !== 'loading' && s ? s : {}), hour: h }));
-              }, t('Reminder moved to {time}.', { time: hourLabel(h) }));
-            }}
-            style={{ width: 'auto', height: 44 }}
-          >
-            {REMINDER_HOURS.map((h) => (
-              <option key={h} value={h}>
-                {hourLabel(h)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      {on && typeof status === 'object' && status && (
-        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{t('Weekly recap')}</span>
-            <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>{t("Sunday at 8pm: the week's meals, favourite, vetoes and who paid most.")}</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            className="switch"
-            checked={status.recap !== false}
-            disabled={busy}
-            onChange={(e) => {
-              const next = e.target.checked;
-              run(async () => {
-                await setWeeklyRecap(next);
-                setStatus({ ...status, recap: next });
-              }, next ? t('Weekly recap on.') : t('Weekly recap off.'));
-            }}
-          />
-        </label>
-      )}
-      {on && typeof status === 'object' && status && (
-        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{t('Alerts when things happen')}</span>
-            <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--muted)' }}>
-              {t('A pick to answer, the meal decided, a bill with your share, a tapau run, and a nudge every few days if you owe someone.')}
-            </span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            className="switch"
-            checked={status.events !== false}
-            disabled={busy}
-            onChange={(e) => {
-              const next = e.target.checked;
-              run(async () => {
-                await setPushPrefs(next);
-                setStatus({ ...status, events: next });
-              }, next ? t('Alerts on.') : t('Alerts off.'));
-            }}
-          />
-        </label>
-      )}
-      {on && (
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('Times are in the room’s timezone ({zone}).', { zone: room.timezone.replace(/_/g, ' ') })}</span>
       )}
     </div>
   );

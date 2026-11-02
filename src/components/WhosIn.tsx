@@ -83,6 +83,7 @@ export function WhosInCard({
         <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.4 }}>
           {summary.length ? summary.join(' · ') : t("Everyone's in so far.")}
           {mine === 'out' && ` ${t("You won't be the decider or on the bill.")}`}
+          {mine === 'late' && ` ${t('Late still counts as in: you can decide and you’re on the bill.')}`}
         </span>
       </div>
     </section>

@@ -107,7 +107,7 @@ export function MoneyCard({
   }, [owe.length, owed.length]);
   if (!owe.length && !owed.length) return null;
   const rooms = new Set([...owe, ...owed].map((x) => x.s.room.id)).size;
-  const who = (s: RoomSummary, id: string) => s.members.find((m) => m.id === id);
+  const who = (s: RoomSummary, id: string) => s.everyone.find((m) => m.id === id);
 
   const copy = async (text: string) => {
     try {

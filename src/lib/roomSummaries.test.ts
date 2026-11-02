@@ -50,4 +50,12 @@ describe('room summaries', () => {
     expect(s[0].meals[1].status).toEqual({ kind: 'decided', food: 'Ramen' });
     expect(s[0].debts).toEqual([{ from_member: 'wei', to_member: 'alex', amount_cents: 1500 }]);
   });
+
+  it('skips people who left: not decider, not counted', () => {
+    const left = members.map((m) => (m.id === 'wei' ? { ...m, left_at: '2026-11-01T00:00:00Z' } : m));
+    const s = summarize([known('lunch', 'alex')], { ...empty, rooms, members: left, entries: [] }, today);
+    expect(s[0].status).toEqual({ kind: 'your-turn' });
+    expect(s[0].members.map((m) => m.id)).toEqual(['alex']);
+    expect(s[0].everyone.map((m) => m.id)).toContain('wei');
+  });
 });

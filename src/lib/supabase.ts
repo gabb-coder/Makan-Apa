@@ -51,6 +51,8 @@ export interface MemberRow {
   /** How to pay them back: a DuitNow phone or ID, and/or a bank account. Only they can set it. */
   pay_duitnow?: string | null;
   pay_bank?: string | null;
+  /** Set when they left the room: kept for its history and money, out of turns and new bills. */
+  left_at?: string | null;
   created_at: string;
 }
 

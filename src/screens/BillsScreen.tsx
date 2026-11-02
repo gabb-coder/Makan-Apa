@@ -7,6 +7,7 @@ import { dayMonthLabel } from '../lib/rotation';
 import { roomTitle } from '../lib/session';
 import type { DayEntryRow, MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch } from '../lib/useRoomData';
+import { updateEverywhere } from '../lib/profile';
 import type { RoomExtras } from '../lib/useRoomExtras';
 import type { AttendanceApi } from '../lib/useAttendance';
 
@@ -136,8 +137,10 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
           key={`${me.pay_duitnow}|${me.pay_bank}`}
           me={me}
           onSave={async (patch) => {
+            // The same DuitNow for every room you're in.
+            await updateEverywhere(patch);
             await updateMember(me.id, patch);
-            onToast(t('Payment details saved.'));
+            onToast(t('Payment details saved in all your rooms.'));
           }}
         />
       </section>
