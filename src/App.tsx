@@ -6,6 +6,7 @@ import { disableReminders, followRoom } from './lib/push';
 import { HomeScreen } from './screens/HomeScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { carryProfile } from './lib/profile';
+import { markSeen } from './lib/seen';
 import { closeCurrentRoom, currentRoomId, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
@@ -409,6 +410,11 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   );
 
   useEffect(preloadScreens, []);
+  // For the main menu's "New" badge: this room has been looked at, now and on the way out.
+  useEffect(() => {
+    markSeen(room.id);
+    return () => markSeen(room.id);
+  }, [room.id]);
   const connection = useConnection();
 
   return (
@@ -481,6 +487,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
           }}
           onToast={onToast}
           onOpenProfile={onProfile}
+          foodNames={(active ?? []).map((f) => f.name)}
         />
       )}
       {route === 'wheel' &&

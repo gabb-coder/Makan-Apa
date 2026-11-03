@@ -93,6 +93,7 @@ export function ProfileScreen({ onBack, onToast }: { onBack: () => void; onToast
               key={`${me.pay_duitnow}|${me.pay_bank}`}
               me={me}
               onSave={(patch) => save(patch, t('Payment details saved in all your rooms.'))}
+              onQrChanged={() => void myMembers().then(setMine)}
             />
           )}
         </section>

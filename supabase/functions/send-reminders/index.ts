@@ -40,6 +40,7 @@ interface Room {
   timezone: string;
   rotation_start: string;
   decision_mode: 'decider' | 'secret';
+  fixed_days: Record<string, string> | null;
 }
 interface Member {
   id: string;
@@ -58,6 +59,9 @@ interface Entry {
   meal: 'lunch' | 'dinner';
   food_option_id: string | null;
   custom_food: string | null;
+  meet_at: string | null;
+  meet_place: string | null;
+  meet_alerted: boolean;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -199,12 +203,12 @@ Deno.serve(async (req) => {
 
   const roomIds = [...new Set(subs.map((s) => s.room_id))];
   const [rooms, members, entries] = await Promise.all([
-    db.from('rooms').select('id, timezone, rotation_start, decision_mode').in('id', roomIds),
+    db.from('rooms').select('id, timezone, rotation_start, decision_mode, fixed_days').in('id', roomIds),
     db.from('members').select('id, room_id, name, sort_order, created_at, left_at').in('room_id', roomIds),
     // A week back for the recap, plus enough for any timezone's "today".
     db
       .from('day_entries')
-      .select('id, room_id, entry_date, decider_id, status, meal, food_option_id, custom_food')
+      .select('id, room_id, entry_date, decider_id, status, meal, food_option_id, custom_food, meet_at, meet_place, meet_alerted')
       .in('room_id', roomIds)
       .gte('entry_date', new Date(Date.now() - 9 * 86_400_000).toISOString().slice(0, 10)),
   ]);
@@ -234,12 +238,27 @@ Deno.serve(async (req) => {
     return roomDebts.get(roomId)!;
   };
   const now = new Date();
+  // Meet-ups starting in the next ~10 minutes that haven't had their "leaving soon" alert.
+  const leavingSoon = (entries.data as Entry[]).filter((e) => {
+    if (e.status !== 'accepted' || !e.meet_at || e.meet_alerted) return false;
+    const ms = Date.parse(e.meet_at) - now.getTime();
+    return ms > 0 && ms <= 12 * 60_000;
+  });
   const recapFor = await weeklyRecaps(entries.data as Entry[], members.data as Member[]);
 
   for (const sub of subs) {
     const room = (rooms.data as Room[]).find((r) => r.id === sub.room_id);
     if (!room) continue;
     const local = localNow(room.timezone, now);
+
+    // Alerts on only.
+    for (const e of sub.notify_events ? leavingSoon.filter((x) => x.room_id === room.id) : []) {
+      if (outOn(room.id, e.entry_date).has(sub.member_id) && (e.meal ?? 'lunch') === 'lunch') continue;
+      const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: room.timezone }).format(new Date(e.meet_at!));
+      const result = await send(sub, { ...message({ type: 'leaving', time, place: e.meet_place ?? '' }, sub.lang), url: `/?room=${room.id}#today`, tag: `makan-leaving-${e.id}` });
+      if (result === 'gone') break;
+      summary[result]++;
+    }
 
     if (sub.weekly_recap && local.weekday === 0 && local.hour >= RECAP_HOUR && sub.last_recap_on !== local.date) {
       const recap = recapFor(room.id, local.date);
@@ -265,8 +284,9 @@ Deno.serve(async (req) => {
     let reminder: { title: string; body: string } | null = null;
     const away = outOn(room.id, local.date);
 
-    // Nothing for someone who said they're out today.
-    if (entry?.status !== 'accepted' && !away.has(sub.member_id)) {
+    // Nothing for someone who said they're out today, or on a fixed day (it decides itself).
+    const fixedDay = !!room.fixed_days?.[String(local.weekday)];
+    if (entry?.status !== 'accepted' && !away.has(sub.member_id) && !fixedDay) {
       if (room.decision_mode === 'secret') {
         const picked = (picks.data ?? []).some((p) => p.day_entry_id === entry?.id && p.member_id === sub.member_id);
         if (!picked) reminder = message({ type: 'secret-open' }, sub.lang);
@@ -304,6 +324,9 @@ Deno.serve(async (req) => {
     }
     await db.from('push_subscriptions').update({ last_sent_on: local.date }).eq('id', sub.id);
   }
+
+  // Each meet-up gets its "leaving soon" alert once.
+  if (leavingSoon.length) await db.from('day_entries').update({ meet_alerted: true }).in('id', leavingSoon.map((e) => e.id));
 
   console.log('send-reminders', JSON.stringify(summary));
   return json(summary);

@@ -5,6 +5,9 @@
 //   bill      a bill was added or changed     → everyone with a share, but not the payer
 //   tapau     someone started a tapau run     → everyone else who's in: add your order
 //   order     someone added a tapau order     → the runner
+//   vote      the decider started a quick vote → everyone else who's in
+//   meet      a meet-up time was set          → everyone else who's in
+//   late      someone's running late          → everyone else who's in
 // The person who did it (actor) never gets their own alert.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
@@ -31,6 +34,14 @@ interface Entry {
   status: string;
   food_option_id: string | null;
   custom_food: string | null;
+  vote_options: string[] | null;
+  meet_at: string | null;
+  meet_place: string | null;
+}
+
+/** "12:30" in the room's timezone. */
+function clock(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(iso));
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -44,7 +55,7 @@ async function foodName(entry: Entry): Promise<string> {
 }
 
 async function entry(id: string): Promise<Entry | null> {
-  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food').eq('id', id).maybeSingle();
+  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food, vote_options, meet_at, meet_place').eq('id', id).maybeSingle();
   return (data as Entry | null) ?? null;
 }
 
@@ -112,6 +123,26 @@ Deno.serve(async (req) => {
     if (!order || !runner || runner === actor) return json({ skipped: 'own order' });
     recipients.set(runner, { type: 'order', who: nameOf(order.member_id), item: order.qty > 1 ? `${order.qty}× ${order.item}` : order.item });
     tag = `makan-orders-${order.run_id}`;
+  } else if (type === 'vote' || type === 'meet') {
+    const e = await entry(id);
+    if (!e) return json({ skipped: 'stale' });
+    const away = await awayFor(e);
+    let ev: Event;
+    if (type === 'vote') {
+      if (!e.vote_options || e.status === 'accepted') return json({ skipped: 'stale' });
+      ev = { type, decider: nameOf(e.decider_id), options: e.vote_options.join(' · ') };
+    } else {
+      if (!e.meet_at) return json({ skipped: 'stale' });
+      const { data: room } = await db.from('rooms').select('timezone').eq('id', roomId).maybeSingle();
+      ev = { type, time: clock(e.meet_at, (room as { timezone: string } | null)?.timezone ?? 'Asia/Kuala_Lumpur'), place: e.meet_place ?? '—' };
+    }
+    for (const s of subs) if (s.member_id !== actor && !away.has(s.member_id)) recipients.set(s.member_id, ev);
+    tag = `makan-${type}-${id}`;
+  } else if (type === 'late') {
+    // id is the member who's running late.
+    const ev: Event = { type, who: nameOf(id) };
+    for (const s of subs) if (s.member_id !== id) recipients.set(s.member_id, ev);
+    tag = `makan-late-${id}`;
   } else {
     return json({ error: 'unknown type' }, 400);
   }

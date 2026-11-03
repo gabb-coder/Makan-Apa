@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, HostBadge } from '../components/Avatar';
+import { RoomIcon, ROOM_EMOJIS, roomColor } from '../components/RoomIcon';
 import { shareInvite } from '../lib/invite';
-import { t, tk } from '../lib/i18n';
+import { locale, t, tk } from '../lib/i18n';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
@@ -20,9 +21,17 @@ interface Props {
   onToast: (message: string) => void;
   /** The main menu's You & this phone page. */
   onOpenProfile?: () => void;
+  /** The room's food list, for fixed days. */
+  foodNames?: string[];
 }
 
 const VETO_MAX = 3;
+
+/** "Monday" for weekday 1, in the app's language. */
+function weekdayName(wd: number): string {
+  // 2026-11-01 was a Sunday.
+  return new Intl.DateTimeFormat(locale(), { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1 + wd)));
+}
 
 function timeZones(current: string): string[] {
   let zones: string[] = [];
@@ -36,7 +45,7 @@ function timeZones(current: string): string[] {
 
 const cardStyle = { padding: 16, display: 'flex', flexDirection: 'column', gap: 14 } as const;
 
-export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom, onBack, onLeave, onToast, onOpenProfile }: Props) {
+export function SettingsScreen({ room, me, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom, onBack, onLeave, onToast, onOpenProfile, foodNames = [] }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -128,6 +137,39 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         ) : (
           room.name && <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, overflowWrap: 'anywhere' }}>{room.name}</span>
         )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span className="field-label">{t('Icon on the main menu')}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <RoomIcon title={roomTitle(room)} code={room.code} emoji={room.emoji} color={room.color} size={52} />
+            <div role="group" aria-label={t('Colour')} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {MEMBER_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={t('Colour {n}', { n: MEMBER_COLORS.indexOf(c) + 1 })}
+                  aria-pressed={roomColor(room.code, room.color) === c}
+                  onClick={() => attempt(() => updateRoom({ color: c }))}
+                  style={{ width: 30, height: 30, borderRadius: 999, background: c, border: roomColor(room.code, room.color) === c ? '3px solid var(--ink)' : '2px solid var(--surface)', boxShadow: '0 0 0 1px var(--border)' }}
+                />
+              ))}
+            </div>
+          </div>
+          <div role="group" aria-label={t('Emoji')} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {ROOM_EMOJIS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                className="chip press"
+                aria-pressed={room.emoji === e}
+                aria-label={e}
+                onClick={() => attempt(() => updateRoom({ emoji: room.emoji === e ? null : e }))}
+                style={{ height: 40, width: 44, padding: 0, justifyContent: 'center', fontSize: 20 }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
         <span className="field-label" style={{ marginBottom: -6 }}>
           {t('Code')}
         </span>
@@ -418,6 +460,38 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
               +
             </button>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Fixed days')}</span>
+          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{t('A food you always have on a weekday, like mamak on Fridays. That lunch decides itself; nobody has to choose.')}</span>
+          {([1, 2, 3, 4, 5, 6, 0] as const).map((wd) => {
+            const fixed = room.fixed_days ?? {};
+            const value = fixed[String(wd)] ?? '';
+            return (
+              <label key={wd} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
+                <span style={{ width: 96, fontSize: 14, fontWeight: 600 }}>{weekdayName(wd)}</span>
+                <select
+                  className="input"
+                  value={value}
+                  onChange={(e) => {
+                    const next = { ...fixed };
+                    if (e.target.value) next[String(wd)] = e.target.value;
+                    else delete next[String(wd)];
+                    attempt(() => updateRoom({ fixed_days: next }), e.target.value ? t('{day}: {food}, every week.', { day: weekdayName(wd), food: e.target.value }) : undefined);
+                  }}
+                  style={{ flexGrow: 1, height: 40 }}
+                >
+                  <option value="">{t('Decide as usual')}</option>
+                  {[...new Set([...(value ? [value] : []), ...foodNames])].map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
         </div>
 
         <details className="advanced">

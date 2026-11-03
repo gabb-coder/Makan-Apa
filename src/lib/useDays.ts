@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from './i18n';
 import { deciderFor } from './rotation';
-import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow } from './supabase';
+import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow, type VoteRow } from './supabase';
 
 /** What the decider is proposing: a pool food, or a name typed in. */
 export type Pick = { foodId: string; name: string } | { foodId: null; name: string };
@@ -116,6 +116,9 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     };
   }, [todayId]);
 
+  // A fixed day ("Friday is mamak"): lunch decides itself and nobody has to choose.
+  const fixedFood = meal === 'lunch' ? (room.fixed_days?.[String(new Date(`${today}T00:00:00Z`).getUTCDay())] ?? null) : null;
+
   // Step 1: the first visit of the day creates the entry. Both phones may race; the unique
   // (room_id, entry_date, meal) constraint keeps one row.
   useEffect(() => {
@@ -123,11 +126,13 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     supabase
       .from('day_entries')
       .upsert(
-        { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'pending' },
+        fixedFood
+          ? { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'accepted', custom_food: fixedFood, method: 'direct' }
+          : { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'pending' },
         { onConflict: 'room_id,entry_date,meal', ignoreDuplicates: true },
       )
       .then(({ error: err }) => (err ? setError(err.message) : load()));
-  }, [entries, todayEntry, computedDecider, room.id, today, meal, load]);
+  }, [entries, todayEntry, computedDecider, room.id, today, meal, load, fixedFood]);
 
   // Until the day has a pick or a veto, follow changes to the member order or rotation start.
   useEffect(() => {
@@ -144,6 +149,18 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         .then(({ error: err }) => err && setError(err.message));
       return;
     }
+    // The day became a fixed day after it started, before anyone picked.
+    if (untouched && fixedFood) {
+      supabase
+        .from('day_entries')
+        .update({ status: 'accepted', custom_food: fixedFood, method: 'direct' })
+        .eq('id', todayEntry.id)
+        .eq('status', 'pending')
+        .is('food_option_id', null)
+        .is('custom_food', null)
+        .then(({ error: err }) => err && setError(err.message));
+      return;
+    }
     if (untouched && todayEntry.decider_id !== computedDecider.id) {
       supabase
         .from('day_entries')
@@ -154,7 +171,31 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         .is('custom_food', null)
         .then(({ error: err }) => err && setError(err.message));
     }
-  }, [todayEntry, computedDecider, todayVetoes.length]);
+  }, [todayEntry, computedDecider, todayVetoes.length, fixedFood]);
+
+  // Quick vote: everyone's votes for today, live.
+  const [votes, setVotes] = useState<VoteRow[]>([]);
+  const votingId = todayEntry?.vote_options ? todayEntry.id : null;
+  useEffect(() => {
+    setVotes([]);
+    if (!votingId) return;
+    const loadVotes = () =>
+      supabase
+        .from('votes')
+        .select('*')
+        .eq('day_entry_id', votingId)
+        .then(({ data }) => data && setVotes(data as VoteRow[]));
+    void loadVotes();
+    const channel = supabase
+      .channel(`votes:${votingId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes', filter: `day_entry_id=eq.${votingId}` }, () => void loadVotes())
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void loadVotes();
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [votingId]);
 
   /** Run an update on today's entry; returns false if `guard` no longer matched (someone got there first). */
   const updateToday = async (patch: Partial<DayEntryRow>, guard: (q: any) => any = (q) => q): Promise<boolean> => {
@@ -264,8 +305,45 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       (q) => q.eq('status', 'pending'),
     );
 
+  /** The decider puts 2–3 options to a vote that closes in `minutes`. */
+  const startVote = async (options: string[], minutes: number) => {
+    const ok = await updateToday(
+      { vote_options: options, vote_ends_at: new Date(Date.now() + minutes * 60_000).toISOString(), food_option_id: null, custom_food: null, method: null, status: 'pending' },
+      (q) => q.neq('status', 'accepted').eq('decider_id', meId),
+    );
+    if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
+  };
+  /** The decider calls the vote off. */
+  const cancelVote = async () => {
+    await updateToday({ vote_options: null, vote_ends_at: null }, (q) => q.neq('status', 'accepted'));
+    await supabase.from('votes').delete().eq('day_entry_id', todayEntry?.id ?? '');
+  };
+  const castVote = async (choice: number) => {
+    if (!todayEntry) return;
+    const row = { day_entry_id: todayEntry.id, member_id: meId, choice };
+    setVotes((cur) => [...cur.filter((v) => v.member_id !== meId), { ...row, created_at: new Date().toISOString() }]);
+    const { error: err } = await supabase.from('votes').upsert(row);
+    if (err) throw new Error(err.message);
+  };
+  /** The vote is over: lock in the winner. Only the first phone to get here counts. */
+  const settleVote = (pick: Pick) =>
+    updateToday({ food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted' }, (q) => q.neq('status', 'accepted'));
+
+  /** When to head out and where to meet, once decided; null clears it. */
+  const setMeetup = async (meetAt: string | null, place: string | null) => {
+    const ok = await updateToday({ meet_at: meetAt, meet_place: place?.trim().slice(0, 60) || null });
+    if (!ok) throw new Error(t('Could not save.'));
+  };
+
   return {
     entries,
+    votes,
+    startVote,
+    cancelVote,
+    castVote,
+    settleVote,
+    setMeetup,
+    fixedFood,
     secretPicks,
     submitSecretPick,
     settleSecretSpin,

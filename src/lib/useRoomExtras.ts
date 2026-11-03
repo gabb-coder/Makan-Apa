@@ -1,29 +1,10 @@
-import { t } from './i18n';
+import { shrinkPhoto } from './photo';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, type MealBillRow, type MealRatingRow, type RoomSpotRow, type SettlementRow } from './supabase';
 
 type RoomSpotDraft = Pick<RoomSpotRow, 'name' | 'area' | 'note' | 'price' | 'diet' | 'lat' | 'lng'>;
 
 const RECEIPTS = 'receipts';
-
-/** Phone photos are several MB; a 1600px JPEG is plenty to read a receipt. */
-async function shrinkPhoto(file: Blob, max = 1600): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-    if (blob) return blob;
-  } catch {
-    // Fall through: send the photo as it is if the browser can't decode it.
-  }
-  if (file.size > 3 * 1024 * 1024) throw new Error(t('That photo is too big. Try a smaller one.'));
-  return file;
-}
 
 async function must<T>(q: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await q;

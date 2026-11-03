@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Avatar } from '../components/Avatar';
 import { locale, t } from '../lib/i18n';
 import { formatRM } from '../lib/money';
 import { loadRoomSummaries, type RoomSummary } from '../lib/roomSummaries';
-import { knownRooms, knownRoomTitle, leaveRoom, MEMBER_COLORS, roomTitle, type KnownRoom } from '../lib/session';
+import { knownRooms, knownRoomTitle, leaveRoom, roomTitle, type KnownRoom } from '../lib/session';
 import { MoneyCard, RoomActionsSheet, TodayCard } from '../components/HomeCards';
+import { RoomIcon } from '../components/RoomIcon';
 import { shareInvite } from '../lib/invite';
 import { disableReminders, notifiedMembers, notifyRoom } from '../lib/push';
 import { storage } from '../lib/storage';
+import { lastSeen, markSeen } from '../lib/seen';
 import { supabase, type Meal } from '../lib/supabase';
 
 interface Props {
@@ -63,12 +64,6 @@ function useLongPress(onLong: () => void, ms = 500) {
   };
 }
 
-/** A steady colour per room, from its code. */
-function roomColor(code: string): string {
-  let h = 0;
-  for (const c of code) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return MEMBER_COLORS[h % MEMBER_COLORS.length];
-}
 
 export function statusText(s: RoomSummary): string {
   const st = s.status;
@@ -117,6 +112,8 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
       .catch(() => {});
     loadRoomSummaries().then(
       (s) => {
+        // Rooms this phone hasn't tracked yet start as seen, so nothing old shows as new.
+        for (const x of s) if (!lastSeen(x.room.id)) markSeen(x.room.id);
         setSummaries(s);
         setError(null);
       },
@@ -262,7 +259,7 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
                     onOpen={() => onOpen(k.roomId)}
                     onActions={s ? () => setActionsFor(s) : undefined}
                   >
-                      <Avatar name={title} color={roomColor(k.code)} size={46} />
+                      <RoomIcon title={title} code={k.code} emoji={s?.room.emoji} color={s?.room.color} />
                       <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                           <span style={{ fontSize: 16, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1, minWidth: 0 }}>
@@ -273,6 +270,11 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
                             )}
                             {title}
                           </span>
+                          {s?.lastActivity && s.lastActivity > (lastSeen(k.roomId) ?? '') && (
+                            <span className="badge" style={{ background: 'var(--accent)', color: '#fff', flexShrink: 0 }}>
+                              {t('New')}
+                            </span>
+                          )}
                           <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>
                             {s ? (s.members.length === 1 ? t('{n} person', { n: 1 }) : t('{n} people', { n: s.members.length })) : k.code}
                           </span>

@@ -21,6 +21,11 @@ export interface RoomRow {
   decision_mode: 'decider' | 'secret';
   /** Decide lunch only, or lunch and dinner. */
   meals: 'lunch' | 'both';
+  /** The room's icon on the main menu, and its colour. */
+  emoji?: string | null;
+  color?: string | null;
+  /** Weekday (0 Sunday … 6 Saturday) → a food that's always eaten that day, e.g. {"5": "Mamak"}. */
+  fixed_days?: Record<string, string>;
   created_at: string;
 }
 
@@ -53,6 +58,8 @@ export interface MemberRow {
   pay_bank?: string | null;
   /** Set when they left the room: kept for its history and money, out of turns and new bills. */
   left_at?: string | null;
+  /** A photo of their DuitNow QR, in the room's receipts folder. */
+  pay_qr_path?: string | null;
   created_at: string;
 }
 
@@ -69,6 +76,21 @@ export interface DayEntryRow {
   method: 'direct' | 'wheel' | null;
   status: DayStatus;
   meal: Meal;
+  /** Meet-up once decided: when to leave and where to meet. */
+  meet_at?: string | null;
+  meet_place?: string | null;
+  /** A quick vote: the options, and when voting closes. */
+  vote_options?: string[] | null;
+  vote_ends_at?: string | null;
+  updated_at?: string;
+  created_at: string;
+}
+
+export interface VoteRow {
+  day_entry_id: string;
+  member_id: string;
+  /** Index into the day's vote_options. */
+  choice: number;
   created_at: string;
 }
 

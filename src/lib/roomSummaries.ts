@@ -35,6 +35,8 @@ export interface RoomSummary {
   tapau: { runner: string; mine: boolean } | null;
   /** Your balance in sen: negative means you owe. */
   balance: number;
+  /** When anything last happened in the room: a pick, a bill, a payback, a tapau run, a join. */
+  lastActivity: string | null;
   /** Something's waiting on you: your turn, a pick to answer, a secret pick, money owed. */
   needsYou: boolean;
 }
@@ -48,7 +50,7 @@ interface Bundle {
   settlements: SettlementRow[];
   picks: { day_entry_id: string; member_id: string }[];
   attendance: { room_id: string; entry_date: string; meal: string; member_id: string; status: string }[];
-  runs: { room_id: string; day_entry_id: string; runner_id: string; status: string }[];
+  runs: { room_id: string; day_entry_id: string; runner_id: string; status: string; created_at?: string }[];
 }
 
 /** Lunch, or dinner from 3pm in rooms that decide both (same rule as the room screen). */
@@ -76,6 +78,9 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
       const entry = b.entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === m) ?? null;
       const food = entry ? (entry.food_option_id && foodName.get(entry.food_option_id)) || entry.custom_food || '' : '';
       if (entry?.status === 'accepted') return { entry, status: away.has(meId) ? { kind: 'out' } : { kind: 'decided', food } };
+      // A fixed day nobody has opened yet is decided all the same.
+      const fixed = m === 'lunch' ? room.fixed_days?.[String(new Date(`${date}T00:00:00Z`).getUTCDay())] : undefined;
+      if (fixed && !entry?.food_option_id && !entry?.custom_food) return { entry, status: away.has(meId) ? { kind: 'out' } : { kind: 'decided', food: fixed } };
       if (away.has(meId)) return { entry, status: { kind: 'out' } };
       if (room.decision_mode === 'secret') {
         const picked = new Set(b.picks.filter((p) => p.day_entry_id === entry?.id).map((p) => p.member_id));
@@ -99,7 +104,15 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
 
     const needsYou =
       status.kind === 'your-turn' || status.kind === 'answer' || (status.kind === 'secret' && !status.mine) || balance < 0 || (!!run && run.runner_id !== meId);
-    out.push({ known: k, room, members, everyone, meId, date, meal, status, meals: meals.map((x) => ({ meal: x.meal, status: x.status })), debts, tapau: run ? { runner: name(run.runner_id), mine: run.runner_id === meId } : null, balance, needsYou });
+    const stamps = [
+      ...b.entries.filter((e) => e.room_id === room.id).map((e) => e.updated_at ?? e.created_at),
+      ...b.bills.filter((x) => x.room_id === room.id).map((x) => x.updated_at),
+      ...b.settlements.filter((x) => x.room_id === room.id).map((x) => x.created_at),
+      ...b.runs.filter((x) => x.room_id === room.id).map((x) => x.created_at ?? ''),
+      ...everyone.filter((m) => m.id !== meId).map((m) => m.created_at),
+    ].filter(Boolean);
+    const lastActivity = stamps.length ? stamps.reduce((a, c) => (c > a ? c : a)) : null;
+    out.push({ known: k, room, members, everyone, meId, lastActivity, date, meal, status, meals: meals.map((x) => ({ meal: x.meal, status: x.status })), debts, tapau: run ? { runner: name(run.runner_id), mine: run.runner_id === meId } : null, balance, needsYou });
   }
   return out;
 }
@@ -113,7 +126,7 @@ async function fetchBundle(roomIds: string[]): Promise<Bundle> {
     supabase.from('meal_bills').select('*').in('room_id', roomIds),
     supabase.from('settlements').select('*').in('room_id', roomIds),
     supabase.from('attendance').select('room_id, entry_date, meal, member_id, status').in('room_id', roomIds).gte('entry_date', since),
-    supabase.from('tapau_runs').select('room_id, day_entry_id, runner_id, status').in('room_id', roomIds),
+    supabase.from('tapau_runs').select('room_id, day_entry_id, runner_id, status, created_at').in('room_id', roomIds),
   ]);
   const failed = [rooms, members, entries, bills, settlements].find((r) => r.error);
   if (failed?.error) throw new Error(failed.error.message);

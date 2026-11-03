@@ -4,6 +4,7 @@ import { formatRM } from '../lib/money';
 import type { MealStatus, RoomSummary } from '../lib/roomSummaries';
 import { roomTitle } from '../lib/session';
 import type { Meal } from '../lib/supabase';
+import { ShowQrButton } from './Bills';
 
 /** "Nasi Lemak", "your turn", "Alex is choosing"… for one room's meal, short. */
 function mealLine(st: MealStatus): string {
@@ -172,6 +173,7 @@ export function MoneyCard({
                     {busy === key ? t('Saving…') : t('Mark paid')}
                   </button>
                 </div>
+                {iOwe && <ShowQrButton member={other} />}
                 {iOwe && (other?.pay_duitnow || other?.pay_bank) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {other.pay_duitnow && (

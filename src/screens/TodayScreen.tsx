@@ -15,6 +15,7 @@ import { BillLine, RatingRow } from '../components/MealExtras';
 import { BillSheet } from '../components/Bills';
 import { TapauLine, TapauSheet } from '../components/Tapau';
 import { WhosInCard } from '../components/WhosIn';
+import { MeetupCard, PlanAheadSheet, VoteCard, VoteSheet } from '../components/Plans';
 import type { BillItem } from '../lib/money';
 import type { AttendanceApi } from '../lib/useAttendance';
 import { useTapau } from '../lib/useTapau';
@@ -78,6 +79,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [billOpen, setBillOpen] = useState(false);
   const [billStart, setBillStart] = useState<{ paidBy: string; items: BillItem[] } | undefined>(undefined);
   const [tapauOpen, setTapauOpen] = useState(false);
+  const [voteSheet, setVoteSheet] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   // Whoever's in for this meal: they decide, answer, pick and pay.
   const present = members.filter((m) => !away.has(m.id));
   const [addingSpot, setAddingSpot] = useState(false);
@@ -178,6 +181,26 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         onError={onToast}
       />
     );
+  } else if (todayEntry.vote_options && todayEntry.status !== 'accepted') {
+    const options = todayEntry.vote_options;
+    main = (
+      <VoteCard
+        key={todayEntry.vote_ends_at ?? 'vote'}
+        options={options}
+        votes={days.votes}
+        voters={present}
+        me={me}
+        isDecider={isDecider}
+        endsAt={todayEntry.vote_ends_at ?? null}
+        onVote={days.castVote}
+        onSettle={(winner) => {
+          const match = pickable.find((f) => f.name.toLowerCase() === winner.toLowerCase());
+          return days.settleVote(match ? { foodId: match.id, name: match.name } : { foodId: null, name: winner });
+        }}
+        onCancel={days.cancelVote}
+        onError={onToast}
+      />
+    );
   } else if (todayEntry.status === 'accepted' && todayFood) {
     main = (
       <DecidedCard
@@ -236,7 +259,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             ? t('{name} can veto {times}', { name: others[0].name, times: timesWord(left) })
             : t('{name} is out of vetoes, so your pick stands.', { name: others[0].name });
       } else sub = t('Everyone else can veto {times}', { times: timesWord(room.veto_limit) });
-      main = <YourTurnCard me={me} sub={sub} onSpin={onSpin} onPickList={() => setSheet('list')} onType={() => setSheet('type')} />;
+      main = (
+        <YourTurnCard
+          me={me}
+          sub={sub}
+          onSpin={onSpin}
+          onPickList={() => setSheet('list')}
+          onType={() => setSheet('type')}
+          onVote={others.length > 0 && pickable.length >= 2 ? () => setVoteSheet(true) : undefined}
+        />
+      );
     }
   } else if (todayEntry.status === 'proposed' && todayFood) {
     proposalView = true;
@@ -429,8 +461,23 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
       {main}
 
+      {!proposalView && todayEntry?.status === 'accepted' && todayFood && present.length > 1 && (
+        <MeetupCard
+          meetAt={todayEntry.meet_at ?? null}
+          place={todayEntry.meet_place ?? null}
+          today={today}
+          timeZone={room.timezone}
+          places={[t('Lobby'), ...suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).map((sp) => sp.name)]}
+          late={members.filter((m) => m.id !== me.id && attendance.statusOf(m.id, today, meal) === 'late')}
+          myStatus={attendance.statusOf(me.id, today, meal)}
+          onSave={(at, where) => run(() => days.setMeetup(at, where))}
+          onLate={() => run(() => attendance.setStatus(me.id, today, meal, 'late'))}
+        />
+      )}
+
       {!proposalView && members.length > 1 && todayEntry && (
         <WhosInCard
+          onPlan={() => setPlanOpen(true)}
           me={me}
           members={members}
           meal={meal}
@@ -573,6 +620,20 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             setBillOpen(false);
             setBillStart(undefined);
           }}
+        />
+      )}
+
+      {voteSheet && (
+        <VoteSheet foods={pickable.map((f) => f.name)} onStart={(options, minutes) => days.startVote(options, minutes)} onClose={() => setVoteSheet(false)} />
+      )}
+
+      {planOpen && (
+        <PlanAheadSheet
+          today={today}
+          meals={room.meals === 'both' ? ['lunch', 'dinner'] : ['lunch']}
+          statusOf={(date, m) => attendance.statusOf(me.id, date, m)}
+          onSet={(date, m, status) => attendance.setStatus(me.id, date, m, status)}
+          onClose={() => setPlanOpen(false)}
         />
       )}
 
