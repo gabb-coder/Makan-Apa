@@ -19,6 +19,8 @@ import { MeetupCard, PlanAheadSheet, VoteCard, VoteSheet } from '../components/P
 import type { BillItem } from '../lib/money';
 import type { AttendanceApi } from '../lib/useAttendance';
 import { useTapau } from '../lib/useTapau';
+import { shareCard } from '../lib/shareCard';
+import { clockTime } from '../lib/vote';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
 import { daysBetween } from '../lib/dates';
@@ -213,6 +215,26 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             <RatingRow entryId={todayEntry.id} ratings={extras.ratings} meId={me.id} onRate={(r) => run(() => extras.rate(todayEntry.id, r))} />
             <BillLine bill={extras.bills.find((b) => b.day_entry_id === todayEntry.id) ?? null} members={members} meId={me.id} onOpen={() => setBillOpen(true)} />
             {!extras.bills.some((b) => b.day_entry_id === todayEntry.id) && <TapauLine tapau={tapau} members={members} meId={me.id} onOpen={() => setTapauOpen(true)} />}
+            <button
+              type="button"
+              className="press"
+              onClick={() =>
+                run(async () => {
+                  const msg = await shareCard({
+                    room: roomTitle(room),
+                    date: new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${today}T00:00:00Z`)),
+                    food: todayFood.name,
+                    place: todayEntry.meet_place,
+                    time: todayEntry.meet_at ? t('Leaving {time}', { time: clockTime(todayEntry.meet_at, room.timezone) }) : null,
+                    by: todayEntry.method === 'wheel' ? t('Picked by the wheel') : t('{name} picked', { name: nameFor(todayEntry.decider_id, me.name) }),
+                  });
+                  if (msg) onToast(msg);
+                })
+              }
+              style={{ alignSelf: 'center', minHeight: 44, padding: '0 12px', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent-text)' }}
+            >
+              {t('Share today’s pick as a picture')}
+            </button>
           </div>
         }
         busy={busy}

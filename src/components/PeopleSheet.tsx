@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
 import { needsLabel } from '../lib/diet';
 import { t } from '../lib/i18n';
 import { hostOf, knownRooms, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
+import { InviteQrSheet } from './InviteQr';
 
 interface Props {
   room: RoomRow;
@@ -52,6 +53,7 @@ export function OnlineDot({ size = 12 }: { size?: number }) {
 
 export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onHome }: Props) {
   const otherRooms = knownRooms().filter((r) => r.roomId !== room.id);
+  const [qrOpen, setQrOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -127,6 +129,10 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
             {t('Room settings')}
           </button>
         </div>
+        <button type="button" onClick={() => setQrOpen(true)} style={{ minHeight: 40, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
+          {t('Sitting together? Show a QR code to scan')}
+        </button>
+        {qrOpen && <InviteQrSheet code={room.code} title={roomTitle(room)} onClose={() => setQrOpen(false)} />}
         <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>{t('A green dot means they have Makan apa? open right now.')}</p>
 
         {onHome && (

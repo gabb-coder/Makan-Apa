@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, HostBadge } from '../components/Avatar';
 import { RoomIcon, ROOM_EMOJIS, roomColor } from '../components/RoomIcon';
+import { InviteQrSheet } from '../components/InviteQr';
 import { shareInvite } from '../lib/invite';
 import { locale, t, tk } from '../lib/i18n';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
@@ -49,6 +50,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const host = hostOf(members);
@@ -192,6 +194,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             {t('Share invite')}
           </button>
         </div>
+        <button type="button" className="btn btn--secondary press" onClick={() => setQrOpen(true)}>
+          {t('Show QR code to scan')}
+        </button>
+        {qrOpen && <InviteQrSheet code={room.code} title={roomTitle(room)} onClose={() => setQrOpen(false)} />}
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.08s' }}>

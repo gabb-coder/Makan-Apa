@@ -9,6 +9,7 @@ import { shareInvite } from '../lib/invite';
 import { disableReminders, notifiedMembers, notifyRoom } from '../lib/push';
 import { storage } from '../lib/storage';
 import { lastSeen, markSeen } from '../lib/seen';
+import { loadYourMonth, type MonthSummary } from '../lib/yourMonth';
 import { supabase, type Meal } from '../lib/supabase';
 
 interface Props {
@@ -102,6 +103,10 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
   const [pinned, setPinned] = useState<string[]>(loadPinned);
   const [notified, setNotified] = useState<Set<string> | null>(null);
   const [actionsFor, setActionsFor] = useState<RoomSummary | null>(null);
+  const [month, setMonth] = useState<MonthSummary | null>(null);
+  useEffect(() => {
+    loadYourMonth().then(setMonth, () => {});
+  }, [known]);
   const [summaries, setSummaries] = useState<RoomSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -309,6 +314,35 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
           )}
           {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>{t("Couldn't load what's happening in your rooms. {error}", { error })}</p>}
         </section>
+
+        {month && month.meals > 0 && (
+          <section aria-labelledby="month-label" className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+            <h2 id="month-label" className="section-label" style={{ margin: 0 }}>
+              {t('Your {month}', { month: new Intl.DateTimeFormat(locale(), { month: 'long', timeZone: 'UTC' }).format(new Date(`${month.month}-01T00:00:00Z`)) })}
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+              {(
+                [
+                  [String(month.meals), month.meals === 1 ? t('meal') : t('meals')],
+                  [String(month.foods), month.foods === 1 ? t('different food') : t('different foods')],
+                  [formatRM(month.spent), t('your share')],
+                ] as const
+              ).map(([n, label]) => (
+                <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            {month.top && month.top.count > 1 && (
+              <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>
+                {month.rooms > 1
+                  ? t('Most eaten: {food} ({n}×), across {rooms} rooms.', { food: month.top.name, n: month.top.count, rooms: month.rooms })
+                  : t('Most eaten: {food} ({n}×).', { food: month.top.name, n: month.top.count })}
+              </span>
+            )}
+          </section>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
           <button type="button" className="btn btn--primary press" onClick={onNew} style={{ height: 52 }}>
