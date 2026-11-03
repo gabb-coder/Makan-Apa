@@ -30,6 +30,10 @@ export const translations: Translations = {
     'New room': 'Bilik baru',
     'Start one for a new group': 'Mulakan untuk kumpulan baru',
     'Use the code a friend sent you': 'Guna kod yang kawan hantar',
+    'Join a room': 'Sertai bilik',
+    'Room codes are {n} characters.': 'Kod bilik ada {n} aksara.',
+    'Start a room for a group you eat with, then share its code with them.': 'Mulakan bilik untuk kumpulan makan kamu, kemudian kongsi kodnya dengan mereka.',
+    'Enter the room code a friend sent you.': 'Masukkan kod bilik yang kawan hantar.',
     'Join a room with a code': 'Sertai bilik dengan kod',
     'One room for each group you eat with: classmates, office, family. Each room has its own turns, food list and bills.':
       'Satu bilik untuk setiap kumpulan makan: kawan kelas, pejabat, keluarga. Setiap bilik ada giliran, senarai makanan dan bil sendiri.',
@@ -115,6 +119,10 @@ export const translations: Translations = {
     'New room': '新房间',
     'Start one for a new group': '为新的饭友群建一个',
     'Use the code a friend sent you': '用朋友发给你的代码',
+    'Join a room': '加入房间',
+    'Room codes are {n} characters.': '房间代码是{n}个字符。',
+    'Start a room for a group you eat with, then share its code with them.': '为一起吃饭的朋友建个房间，再把代码分享给他们。',
+    'Enter the room code a friend sent you.': '输入朋友发给你的房间代码。',
     'Join a room with a code': '用代码加入房间',
     'One room for each group you eat with: classmates, office, family. Each room has its own turns, food list and bills.':
       '每个饭友群一个房间：同学、同事、家人。每个房间有自己的轮流、食物列表和账单。',

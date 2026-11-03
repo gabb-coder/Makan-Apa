@@ -15,6 +15,9 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   await phone.getByRole('menuitem', { name: /Create a new room/ }).click();
   // Your name carries over from your other room
   await expect(phone.locator('#join-name')).toHaveValue('Wei');
+  // Creating shows only creating: no room code, no Join button
+  await expect(phone.locator('#join-code')).toHaveCount(0);
+  await expect(phone.locator('button:text-is("Join room")')).toHaveCount(0);
   await phone.fill('#room-name', 'Housemates');
   await phone.click('button:text-is("Create room")');
   await expect(phone.locator('header h1')).toContainText('Housemates');
@@ -40,6 +43,15 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   await phone.locator('main li button', { hasText: 'Housemates' }).click();
   await expect(phone.locator('header h1')).toContainText('Housemates');
   await phone.click('button[aria-label="All rooms"]');
+  await expect(phone.locator('main li', { hasText: 'Lunch gang' })).toBeVisible();
+
+  // + then Join shows only joining: a room code, no Create button, and back to your rooms
+  await phone.click('button[aria-label="New room"]');
+  await phone.getByRole('menuitem', { name: /Join a room with a code/ }).click();
+  await expect(phone.locator('#join-code')).toHaveValue('');
+  await expect(phone.locator('#room-name')).toHaveCount(0);
+  await expect(phone.locator('button:has-text("Create")')).toHaveCount(0);
+  await phone.click('button:has-text("Your rooms")');
   await expect(phone.locator('main li', { hasText: 'Lunch gang' })).toBeVisible();
 
   // Today: down for lunch in both rooms, so skip one

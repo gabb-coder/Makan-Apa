@@ -57,7 +57,7 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'home' }
   | { status: 'profile' }
-  | { status: 'join'; notice?: string; creating?: boolean }
+  | { status: 'join'; notice?: string; mode?: 'create' | 'join' }
   | { status: 'ready'; session: Session };
 
 /** Drop ?room= (and optionally ?join=) from the address bar once used, keeping the tab. */
@@ -129,7 +129,8 @@ export default function App() {
         return restore();
       }
       generation.current++;
-      return setState({ status: 'join' });
+      // An invite link: just joining (with the code filled in), unless this is the first room.
+      return setState(knownRooms().length ? { status: 'join', mode: 'join' } : { status: 'join' });
     }
     // A reload inside a room (this tab was in it, and the address has a tab like #bills) stays
     // there. Anything else, including a fresh launch of the installed app, opens the main menu.
@@ -200,8 +201,8 @@ export default function App() {
     body = (
       <HomeScreen
         onOpen={openRoomFromHome}
-        onNew={() => setState({ status: 'join', creating: true })}
-        onJoin={() => setState({ status: 'join' })}
+        onNew={() => setState({ status: 'join', mode: 'create' })}
+        onJoin={() => setState({ status: 'join', mode: 'join' })}
         onToast={setToast}
         onNoRooms={() => setState({ status: 'join' })}
         onProfile={() => setState({ status: 'profile' })}
@@ -212,9 +213,9 @@ export default function App() {
   } else if (state.status === 'join') {
     body = (
       <JoinScreen
-        key={state.creating ? 'create' : 'join'}
+        key={state.mode ?? 'both'}
         notice={state.notice}
-        creating={state.creating}
+        mode={state.mode}
         onBack={knownRooms().length ? goHome : undefined}
         rooms={knownRooms()}
         onOpenRoom={(roomId) => {
