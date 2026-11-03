@@ -16,6 +16,8 @@ export interface Bill {
   items?: BillItem[] | null;
   service_pct?: number | string | null;
   sst_pct?: number | string | null;
+  /** Paid out of the room's kitty: everyone's share comes off their kitty balance, not a debt. */
+  from_kitty?: boolean | null;
 }
 
 export interface Payment {
@@ -110,6 +112,7 @@ export function balances(bills: Bill[], payments: Payment[]): Map<string, number
   const net = new Map<string, number>();
   const add = (id: string, cents: number) => net.set(id, (net.get(id) ?? 0) + cents);
   for (const bill of bills) {
+    if (bill.from_kitty) continue;
     add(bill.paid_by, bill.amount_cents);
     for (const [id, share] of shares(bill)) add(id, -share);
   }
@@ -138,4 +141,29 @@ export function settleUp(net: Map<string, number>): Payment[] {
     if (owed[j].c === 0) j++;
   }
   return out;
+}
+
+export interface TopUp {
+  member_id: string;
+  amount_cents: number;
+}
+
+/**
+ * The kitty: what's left in it, and each person's part of that (what they put in minus their
+ * shares of the bills it paid). A negative part means they've eaten more than they put in.
+ */
+export function kitty(bills: Bill[], topUps: TopUp[]): { total: number; each: Map<string, number> } {
+  const each = new Map<string, number>();
+  const add = (id: string, cents: number) => each.set(id, (each.get(id) ?? 0) + cents);
+  let total = 0;
+  for (const t of topUps) {
+    add(t.member_id, t.amount_cents);
+    total += t.amount_cents;
+  }
+  for (const bill of bills) {
+    if (!bill.from_kitty) continue;
+    total -= bill.amount_cents;
+    for (const [id, share] of shares(bill)) add(id, -share);
+  }
+  return { total, each };
 }

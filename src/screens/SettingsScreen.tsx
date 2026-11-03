@@ -7,6 +7,8 @@ import { locale, t, tk } from '../lib/i18n';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
+import { useJoinRequests } from '../lib/useJoinRequests';
+import { JoinRequestList } from '../components/JoinRequests';
 
 interface Props {
   room: RoomRow;
@@ -53,9 +55,11 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const host = hostOf(members);
+  const host = hostOf(members, room.host_id);
   const iAmHost = host?.id === me.id;
   const [pins, setPins] = useState<Set<string> | null>(null);
+  const joinRequests = useJoinRequests(room.id, iAmHost);
+  const [confirmHost, setConfirmHost] = useState<string | null>(null);
   const refreshPins = () => roomPins(room.id).then(setPins, () => setPins(null));
   useEffect(() => {
     void refreshPins();
@@ -209,7 +213,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           {members.length > 1 && (
             <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
               {iAmHost
-                ? t('You’re the host: tap someone’s name to rename them, change their colour or remove them from the room.')
+                ? t('You’re the host: tap someone’s name to rename them, change their colour, make them host or remove them from the room.')
                 : t('{name} is the host and can remove people from the room.', { name: host?.name ?? t('The host') })}
             </span>
           )}
@@ -317,6 +321,22 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                   </button>
                 )}
                 {editing && iAmHost && m.id !== me.id && (
+                  <button
+                    type="button"
+                    className="btn btn--secondary press"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (confirmHost !== m.id) return setConfirmHost(m.id);
+                      setConfirmHost(null);
+                      setEditingId(null);
+                      attempt(() => updateRoom({ host_id: m.id }), t('{name} is the host now.', { name: m.name }));
+                    }}
+                    style={{ order: 3, marginLeft: 26, height: 40, fontSize: 14 }}
+                  >
+                    {confirmHost === m.id ? t('Tap again to hand over to {name}', { name: m.name }) : t('Make {name} the host', { name: m.name })}
+                  </button>
+                )}
+                {editing && iAmHost && m.id !== me.id && (
                   <div style={{ order: 3, marginLeft: 26, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <button
                       type="button"
@@ -385,6 +405,68 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         />
       </section>
 
+
+      <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.12s' }} aria-labelledby="joining-label">
+        <h2 id="joining-label" className="section-label" style={{ margin: 0 }}>
+          {t('Who can join')}
+        </h2>
+        {iAmHost ? (
+          <>
+            <div className="segmented" role="group" aria-label={t('Who can join')} style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <button type="button" aria-pressed={!room.locked} onClick={() => room.locked && attempt(() => updateRoom({ locked: false }), t('Anyone with the code can join again.'))}>
+                {t('Anyone with the code')}
+              </button>
+              <button type="button" aria-pressed={!!room.locked} onClick={() => !room.locked && attempt(() => updateRoom({ locked: true }), t('Room locked. New people will ask you first.'))}>
+                {t('Ask me first')}
+              </button>
+            </div>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+              {room.locked
+                ? t('New people ask to join and you let them in. People already in the room can still come back on a new phone.')
+                : t('Anyone with the room code or invite link joins straight away. People you remove always need your OK to come back.')}
+            </span>
+            {joinRequests.requests.length > 0 && <JoinRequestList requests={joinRequests.requests} onAnswer={joinRequests.answer} onToast={onToast} />}
+          </>
+        ) : (
+          <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+            {room.locked
+              ? t('Locked: new people ask {name} (the host) to let them in.', { name: host?.name ?? t('the host') })
+              : t('Anyone with the room code or invite link can join.')}
+          </span>
+        )}
+      </section>
+
+      <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.14s' }} aria-labelledby="kitty-setting-label">
+        <h2 id="kitty-setting-label" className="section-label" style={{ margin: 0 }}>
+          {t('Group kitty')}
+        </h2>
+        <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+          {t('Everyone tops up a shared pot, say RM50 each, and meals are paid out of it instead of settling up after every lunch. The keeper holds the money.')}
+        </span>
+        <label htmlFor="kitty-keeper" className="field-label">
+          {t('Kitty keeper')}
+        </label>
+        <select
+          id="kitty-keeper"
+          className="input"
+          value={room.kitty_keeper ?? ''}
+          onChange={(e) =>
+            attempt(
+              () => updateRoom({ kitty_keeper: e.target.value || null }),
+              e.target.value ? t('Kitty on. It shows in Bills.') : t('Kitty off. Its history stays in Bills.'),
+            )
+          }
+        >
+          <option value="">{t('No kitty')}</option>
+          {members
+            .filter((m) => !m.left_at)
+            .map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id === me.id ? t('{name} (you)', { name: m.name }) : m.name}
+              </option>
+            ))}
+        </select>
+      </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
         <span className="section-label">{t('Rules')}</span>

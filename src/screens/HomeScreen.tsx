@@ -10,6 +10,8 @@ import { disableReminders, notifiedMembers, notifyRoom } from '../lib/push';
 import { storage } from '../lib/storage';
 import { lastSeen, markSeen } from '../lib/seen';
 import { loadYourMonth, type MonthSummary } from '../lib/yourMonth';
+import { budgetState, firstTimeAt, monthlyBudget } from '../lib/budget';
+import { usePhotoUrl } from '../components/MealSocial';
 import { supabase, type Meal } from '../lib/supabase';
 
 interface Props {
@@ -105,7 +107,19 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
   const [actionsFor, setActionsFor] = useState<RoomSummary | null>(null);
   const [month, setMonth] = useState<MonthSummary | null>(null);
   useEffect(() => {
-    loadYourMonth().then(setMonth, () => {});
+    loadYourMonth().then((m) => {
+      setMonth(m);
+      // The budget heads-up, once per month per level.
+      const budget = monthlyBudget();
+      if (!m || !budget) return;
+      const state = budgetState(m.spent, budget);
+      if (firstTimeAt(m.month, state.level))
+        onToast(
+          state.level === 'over'
+            ? t('You’re {amount} over this month’s food budget.', { amount: formatRM(-state.left) })
+            : t('Heads-up: you’ve used {pct}% of this month’s food budget.', { pct: state.pct }),
+        );
+    }, () => {});
   }, [known]);
   const [summaries, setSummaries] = useState<RoomSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -246,6 +260,8 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
           />
         )}
 
+        {month && <BudgetCard spent={month.spent} onProfile={onProfile} />}
+
         <section aria-labelledby="rooms-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
           <h2 id="rooms-label" className="section-label" style={{ margin: 0 }}>
             {rows.length === 1 ? t('{n} room', { n: rows.length }) : t('{n} rooms', { n: rows.length })}
@@ -337,6 +353,13 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
                 </div>
               ))}
             </div>
+            {!!month.photos?.length && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6 }}>
+                {month.photos.map((path) => (
+                  <MonthPhoto key={path} path={path} />
+                ))}
+              </div>
+            )}
             {month.top && month.top.count > 1 && (
               <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>
                 {month.rooms > 1
@@ -514,5 +537,41 @@ function RoomRow({ first, title, onOpen, onActions, children }: { first: boolean
         </button>
       )}
     </li>
+  );
+}
+
+function MonthPhoto({ path }: { path: string }) {
+  const url = usePhotoUrl(path);
+  return <div style={{ aspectRatio: '1', borderRadius: 12, overflow: 'hidden', background: 'var(--track)' }}>{url && <img src={url} alt={t('Meal photo')} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}</div>;
+}
+
+/** This month's spending against the budget set on You & this phone. */
+function BudgetCard({ spent, onProfile }: { spent: number; onProfile: () => void }) {
+  const budget = monthlyBudget();
+  if (!budget) return null;
+  const { pct, level, left } = budgetState(spent, budget);
+  const color = level === 'over' ? 'var(--danger)' : level === 'warn' ? 'var(--warn)' : 'var(--success)';
+  return (
+    <section aria-labelledby="budget-card-label" className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <h2 id="budget-card-label" className="section-label" style={{ margin: 0 }}>
+          {t('Food budget')}
+        </h2>
+        <button type="button" className="press" onClick={onProfile} style={{ minHeight: 32, border: 'none', background: 'none', padding: 0, fontSize: 13, fontWeight: 700, color: 'var(--accent-text)' }}>
+          {t('Change')}
+        </button>
+      </div>
+      <span style={{ fontSize: 15, fontWeight: 700 }}>{t('{spent} of {budget}', { spent: formatRM(spent), budget: formatRM(budget) })}</span>
+      <div role="progressbar" aria-label={t('Food budget used')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(pct, 100)} style={{ height: 10, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', borderRadius: 999, background: color, transition: 'width 0.6s var(--ease-out)' }} />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: level === 'ok' ? 500 : 700, color: level === 'ok' ? 'var(--muted)' : color }}>
+        {level === 'over'
+          ? t('{amount} over budget this month.', { amount: formatRM(-left) })
+          : level === 'warn'
+            ? t('Heads-up: {pct}% used, {amount} left this month.', { pct, amount: formatRM(left) })
+            : t('{amount} left this month.', { amount: formatRM(left) })}
+      </span>
+    </section>
   );
 }

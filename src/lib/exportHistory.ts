@@ -3,7 +3,7 @@ import { customFood, entryFood, formatTag, type Food } from './foods';
 import { SUNWAY_SPOTS } from './nearby';
 import { dayLabel } from './rotation';
 import { supabase } from './supabase';
-import type { DayEntryRow, MealBillRow, MealRatingRow, MemberRow, RoomRow, SecretPickRow, VetoRow } from './supabase';
+import type { DayEntryRow, KittyTopUpRow, MealBillRow, MealRatingRow, MemberRow, RoomRow, SecretPickRow, SettlementRow, VetoRow } from './supabase';
 import { csv, xlsx, type Sheet } from './xlsx';
 
 const AREA_BY_NAME = new Map(SUNWAY_SPOTS.map((s) => [s.name.toLowerCase(), s.area]));
@@ -92,6 +92,74 @@ export function historySheet({ room, entries, vetoes, picks, ratings = [], bills
   };
 }
 
+interface MoneyData {
+  room: RoomRow;
+  members: MemberRow[];
+  entries: DayEntryRow[];
+  bills: MealBillRow[];
+  settlements: SettlementRow[];
+  topUps: KittyTopUpRow[];
+  foodsById: Map<string, Food>;
+}
+
+/**
+ * Every bill, payment and kitty top-up, oldest first, with a column per person for their share
+ * of each bill. In English, like the meals export.
+ */
+export function moneySheet({ room, members, entries, bills, settlements, topUps, foodsById }: MoneyData): Sheet {
+  const nameOf = new Map(members.map((m) => [m.id, m.name]));
+  const who = (id: string | null) => (id && nameOf.get(id)) || 'Removed member';
+  const entryById = new Map(entries.map((e) => [e.id, e]));
+  // Everyone who ever had a share, in the room's order.
+  const people = members.filter((m) => bills.some((b) => shares(b).has(m.id)));
+  const day = (iso: string) => iso.slice(0, 10);
+  type Row = { sort: string; cells: (string | number | { date: string } | null)[] };
+  const rows: Row[] = [];
+  for (const b of bills) {
+    const e = entryById.get(b.day_entry_id);
+    const date = e?.entry_date ?? day(b.updated_at);
+    const food = e ? (e.food_option_id && !foodsById.has(e.food_option_id) ? 'A deleted food' : (entryFood(e, foodsById)?.name ?? 'Unknown')) : 'Unknown';
+    const each = shares(b);
+    rows.push({
+      sort: `${date}0`,
+      cells: [{ date }, b.from_kitty ? 'Bill (from the kitty)' : 'Bill', `${food}${e?.meal === 'dinner' ? ' (dinner)' : ''}`, b.from_kitty ? 'Kitty' : who(b.paid_by), '', b.amount_cents / 100, ...people.map((m) => (each.has(m.id) ? each.get(m.id)! / 100 : null))],
+    });
+  }
+  for (const p of settlements) {
+    rows.push({ sort: `${day(p.created_at)}1${p.created_at}`, cells: [{ date: day(p.created_at) }, 'Payment', '', who(p.from_member), who(p.to_member), p.amount_cents / 100, ...people.map(() => null)] });
+  }
+  for (const k of topUps) {
+    rows.push({ sort: `${day(k.created_at)}2${k.created_at}`, cells: [{ date: day(k.created_at) }, 'Kitty top-up', '', who(k.member_id), 'Kitty', k.amount_cents / 100, ...people.map(() => null)] });
+  }
+  rows.sort((a, b) => a.sort.localeCompare(b.sort));
+  return {
+    name: `${(room.name?.trim() || `Room ${room.code}`).slice(0, 24)} money`,
+    columns: [
+      { header: 'Date', width: 12 },
+      { header: 'Type', width: 20 },
+      { header: 'Meal', width: 26 },
+      { header: 'Paid by / from', width: 16 },
+      { header: 'To', width: 14 },
+      { header: 'Amount (RM)', width: 12 },
+      ...people.map((m) => ({ header: `${m.name}'s share (RM)`, width: Math.max(12, m.name.length + 14) })),
+    ],
+    rows: rows.map((r) => r.cells),
+  };
+}
+
+/** Bills, payments and kitty top-ups, straight from the database. */
+export async function loadMoney(roomId: string): Promise<Pick<MoneyData, 'entries' | 'bills' | 'settlements' | 'topUps'>> {
+  const [e, b, s, k] = await Promise.all([
+    supabase.from('day_entries').select('*').eq('room_id', roomId).eq('status', 'accepted').limit(10_000),
+    supabase.from('meal_bills').select('*').eq('room_id', roomId).limit(50_000),
+    supabase.from('settlements').select('*').eq('room_id', roomId).limit(50_000),
+    supabase.from('kitty_topups').select('*').eq('room_id', roomId).limit(50_000),
+  ]);
+  const error = e.error ?? b.error ?? s.error ?? k.error;
+  if (error) throw new Error(error.message);
+  return { entries: e.data as DayEntryRow[], bills: b.data as MealBillRow[], settlements: s.data as SettlementRow[], topUps: k.data as KittyTopUpRow[] };
+}
+
 /** Every agreed day in the room, straight from the database (the app only keeps recent ones). */
 export async function loadHistory(roomId: string): Promise<Pick<HistoryData, 'entries' | 'vetoes' | 'picks' | 'ratings' | 'bills'>> {
   const [e, v, p, r, b] = await Promise.all([
@@ -112,7 +180,7 @@ export async function loadHistory(roomId: string): Promise<Pick<HistoryData, 'en
   };
 }
 
-export function exportFileName(room: Pick<RoomRow, 'name' | 'code'>, today: string, ext: 'xlsx' | 'csv'): string {
+export function exportFileName(room: Pick<RoomRow, 'name' | 'code'>, today: string, ext: 'xlsx' | 'csv', what: 'history' | 'money' = 'history'): string {
   const slug =
     (room.name ?? '')
       .toLowerCase()
@@ -120,7 +188,7 @@ export function exportFileName(room: Pick<RoomRow, 'name' | 'code'>, today: stri
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 40) || room.code.toLowerCase();
-  return `makan-apa-${slug}-history-${today}.${ext}`;
+  return `makan-apa-${slug}-${what}-${today}.${ext}`;
 }
 
 export function historyFile(sheet: Sheet, fileName: string, format: 'xlsx' | 'csv'): File {

@@ -35,9 +35,11 @@ interface Props {
   send: WheelSend;
   onBack: () => void;
   onSend: (food: Food) => Promise<void>;
+  /** Extra weight for some foods, e.g. ones you can get under cover when it's raining. */
+  boost?: (food: Food) => number;
 }
 
-export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnLabel, send, onBack, onSend }: Props) {
+export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnLabel, send, onBack, onSend, boost }: Props) {
   const [sending, setSending] = useState(false);
 
   const [mode, setMode] = useState<'all' | 'shortlist'>('all');
@@ -112,7 +114,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
 
   const spin = () => {
     if (!canSpin) return;
-    const k = weightedPick(wheelFoods, wheelWeight);
+    const k = weightedPick(wheelFoods, (f) => wheelWeight(f) * (boost?.(f) ?? 1));
     const winner = wheelFoods[k];
     setResult(null);
     wheel.spinTo(k, wheelFoods.length, () => setResult(winner));

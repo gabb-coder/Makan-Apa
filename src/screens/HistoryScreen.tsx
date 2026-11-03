@@ -4,13 +4,15 @@ import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
 import { dayLabel } from '../lib/rotation';
 import type { RoomExtras } from '../lib/useRoomExtras';
-import { exportFileName, historyFile, historySheet, loadHistory, saveFile } from '../lib/exportHistory';
+import { exportFileName, historyFile, historySheet, loadHistory, loadMoney, moneySheet, saveFile } from '../lib/exportHistory';
 import { roomTitle } from '../lib/session';
 import { availableMonths, monthKey, monthLabel, monthStats } from '../lib/stats';
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { t } from '../lib/i18n';
 import { badgesFor } from '../lib/badges';
+import { PhotoGrid, PhotoViewer, Thumb } from '../components/MealSocial';
+import { hostOf } from '../lib/session';
 
 interface Props {
   room: RoomRow;
@@ -75,6 +77,14 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const eaten = showAllEaten ? stats.mostEaten.slice(0, 10) : stats.mostEaten.slice(0, 3);
   const maxEaten = stats.mostEaten[0]?.count ?? 1;
   const vetoSplit = stats.vetoesByMember.map((x) => `${x.member.id === me.id ? t('You') : x.member.name} ${x.count}`).join(' · ');
+
+  const isHost = hostOf(members, room.host_id)?.id === me.id;
+  const [viewing, setViewing] = useState<(typeof extras.photos)[number] | null>(null);
+  const monthEntryIds = useMemo(() => new Set(stats.meals.map((m) => m.entry.id)), [stats]);
+  const monthPhotos = extras.photos.filter((p) => monthEntryIds.has(p.day_entry_id));
+  // The newest photo of each meal, for its row.
+  const photosByEntry = new Map<string, (typeof extras.photos)[number]>();
+  for (const p of extras.photos) if (!photosByEntry.has(p.day_entry_id)) photosByEntry.set(p.day_entry_id, p);
 
   const badges = useMemo(
     () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements }),
@@ -252,6 +262,26 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         )}
       </section>
 
+      {monthPhotos.length > 0 && (
+        <section aria-labelledby="photos-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <h2 id="photos-label" className="section-label" style={{ margin: 0 }}>
+            {t('Photos')}
+          </h2>
+          <PhotoGrid
+            photos={monthPhotos}
+            me={me}
+            members={members}
+            isHost={isHost}
+            onRemove={extras.removePhoto}
+            onError={onToast}
+            captionFor={(p) => {
+              const meal = stats.meals.find((m) => m.entry.id === p.day_entry_id);
+              return meal ? `${meal.food.name}, ${meal.entry.entry_date === today ? t('Today') : dayLabel(meal.entry.entry_date)}` : t('Meal photo');
+            }}
+          />
+        </section>
+      )}
+
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
         <span className="section-label">{isCurrent ? t('Recent meals') : t('Meals in {month}', { month: monthLabel(month, currentYear) })}</span>
         {stats.meals.length === 0 ? (
@@ -269,7 +299,14 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                   className="row"
                   style={{ animation: `fadeUp 0.5s ${(0.5 + Math.min(i, 8) * 0.1).toFixed(2)}s cubic-bezier(0.2, 0.8, 0.2, 1) both` }}
                 >
-                  <FoodTile food={m.food} />
+                  {(() => {
+                    const photo = photosByEntry.get(m.entry.id);
+                    return photo ? (
+                      <Thumb photo={photo} size={44} onOpen={() => setViewing(photo)} label={t('Photo of {food}', { food: m.food.name })} />
+                    ) : (
+                      <FoodTile food={m.food} />
+                    );
+                  })()}
                   <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {m.food.name}
@@ -412,6 +449,15 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
       {entries.some((e) => e.status === 'accepted') && (
         <ExportCard room={room} members={members} today={today} foodsById={foodsById} onToast={onToast} />
       )}
+      {viewing && (
+        <PhotoViewer
+          photo={viewing}
+          by={nameFor(viewing.member_id)}
+          canRemove={viewing.member_id === me.id || isHost}
+          onRemove={() => extras.removePhoto(viewing).catch((e: unknown) => onToast(e instanceof Error ? e.message : t('Something went wrong. Try again.')))}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </main>
   );
 }
@@ -427,9 +473,17 @@ interface ExportProps {
 /** Download every agreed meal as a spreadsheet. */
 function ExportCard({ room, members, today, foodsById, onToast }: ExportProps) {
   const [busy, setBusy] = useState<'xlsx' | 'csv' | null>(null);
+  const [what, setWhat] = useState<'history' | 'money'>('history');
   const run = async (format: 'xlsx' | 'csv') => {
     setBusy(format);
     try {
+      if (what === 'money') {
+        const data = await loadMoney(room.id);
+        const sheet = moneySheet({ room, members, foodsById, ...data });
+        const saved = await saveFile(historyFile(sheet, exportFileName(room, today, format, 'money'), format));
+        if (saved) onToast(sheet.rows.length === 1 ? t('Exported {n} line.', { n: sheet.rows.length }) : t('Exported {n} lines.', { n: sheet.rows.length }));
+        return;
+      }
       const data = await loadHistory(room.id);
       const sheet = historySheet({ room, members, foodsById, ...data });
       const saved = await saveFile(historyFile(sheet, exportFileName(room, today, format), format));
@@ -444,8 +498,18 @@ function ExportCard({ room, members, today, foodsById, onToast }: ExportProps) {
     <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, paddingBottom: 8 }}>
       <span className="section-label">{t('Export')}</span>
       <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="segmented" role="group" aria-label={t('What to export')} style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <button type="button" aria-pressed={what === 'history'} onClick={() => setWhat('history')}>
+            {t('Meals')}
+          </button>
+          <button type="button" aria-pressed={what === 'money'} onClick={() => setWhat('money')}>
+            {t('Money')}
+          </button>
+        </div>
         <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
-          {t("Every meal you've agreed on, all months: the date, the food or place, who chose it, how, and what got vetoed.")}
+          {what === 'money'
+            ? t('Every bill, payment and kitty top-up: who paid, how much, and each person’s share.')
+            : t("Every meal you've agreed on, all months: the date, the food or place, who chose it, how, and what got vetoed.")}
         </span>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button type="button" className="btn btn--primary press" disabled={busy !== null} onClick={() => run('xlsx')}>

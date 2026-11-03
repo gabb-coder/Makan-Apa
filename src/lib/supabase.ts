@@ -26,6 +26,12 @@ export interface RoomRow {
   color?: string | null;
   /** Weekday (0 Sunday … 6 Saturday) → a food that's always eaten that day, e.g. {"5": "Mamak"}. */
   fixed_days?: Record<string, string>;
+  /** Who the host handed over to; without one the longest-standing member is host. */
+  host_id?: string | null;
+  /** New people ask to join and the host lets them in. */
+  locked?: boolean;
+  /** Holds the group kitty's cash; the kitty is on while someone does. */
+  kitty_keeper?: string | null;
   created_at: string;
 }
 
@@ -60,6 +66,8 @@ export interface MemberRow {
   left_at?: string | null;
   /** A photo of their DuitNow QR, in the room's receipts folder. */
   pay_qr_path?: string | null;
+  /** Set when the host removed them: they need the host's OK to come back. */
+  removed_at?: string | null;
   created_at: string;
 }
 
@@ -129,6 +137,8 @@ export interface MealBillRow {
   sst_pct?: number | string;
   /** A photo in the private receipts bucket, under <room id>/. */
   receipt_path?: string | null;
+  /** Paid out of the room's kitty (by its keeper): no debts, it comes off kitty balances. */
+  from_kitty?: boolean;
   updated_at: string;
 }
 
@@ -186,5 +196,63 @@ export interface TapauOrderRow {
   qty: number;
   price_cents: number | null;
   note: string | null;
+  created_at: string;
+}
+
+/** A message in the room's chat. */
+export interface MessageRow {
+  id: string;
+  room_id: string;
+  member_id: string;
+  body: string;
+  created_at: string;
+}
+
+export const REACTION_EMOJIS = ['🔥', '👍', '😋', '🤔', '😴'] as const;
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
+
+export interface ReactionRow {
+  day_entry_id: string;
+  member_id: string;
+  emoji: ReactionEmoji;
+  created_at: string;
+}
+
+/** A tip on a place: spot_id is the app's spot id (a Sunway spot, or a room spot's id). */
+export interface PlaceNoteRow {
+  id: string;
+  room_id: string;
+  spot_id: string;
+  member_id: string;
+  body: string;
+  created_at: string;
+}
+
+/** A photo of a meal, in the receipts bucket under <room id>/meals/. */
+export interface MealPhotoRow {
+  id: string;
+  room_id: string;
+  day_entry_id: string;
+  member_id: string;
+  path: string;
+  created_at: string;
+}
+
+export interface KittyTopUpRow {
+  id: string;
+  room_id: string;
+  member_id: string;
+  amount_cents: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** Someone asking to join a locked room (or to come back after being removed). */
+export interface JoinRequestRow {
+  id: string;
+  room_id: string;
+  user_id: string;
+  name: string;
+  status: 'pending' | 'approved' | 'declined';
   created_at: string;
 }

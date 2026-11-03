@@ -63,3 +63,20 @@ describe('money', () => {
     expect(settleUp(after)).toEqual([{ from_member: 'alex', to_member: 'wei', amount_cents: 400 }]);
   });
 });
+
+describe('kitty', () => {
+  it('keeps kitty bills out of debts and takes shares off each person’s part', async () => {
+    const { balances, kitty } = await import('./money');
+    const bills = [
+      { paid_by: 'a', amount_cents: 3000, split_between: ['a', 'b', 'c'], from_kitty: true },
+      { paid_by: 'b', amount_cents: 1000, split_between: ['a', 'b'] },
+    ];
+    expect(Object.fromEntries(balances(bills, []))).toEqual({ b: 500, a: -500 });
+    const k = kitty(bills, [
+      { member_id: 'a', amount_cents: 2000 },
+      { member_id: 'b', amount_cents: 2000 },
+    ]);
+    expect(k.total).toBe(1000);
+    expect(Object.fromEntries(k.each)).toEqual({ a: 1000, b: 1000, c: -1000 });
+  });
+});

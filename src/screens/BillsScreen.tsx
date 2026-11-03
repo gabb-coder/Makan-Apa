@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { BillSheet, PayDetailsCard, SettleUpCard } from '../components/Bills';
+import { KittyCard } from '../components/Kitty';
 import { entryFood, type Food } from '../lib/foods';
 import { t } from '../lib/i18n';
 import { formatRM, shares } from '../lib/money';
@@ -65,6 +66,15 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
         />
       </section>
 
+      {(room.kitty_keeper || extras.topUps.length > 0) && (
+        <section aria-labelledby="kitty-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <h2 id="kitty-label" className="section-label" style={{ margin: 0 }}>
+            {t('Group kitty')}
+          </h2>
+          <KittyCard room={room} me={me} members={members} extras={extras} onToast={onToast} />
+        </section>
+      )}
+
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
         <span className="section-label">{t('Meals')}</span>
         {meals.length === 0 ? (
@@ -102,7 +112,7 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
                     <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{food}</span>
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>
                       {when}
-                      {bill && ` · ${t('{name} paid', { name: nameOf(bill.paid_by) })}`}
+                      {bill && ` · ${bill.from_kitty ? t('from the kitty') : t('{name} paid', { name: nameOf(bill.paid_by) })}`}
                       {bill?.receipt_path && ` · ${t('receipt')}`}
                     </span>
                   </span>
@@ -146,7 +156,7 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
       </section>
 
       {open && (
-        <BillSheet dayEntryId={open.id} foodName={open.food} members={members} meId={me.id} extras={extras} away={open.away} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
+        <BillSheet dayEntryId={open.id} foodName={open.food} members={members} meId={me.id} extras={extras} away={open.away} kittyKeeper={room.kitty_keeper} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
       )}
     </main>
   );

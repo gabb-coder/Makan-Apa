@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { PayDetailsCard } from '../components/Bills';
 import { PhoneSettings } from '../components/PhoneSettings';
 import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
+import { monthlyBudget, setMonthlyBudget } from '../lib/budget';
 import { t } from '../lib/i18n';
 import { myMembers, updateEverywhere, type ProfilePatch } from '../lib/profile';
 import type { MemberRow } from '../lib/supabase';
@@ -81,6 +82,8 @@ export function ProfileScreen({ onBack, onToast }: { onBack: () => void; onToast
           </div>
         </section>
 
+        <MonthlyBudgetCard onToast={onToast} />
+
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span className="section-label">{t('How kaki can pay you')}</span>
           {!me && (
@@ -101,5 +104,55 @@ export function ProfileScreen({ onBack, onToast }: { onBack: () => void; onToast
         <PhoneSettings onToast={onToast} />
       </main>
     </div>
+  );
+}
+
+/** A monthly food budget for this phone: your share of meals in every room counts towards it. */
+function MonthlyBudgetCard({ onToast }: { onToast: (message: string) => void }) {
+  const [draft, setDraft] = useState(() => {
+    const b = monthlyBudget();
+    return b ? String(b / 100) : '';
+  });
+  const save = () => {
+    if (!setMonthlyBudget(draft)) return onToast(t('Type an amount, like 300.'));
+    onToast(draft.trim() ? t('Monthly budget saved.') : t('Monthly budget turned off.'));
+  };
+  return (
+    <section className="card fade-up" style={cardStyle}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label htmlFor="monthly-budget" className="section-label">
+          {t('Monthly food budget')}
+        </label>
+        <span id="monthly-budget-hint" style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+          {t('Your share of the bills in all your rooms counts towards it. The main menu shows what’s left, with a heads-up at 80%. Leave it empty to turn it off.')}
+        </span>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        style={{ display: 'flex', gap: 8 }}
+      >
+        <div style={{ position: 'relative', flexGrow: 1 }}>
+          <span aria-hidden="true" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: 'var(--muted)' }}>
+            RM
+          </span>
+          <input
+            id="monthly-budget"
+            className="input"
+            inputMode="decimal"
+            placeholder="300"
+            aria-describedby="monthly-budget-hint"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            style={{ paddingLeft: 46 }}
+          />
+        </div>
+        <button type="submit" className="btn btn--primary press" style={{ padding: '0 20px', flexShrink: 0 }}>
+          {t('Save')}
+        </button>
+      </form>
+    </section>
   );
 }

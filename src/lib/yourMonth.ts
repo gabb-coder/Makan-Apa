@@ -12,6 +12,8 @@ export interface MonthSummary {
   /** Your share of this month's bills, in sen. */
   spent: number;
   rooms: number;
+  /** Paths of this month's latest meal photos, across your rooms. */
+  photos?: string[];
 }
 
 /** What you ate and spent this month, across every room on this phone. Pure part, for tests. */
@@ -44,15 +46,16 @@ export async function loadYourMonth(): Promise<MonthSummary | null> {
   if (!known.length) return null;
   const month = todayIn().slice(0, 7);
   const ids = known.map((k) => k.roomId);
-  const [entries, away, bills] = await Promise.all([
+  const [entries, away, bills, photos] = await Promise.all([
     supabase.from('day_entries').select('*').in('room_id', ids).gte('entry_date', `${month}-01`),
     supabase.from('attendance').select('room_id, entry_date, meal, member_id').in('room_id', ids).eq('status', 'out').gte('entry_date', `${month}-01`),
     supabase.from('meal_bills').select('*').in('room_id', ids),
+    supabase.from('meal_photos').select('path').in('room_id', ids).gte('created_at', `${month}-01`).order('created_at', { ascending: false }).limit(4),
   ]);
   const rows = (entries.data ?? []) as DayEntryRow[];
   const foodIds = [...new Set(rows.map((e) => e.food_option_id).filter((x): x is string => !!x))];
   const foods = foodIds.length ? await supabase.from('food_options').select('id, name').in('id', foodIds) : { data: [] };
-  return summarizeMonth(
+  const summary = summarizeMonth(
     month,
     rows,
     (away.data ?? []) as { room_id: string; entry_date: string; meal: string; member_id: string }[],
@@ -60,4 +63,5 @@ export async function loadYourMonth(): Promise<MonthSummary | null> {
     new Map(((foods.data ?? []) as { id: string; name: string }[]).map((f) => [f.id, f.name])),
     new Map(known.map((k) => [k.roomId, k.memberId])),
   );
+  return { ...summary, photos: ((photos.data ?? []) as { path: string }[]).map((p) => p.path) };
 }

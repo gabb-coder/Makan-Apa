@@ -8,6 +8,8 @@
 //   vote      the decider started a quick vote → everyone else who's in
 //   meet      a meet-up time was set          → everyone else who's in
 //   late      someone's running late          → everyone else who's in
+//   chat      a message in the room's chat    → everyone else
+//   join      someone asked to join a locked room → the host
 // The person who did it (actor) never gets their own alert.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
@@ -104,8 +106,14 @@ Deno.serve(async (req) => {
     const food = await foodName(e);
     const each = shares(bill);
     for (const [mid, cents] of each) {
-      if (mid === bill.paid_by || mid === actor || cents <= 0) continue;
-      recipients.set(mid, { type: 'bill', payer: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents), food, share: formatRM(cents) });
+      // From the kitty nobody's owed, so the keeper hears about their share too.
+      if ((!bill.from_kitty && mid === bill.paid_by) || mid === actor || cents <= 0) continue;
+      recipients.set(
+        mid,
+        bill.from_kitty
+          ? { type: 'kitty', amount: formatRM(bill.amount_cents), food, share: formatRM(cents) }
+          : { type: 'bill', payer: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents), food, share: formatRM(cents) },
+      );
     }
     url = `/?room=${roomId}#bills`;
     tag = `makan-bill-${id}`;
@@ -143,6 +151,33 @@ Deno.serve(async (req) => {
     const ev: Event = { type, who: nameOf(id) };
     for (const s of subs) if (s.member_id !== id) recipients.set(s.member_id, ev);
     tag = `makan-late-${id}`;
+  } else if (type === 'chat') {
+    const [{ data: msg }, { data: room }] = await Promise.all([
+      db.from('messages').select('member_id, body').eq('id', id).maybeSingle(),
+      db.from('rooms').select('name, code').eq('id', roomId).maybeSingle(),
+    ]);
+    const m = msg as { member_id: string; body: string } | null;
+    if (!m) return json({ skipped: 'stale' });
+    const r = room as { name: string | null; code: string } | null;
+    const text = m.body.length > 140 ? `${m.body.slice(0, 139)}…` : m.body;
+    for (const s of subs) if (s.member_id !== m.member_id) recipients.set(s.member_id, { type: 'chat', who: nameOf(m.member_id), room: r?.name || r?.code || '', text });
+    url = `/?room=${roomId}#chat`;
+    // One notification per room, replaced by the newest message.
+    tag = `makan-chat-${roomId}`;
+  } else if (type === 'join') {
+    const [{ data: req }, { data: room }, { data: people }] = await Promise.all([
+      db.from('join_requests').select('name, status').eq('id', id).maybeSingle(),
+      db.from('rooms').select('name, code, host_id').eq('id', roomId).maybeSingle(),
+      db.from('members').select('id, left_at, created_at').eq('room_id', roomId).is('left_at', null).order('created_at').order('id'),
+    ]);
+    const r = req as { name: string; status: string } | null;
+    const rm = room as { name: string | null; code: string; host_id: string | null } | null;
+    const active = (people ?? []) as { id: string }[];
+    // Same rule as private.room_host_id: who it was handed to, else the longest-standing member.
+    const host = active.find((m) => m.id === rm?.host_id)?.id ?? active[0]?.id;
+    if (!r || r.status !== 'pending' || !host) return json({ skipped: 'stale' });
+    recipients.set(host, { type: 'join', who: r.name, room: rm?.name || rm?.code || '' });
+    tag = `makan-join-${id}`;
   } else {
     return json({ error: 'unknown type' }, 400);
   }

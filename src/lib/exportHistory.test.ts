@@ -65,3 +65,22 @@ describe('exportFileName', () => {
     expect(exportFileName({ name: null, code: 'K7M2QX' }, '2026-10-31', 'csv')).toBe('makan-apa-k7m2qx-history-2026-10-31.csv');
   });
 });
+
+describe('moneySheet', () => {
+  it('lists bills, payments and kitty top-ups with each person’s share', async () => {
+    const { moneySheet } = await import('./exportHistory');
+    const m = (id: string, name: string) => ({ id, name, room_id: 'r', color: '#000', sort_order: 0, diet: [], budget: null, created_at: '2026-10-01T00:00:00Z' });
+    const sheet = moneySheet({
+      room: { id: 'r', code: 'ABC123', name: 'Lunch gang', timezone: 'Asia/Kuala_Lumpur', rotation_start: '2026-10-01', veto_limit: 1, decision_mode: 'decider', meals: 'lunch', created_at: '' },
+      members: [m('a', 'Wei'), m('b', 'Ali')],
+      entries: [{ id: 'e1', room_id: 'r', entry_date: '2026-11-02', decider_id: 'a', food_option_id: null, custom_food: 'Mamak', method: 'direct', status: 'accepted', meal: 'lunch', created_at: '' }],
+      bills: [{ day_entry_id: 'e1', room_id: 'r', paid_by: 'a', amount_cents: 3000, split_between: ['a', 'b'], from_kitty: true, updated_at: '2026-11-02T05:00:00Z' }],
+      settlements: [{ id: 's1', room_id: 'r', from_member: 'b', to_member: 'a', amount_cents: 500, created_at: '2026-11-03T05:00:00Z' }],
+      topUps: [{ id: 'k1', room_id: 'r', member_id: 'b', amount_cents: 5000, created_by: 'b', created_at: '2026-11-01T05:00:00Z' }],
+      foodsById: new Map(),
+    });
+    expect(sheet.columns.map((c) => c.header)).toEqual(['Date', 'Type', 'Meal', 'Paid by / from', 'To', 'Amount (RM)', "Wei's share (RM)", "Ali's share (RM)"]);
+    expect(sheet.rows.map((r) => r[1])).toEqual(['Kitty top-up', 'Bill (from the kitty)', 'Payment']);
+    expect(sheet.rows[1]).toEqual([{ date: '2026-11-02' }, 'Bill (from the kitty)', 'Mamak', 'Kitty', '', 30, 15, 15]);
+  });
+});

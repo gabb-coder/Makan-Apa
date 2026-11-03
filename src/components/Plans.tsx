@@ -1,3 +1,4 @@
+import { meetupIcs, openIcs } from '../lib/ics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../lib/i18n';
 import { addDays, dayMonthLabel } from '../lib/rotation';
@@ -52,7 +53,10 @@ export function MeetupCard({
   myStatus,
   onSave,
   onLate,
+  calendar,
 }: {
+  /** For "Add to calendar": the event's id, title and notes. */
+  calendar?: { uid: string; title: string; description?: string };
   meetAt: string | null;
   place: string | null;
   today: string;
@@ -157,6 +161,20 @@ export function MeetupCard({
           {t('Change')}
         </button>
       </div>
+      {calendar && ms > 0 && (
+        <button
+          type="button"
+          className="press"
+          onClick={() => openIcs(meetupIcs({ ...calendar, start: meetAt!, place }))}
+          style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, minHeight: 40, padding: 0, border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent-text)' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4" />
+          </svg>
+          {t('Add to calendar')}
+        </button>
+      )}
     </section>
   );
 }
