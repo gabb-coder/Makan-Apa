@@ -20,12 +20,15 @@ export function WhosInCard({
   meal,
   statusOf,
   onSet,
+  onPlan,
 }: {
   me: MemberRow;
   members: MemberRow[];
   meal: Meal;
   statusOf: (memberId: string) => Attendance;
   onSet: (status: Attendance) => Promise<void>;
+  /** Mark days away ahead of time. */
+  onPlan?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const mine = statusOf(me.id);
@@ -86,6 +89,11 @@ export function WhosInCard({
           {mine === 'late' && ` ${t('Late still counts as in: you can decide and you’re on the bill.')}`}
         </span>
       </div>
+      {onPlan && (
+        <button type="button" onClick={onPlan} style={{ alignSelf: 'flex-start', minHeight: 36, padding: 0, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
+          {t('Away on other days? Plan ahead')}
+        </button>
+      )}
     </section>
   );
 }

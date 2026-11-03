@@ -10,6 +10,7 @@ import { availableMonths, monthKey, monthLabel, monthStats } from '../lib/stats'
 import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { t } from '../lib/i18n';
+import { badgesFor } from '../lib/badges';
 
 interface Props {
   room: RoomRow;
@@ -74,6 +75,11 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const eaten = showAllEaten ? stats.mostEaten.slice(0, 10) : stats.mostEaten.slice(0, 3);
   const maxEaten = stats.mostEaten[0]?.count ?? 1;
   const vetoSplit = stats.vetoesByMember.map((x) => `${x.member.id === me.id ? t('You') : x.member.name} ${x.count}`).join(' · ');
+
+  const badges = useMemo(
+    () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements }),
+    [me.id, entries, vetoes, extras.bills, extras.settlements],
+  );
 
   // Room favourites: foods with more thumbs up than down, all time.
   const favourites = foods.filter((f) => (f.netRating ?? 0) > 0).sort((a, b) => (b.netRating ?? 0) - (a.netRating ?? 0)).slice(0, 5);
@@ -364,6 +370,44 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           </div>
         </section>
       )}
+
+      <section aria-labelledby="badges-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+        <h2 id="badges-label" className="section-label" style={{ margin: 0 }}>
+          {t('Your badges · {n} of {total}', { n: badges.filter((b) => b.earned).length, total: badges.length })}
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+          {badges.map((b) => (
+            <div
+              key={b.id}
+              className="card"
+              style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, background: b.earned ? 'var(--streak-bg)' : undefined }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 26, lineHeight: 1, filter: b.earned ? 'none' : 'grayscale(1)', opacity: b.earned ? 1 : 0.45 }}>
+                {b.emoji}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: b.earned ? 'var(--streak-ink)' : 'var(--ink)' }}>{t(b.title)}</span>
+              <span style={{ fontSize: 12, lineHeight: 1.35, color: b.earned ? 'var(--streak-ink-2)' : 'var(--muted)' }}>{t(b.description)}</span>
+              {!b.earned && (
+                <span
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={b.target}
+                  aria-valuenow={b.value}
+                  aria-label={t('{value} of {target}', { value: b.value, target: b.target })}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}
+                >
+                  <span aria-hidden="true" style={{ flexGrow: 1, height: 6, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
+                    <span style={{ display: 'block', width: `${(b.value / b.target) * 100}%`, height: '100%', background: 'var(--accent)' }} />
+                  </span>
+                  <span aria-hidden="true" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    {b.value}/{b.target}
+                  </span>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       {entries.some((e) => e.status === 'accepted') && (
         <ExportCard room={room} members={members} today={today} foodsById={foodsById} onToast={onToast} />

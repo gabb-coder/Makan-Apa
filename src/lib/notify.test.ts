@@ -18,6 +18,7 @@ describe('notifications', () => {
     expect(message({ type: 'nudge', to: 'Wei', amount: 'RM15.16', several: false }).title).toBe('You owe Wei RM15.16');
     expect(message({ type: 'nudge', to: 'Wei', amount: 'RM30.00', several: true }).title).toBe('You owe RM30.00 in total');
     expect(message({ type: 'tapau', runner: 'Alex', place: 'Lai Kong' }, 'ms').title).toBe('Alex akan beli dari Lai Kong');
+    expect(message({ type: 'leaving', time: '12:30', place: 'Lobby' })).toEqual({ title: 'Leaving in 10 minutes', body: '12:30 · Lobby' });
   });
 
   it('leaves no placeholder unfilled in any language', () => {
@@ -28,6 +29,10 @@ describe('notifications', () => {
       { type: 'tapau', runner: 'A', place: 'B' },
       { type: 'order', who: 'A', item: 'B' },
       { type: 'nudge', to: 'A', amount: 'RM1', several: false },
+      { type: 'vote', decider: 'A', options: 'B · C' },
+      { type: 'meet', time: '12:30', place: 'Lobby' },
+      { type: 'late', who: 'A' },
+      { type: 'leaving', time: '12:30', place: 'Lobby' },
       { type: 'your-turn' },
       { type: 'secret-open' },
     ] as const;

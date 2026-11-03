@@ -114,7 +114,7 @@ interface YourTurnProps {
   onType: () => void;
 }
 
-export function YourTurnCard({ me, sub, onSpin, onPickList, onType }: YourTurnProps) {
+export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote }: YourTurnProps & { onVote?: () => void }) {
   return (
     <DeciderShell decider={me} label={t("Today's decider")}>
       <DeciderHeading decider={me} title={t('Your turn!')} sub={sub} />
@@ -153,6 +153,16 @@ export function YourTurnCard({ me, sub, onSpin, onPickList, onType }: YourTurnPr
           {t('Type my own')}
         </button>
       </div>
+      {onVote && (
+        <button
+          type="button"
+          className="press"
+          onClick={onVote}
+          style={{ position: 'relative', minHeight: 40, border: 'none', background: 'none', color: '#FFFFFF', fontSize: 14, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          {t('Can’t decide? Put it to a vote')}
+        </button>
+      )}
     </DeciderShell>
   );
 }

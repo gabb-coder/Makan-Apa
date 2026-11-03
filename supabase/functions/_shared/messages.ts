@@ -11,6 +11,10 @@ export type Event =
   | { type: 'tapau'; runner: string; place: string }
   | { type: 'order'; who: string; item: string }
   | { type: 'nudge'; to: string; amount: string; several: boolean }
+  | { type: 'vote'; decider: string; options: string }
+  | { type: 'meet'; time: string; place: string }
+  | { type: 'late'; who: string }
+  | { type: 'leaving'; time: string; place: string }
   | { type: 'your-turn' }
   | { type: 'secret-open' };
 
@@ -54,6 +58,26 @@ const TEXT: Record<Event['type'], Record<Lang, [string, string]>> = {
     en: ['You owe {to} {amount}', 'Pay them back, then tap Mark paid in Bills.'],
     ms: ['Kamu hutang {to} {amount}', 'Bayar balik, kemudian tekan Tanda dah bayar dalam Bil.'],
     zh: ['你欠{to} {amount}', '还钱后，在账单里点“标记已付”。'],
+  },
+  vote: {
+    en: ['{decider} put lunch to a vote', '{options}. Tap to vote.'],
+    ms: ['{decider} buat undian makan', '{options}. Tekan untuk undi.'],
+    zh: ['{decider}发起了投票', '{options}。点开投票。'],
+  },
+  meet: {
+    en: ['Leaving at {time}', 'Meet at {place}.'],
+    ms: ['Bertolak pukul {time}', 'Jumpa di {place}.'],
+    zh: ['{time}出发', '在{place}集合。'],
+  },
+  late: {
+    en: ['{who} is running late', 'Wait up, or go ahead and save them a seat.'],
+    ms: ['{who} lambat sikit', 'Tunggu sekejap, atau pergi dulu dan simpan tempat.'],
+    zh: ['{who}会晚一点', '等一下，或先去帮忙留个位。'],
+  },
+  leaving: {
+    en: ['Leaving in 10 minutes', '{time} · {place}'],
+    ms: ['Bertolak dalam 10 minit', '{time} · {place}'],
+    zh: ['10分钟后出发', '{time} · {place}'],
   },
   'your-turn': {
     en: ['It’s your turn to choose', 'Makan apa? Spin the wheel or pick something for today.'],

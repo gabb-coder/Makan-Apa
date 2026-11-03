@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { spotSuitability, suitsEveryone, type Needs } from '../lib/diet';
 import { formatTag } from '../lib/foods';
 import { dayHoursLabel, WEEKDAYS, weekdayLabel } from '../lib/hours';
@@ -25,6 +25,8 @@ import {
   type Spot,
 } from '../lib/nearby';
 import { FoodTile } from './FoodTile';
+
+const SpotMap = lazy(() => import('./SpotMap'));
 
 function DietBadge({ diet }: { diet: Spot['diet'] }) {
   if (!diet) return null;
@@ -362,6 +364,26 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
             {PIN(18)}
             {t('Open in Google Maps')}
           </a>
+          {/* Raining, or no time to go out: find the place on a delivery app. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+            {(
+              [
+                ['GrabFood', 'food.grab.com'],
+                ['foodpanda', 'foodpanda.my'],
+              ] as const
+            ).map(([app, site]) => (
+              <a
+                key={app}
+                href={`https://www.google.com/search?q=${encodeURIComponent(`${spot.name} ${spotArea(spot)} site:${site}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn--secondary press"
+                style={{ height: 44, fontSize: 14, textDecoration: 'none' }}
+              >
+                {t('Order on {app}', { app })}
+              </a>
+            ))}
+          </div>
           <button type="button" className="btn btn--secondary press" disabled={inList} onClick={onAdd}>
             {inList ? t('Already in your food list') : t('Add to food list')}
           </button>
@@ -442,6 +464,7 @@ export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, her
   const needs = members.some((m) => (m.diet?.length ?? 0) > 0 || m.budget);
   const filters = needs ? [FILTERS[0], { label: tk('Suits everyone'), test: (s: Spot) => suitsEveryone(spotSuitability(s), members) }, ...FILTERS.slice(1)] : FILTERS;
   const [filter, setFilter] = useState(needs ? 'Suits everyone' : 'All');
+  const [view, setView] = useState<'list' | 'map'>('list');
   const test = (filters.find((f) => f.label === filter) ?? filters[0]).test;
   const spots = allSpots.filter(test);
   const ours = roomSpots.filter((s) => test(s) || filter === 'Open now');
@@ -482,7 +505,20 @@ export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, her
             {t('Only places a source describes as halal. Others may be halal too; check before you go.')}
           </p>
         )}
-        {(ours.length > 0 || onAddSpot) && (
+        <div className="segmented" role="group" aria-label={t('Show as')} style={{ flexShrink: 0 }}>
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>
+            {t('List')}
+          </button>
+          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
+            {t('Map')}
+          </button>
+        </div>
+        {view === 'map' && (
+          <Suspense fallback={<div style={{ height: '58dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>{t('Loading map…')}</div>}>
+            <SpotMap spots={[...ours, ...spots]} here={here} onOpen={onOpen} />
+          </Suspense>
+        )}
+        {view === 'list' && (ours.length > 0 || onAddSpot) && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span className="section-label">{t("Your room's spots")}</span>
             {ours.length > 0 && (
@@ -512,7 +548,7 @@ export function NearbyAllSheet({ spots: allSpots, roomSpots = [], onAddSpot, her
             )}
           </section>
         )}
-        {areas.map((area) => (
+        {view === 'list' && areas.map((area) => (
           <section key={area} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span className="section-label">
               {area}

@@ -3,6 +3,7 @@ import { t, tNodes } from '../lib/i18n';
 import { balances, billTotals, formatRM, parsePct, parseRM, settleUp, shares, type BillItem } from '../lib/money';
 import type { MealBillRow, MemberRow, SettlementRow } from '../lib/supabase';
 import type { RoomExtras } from '../lib/useRoomExtras';
+import { qrUrl, removeQrEverywhere, saveQrEverywhere } from '../lib/payQr';
 import { Avatar } from './Avatar';
 
 const CLOSE_ICON = (
@@ -389,8 +390,51 @@ async function copy(text: string, onToast: (m: string) => void) {
 }
 
 /** "DuitNow 012-345 6789 [Copy]" lines for someone you owe. */
+/** A full-screen look at someone's DuitNow QR, to scan with a banking app. */
+export function QrViewer({ path, name, onClose }: { path: string; name: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    void qrUrl(path).then(setUrl);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [path, onClose]);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="qr-title" onClick={(e) => e.stopPropagation()} style={{ alignItems: 'center' }}>
+        <h2 id="qr-title" className="title title--sm" style={{ fontSize: 22, alignSelf: 'stretch' }}>
+          {t('Pay {name} with DuitNow', { name })}
+        </h2>
+        {url ? (
+          <img src={url} alt={t('DuitNow QR code for {name}', { name })} style={{ width: '100%', maxWidth: 320, borderRadius: 16, background: '#fff' }} />
+        ) : (
+          <span style={{ color: 'var(--muted)' }}>{t('Loading…')}</span>
+        )}
+        <span style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>{t('Scan it with your banking or e-wallet app, then tap Mark paid.')}</span>
+        <button type="button" className="btn btn--secondary press" onClick={onClose} style={{ alignSelf: 'stretch', height: 48 }}>
+          {t('Close')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "Show QR" for someone who has a DuitNow QR saved. */
+export function ShowQrButton({ member }: { member: MemberRow | undefined }) {
+  const [open, setOpen] = useState(false);
+  if (!member?.pay_qr_path) return null;
+  return (
+    <>
+      <button type="button" className="chip press" onClick={() => setOpen(true)} style={{ height: 32, padding: '0 10px', fontSize: 12, alignSelf: 'flex-start' }}>
+        {t('Show DuitNow QR')}
+      </button>
+      {open && <QrViewer path={member.pay_qr_path} name={member.name} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 function PayLines({ member, onToast }: { member: MemberRow | undefined; onToast: (m: string) => void }) {
-  if (!member?.pay_duitnow && !member?.pay_bank) return null;
+  if (!member?.pay_duitnow && !member?.pay_bank && !member?.pay_qr_path) return null;
   const line = (label: string, value: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)' }}>
       <span style={{ flexGrow: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
@@ -410,6 +454,7 @@ function PayLines({ member, onToast }: { member: MemberRow | undefined; onToast:
     <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 2 }}>
       {member.pay_duitnow && line(t('DuitNow'), member.pay_duitnow)}
       {member.pay_bank && line(t('Bank'), member.pay_bank)}
+      <ShowQrButton member={member} />
     </div>
   );
 }
@@ -557,17 +602,71 @@ export function SettleUpCard({
 }
 
 /** Your DuitNow and bank details, shown to the room when someone owes you. */
-export function PayDetailsCard({ me, onSave }: { me: MemberRow; onSave: (patch: { pay_duitnow: string | null; pay_bank: string | null }) => Promise<void> }) {
+export function PayDetailsCard({ me, onSave, onQrChanged }: { me: MemberRow; onSave: (patch: { pay_duitnow: string | null; pay_bank: string | null }) => Promise<void>; onQrChanged?: () => void }) {
   const [editing, setEditing] = useState(false);
   const [duitnow, setDuitnow] = useState(me.pay_duitnow ?? '');
   const [bank, setBank] = useState(me.pay_bank ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const has = !!(me.pay_duitnow || me.pay_bank);
+  const [qrBusy, setQrBusy] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const qrInput = useRef<HTMLInputElement>(null);
+  const qrAct = async (fn: () => Promise<void>) => {
+    setQrBusy(true);
+    setQrError(null);
+    try {
+      await fn();
+      onQrChanged?.();
+    } catch (e) {
+      setQrError(e instanceof Error ? e.message : t('Could not save.'));
+    } finally {
+      setQrBusy(false);
+    }
+  };
+  // Your DuitNow QR photo, for kaki to scan: saved in every room you're in.
+  const qrRow = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid var(--divider)', flexWrap: 'wrap' }}>
+      <span style={{ flexGrow: 1, fontSize: 14, color: 'var(--ink-2)' }}>{me.pay_qr_path ? t('DuitNow QR saved.') : t('Add your DuitNow QR so kaki can scan it.')}</span>
+      {me.pay_qr_path && (
+        <button type="button" className="chip press" onClick={() => setShowQr(true)} style={{ height: 34, padding: '0 12px', fontSize: 13 }}>
+          {t('View')}
+        </button>
+      )}
+      <button type="button" className="chip press" disabled={qrBusy} onClick={() => qrInput.current?.click()} style={{ height: 34, padding: '0 12px', fontSize: 13 }}>
+        {qrBusy ? t('Saving…') : me.pay_qr_path ? t('Change') : t('Add QR photo')}
+      </button>
+      {me.pay_qr_path && (
+        <button type="button" className="chip press" disabled={qrBusy} onClick={() => void qrAct(removeQrEverywhere)} style={{ height: 34, padding: '0 12px', fontSize: 13 }}>
+          {t('Remove')}
+        </button>
+      )}
+      <input
+        ref={qrInput}
+        type="file"
+        accept="image/*"
+        hidden
+        data-testid="qr-input"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void qrAct(() => saveQrEverywhere(file));
+        }}
+      />
+      {qrError && (
+        <span role="alert" style={{ width: '100%', fontSize: 13, color: 'var(--danger)' }}>
+          {qrError}
+        </span>
+      )}
+      {showQr && me.pay_qr_path && <QrViewer path={me.pay_qr_path} name={me.name} onClose={() => setShowQr(false)} />}
+    </div>
+  );
 
   if (!editing) {
     return (
-      <div className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14 }}>
           {has ? (
             <>
@@ -598,6 +697,8 @@ export function PayDetailsCard({ me, onSave }: { me: MemberRow; onSave: (patch: 
         >
           {has ? t('Edit') : t('Add')}
         </button>
+      </div>
+        {qrRow}
       </div>
     );
   }
