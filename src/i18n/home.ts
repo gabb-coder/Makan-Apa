@@ -25,8 +25,11 @@ export const translations: Translations = {
     'Needs you': 'Perlukan kamu',
     'Tap to open': 'Tekan untuk buka',
     "Couldn't load what's happening in your rooms. {error}": 'Tak dapat muat apa yang berlaku dalam bilik kamu. {error}',
-    'No rooms yet. Create one for each group you eat with, or join one with a code.':
-      'Belum ada bilik. Cipta satu untuk setiap kumpulan makan kamu, atau sertai dengan kod.',
+    'No rooms yet. Tap + to create one for each group you eat with, or join one with a code.':
+      'Belum ada bilik. Tekan + untuk cipta satu bagi setiap kumpulan makan kamu, atau sertai dengan kod.',
+    'New room': 'Bilik baru',
+    'Start one for a new group': 'Mulakan untuk kumpulan baru',
+    'Use the code a friend sent you': 'Guna kod yang kawan hantar',
     'Join a room with a code': 'Sertai bilik dengan kod',
     'One room for each group you eat with: classmates, office, family. Each room has its own turns, food list and bills.':
       'Satu bilik untuk setiap kumpulan makan: kawan kelas, pejabat, keluarga. Setiap bilik ada giliran, senarai makanan dan bil sendiri.',
@@ -108,7 +111,10 @@ export const translations: Translations = {
     'Needs you': '需要你',
     'Tap to open': '点开查看',
     "Couldn't load what's happening in your rooms. {error}": '无法加载房间动态。{error}',
-    'No rooms yet. Create one for each group you eat with, or join one with a code.': '还没有房间。为每个饭友群建一个，或用代码加入。',
+    'No rooms yet. Tap + to create one for each group you eat with, or join one with a code.': '还没有房间。点 + 为每个饭友群建一个，或用代码加入。',
+    'New room': '新房间',
+    'Start one for a new group': '为新的饭友群建一个',
+    'Use the code a friend sent you': '用朋友发给你的代码',
     'Join a room with a code': '用代码加入房间',
     'One room for each group you eat with: classmates, office, family. Each room has its own turns, food list and bills.':
       '每个饭友群一个房间：同学、同事、家人。每个房间有自己的轮流、食物列表和账单。',

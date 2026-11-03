@@ -9,7 +9,10 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   // Add a second room: the people sheet leads back to all rooms
   await people();
   await phone.click('button:has-text("All rooms")');
-  await phone.click('text=Create a new room');
+  // The + at the top right opens create / join
+  await phone.click('button[aria-label="New room"]');
+  await phone.getByRole('menuitem', { name: /Join a room with a code/ }).waitFor();
+  await phone.getByRole('menuitem', { name: /Create a new room/ }).click();
   // Your name carries over from your other room
   await expect(phone.locator('#join-name')).toHaveValue('Wei');
   await phone.fill('#room-name', 'Housemates');
