@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { addDays, dayLabel, deciderFor } from '../lib/rotation';
 import { needsLabel } from '../lib/diet';
 import { t } from '../lib/i18n';
-import { hostOf, knownRooms, knownRoomTitle, roomTitle } from '../lib/session';
+import { hostOf, knownRooms, roomTitle } from '../lib/session';
 import type { MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
 
@@ -16,8 +16,8 @@ interface Props {
   onClose: () => void;
   onInvite: () => void;
   onSettings: () => void;
-  onSwitchRoom: (roomId: string) => void;
-  onAddRoom: () => void;
+  /** The main menu, with every room on this phone. */
+  onHome?: () => void;
 }
 
 /** When each member decides next, e.g. "Decides tomorrow". */
@@ -50,7 +50,7 @@ export function OnlineDot({ size = 12 }: { size?: number }) {
   );
 }
 
-export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onSwitchRoom, onAddRoom }: Props) {
+export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onHome }: Props) {
   const otherRooms = knownRooms().filter((r) => r.roomId !== room.id);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -129,23 +129,11 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
         </div>
         <p style={{ margin: 0, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>{t('A green dot means they have Makan apa? open right now.')}</p>
 
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
-          <span className="section-label">{otherRooms.length ? t('Your other rooms') : t('Another group?')}</span>
-          {otherRooms.map((r) => (
-            <button key={r.roomId} type="button" className="row press" onClick={() => onSwitchRoom(r.roomId)} style={{ borderRadius: 14, background: 'var(--bg)' }}>
-              <span style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{knownRoomTitle(r)}</span>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                  {t("Code {code} · you're {name}", { code: r.code, name: r.name })}
-                </span>
-              </span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-text)', flexShrink: 0 }}>{t('Switch')}</span>
-            </button>
-          ))}
-          <button type="button" className="btn btn--secondary press" onClick={onAddRoom}>
-            {t('Join or create another room')}
+        {onHome && (
+          <button type="button" className="btn btn--secondary press" onClick={onHome} style={{ marginTop: 4 }}>
+            {otherRooms.length ? t('All your rooms ({n})', { n: otherRooms.length + 1 }) : t('All rooms, or start another group')}
           </button>
-        </section>
+        )}
       </div>
     </div>
   );

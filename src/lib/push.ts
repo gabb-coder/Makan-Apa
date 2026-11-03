@@ -152,3 +152,30 @@ export async function notifyRoom(memberId: string): Promise<void> {
   const { error } = await supabase.rpc('subscribe_push', { p_member_id: memberId, p_endpoint: sub.endpoint, p_p256dh: keys.p256dh, p_auth: keys.auth, p_remind_hour: hour });
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Notifications for this phone as a whole: on if any room gets them, with the reminder hour,
+ * weekly recap and alerts settings (the same for every room on the phone), and how many rooms.
+ */
+export async function phoneNotifications(): Promise<{ hour: number; recap: boolean; events: boolean; rooms: number } | null> {
+  if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return null;
+  const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
+  const rows = (data as { member_id: string; remind_hour: number; weekly_recap?: boolean; notify_events?: boolean }[] | null) ?? [];
+  if (!rows.length) return null;
+  return { hour: rows[0].remind_hour, recap: rows[0].weekly_recap ?? true, events: rows[0].notify_events ?? true, rooms: rows.length };
+}
+
+/** Move the daily reminder to `hour` in every room this phone gets notifications for. */
+export async function setReminderHour(hour: number): Promise<void> {
+  const reg = await navigator.serviceWorker?.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return;
+  const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };
+  for (const memberId of await subscribedMembers(sub.endpoint)) {
+    const { error } = await supabase.rpc('subscribe_push', { p_member_id: memberId, p_endpoint: sub.endpoint, p_p256dh: keys.p256dh, p_auth: keys.auth, p_remind_hour: hour });
+    if (error) throw new Error(error.message);
+  }
+}

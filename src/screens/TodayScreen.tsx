@@ -54,8 +54,6 @@ interface Props {
   onOpenSettings: () => void;
   onSpin: () => void;
   onSeeAll: () => void;
-  onSwitchRoom: (roomId: string) => void;
-  onAddRoom: () => void;
   /** Back to the home screen with every room. */
   onHome?: () => void;
   onToast: (message: string) => void;
@@ -72,7 +70,7 @@ interface Props {
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onSwitchRoom, onAddRoom, onHome, onToast, extras, attendance, away, meal, onMealChange }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onHome, onToast, extras, attendance, away, meal, onMealChange }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
@@ -341,19 +339,26 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           </div>
         </header>
       ) : (
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           {backHome}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flexGrow: 1 }}>
             <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
-                new Date(`${today}T00:00:00Z`),
-              )}
-              {room.name ? ` · ${room.name}` : ''}
+              {new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${today}T00:00:00Z`))}
             </span>
-            <h1 className="title">
-              Makan <span style={{ color: 'var(--accent-text)' }}>apa?</span>
+            {/* The room's name, so it's always clear which group this is. */}
+            <h1
+              className="title title--sm"
+              style={{ fontSize: 26, lineHeight: 1.1, overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            >
+              {roomTitle(room)}
             </h1>
           </div>
+          <button type="button" className="icon-btn press" aria-label={t('Room settings')} onClick={onOpenSettings} style={{ flexShrink: 0, alignSelf: 'center' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
+          </button>
           <button
             type="button"
             className="press"
@@ -369,7 +374,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               gap: 8,
               height: 44,
               flexShrink: 0,
-              padding: '0 14px 0 6px',
+              padding: '0 8px 0 6px',
               borderRadius: 999,
               border: '1px solid var(--border)',
               background: 'var(--surface)',
@@ -408,7 +413,6 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                 </span>
               )}
             </span>
-            {room.code}
           </button>
         </header>
       )}
@@ -576,6 +580,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <TapauSheet
           tapau={tapau}
           foodName={todayFood.name}
+          places={suiting(here ? byDistance(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS]), here) : spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).map((sp) => sp.name)}
           members={members}
           me={me}
           onToast={onToast}
@@ -605,8 +610,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             setPeopleOpen(false);
             onOpenSettings();
           }}
-          onSwitchRoom={onSwitchRoom}
-          onAddRoom={onAddRoom}
+          onHome={onHome}
         />
       )}
 

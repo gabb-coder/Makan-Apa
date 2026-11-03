@@ -63,6 +63,27 @@ export const translations: Translations = {
     'Tap again to leave {room}': 'Tekan sekali lagi untuk keluar {room}',
     'You left {room}.': 'Kamu dah keluar {room}.',
     'More for {room}': 'Lagi untuk {room}',
+    // You & this phone, and clearer rooms
+    'You & this phone': 'Kamu & telefon ini',
+    'Open You & this phone': 'Buka Kamu & telefon ini',
+    'Your food needs, DuitNow, language, notifications and more are set once for all your rooms.':
+      'Keperluan makanan, DuitNow, bahasa, pemberitahuan dan lain-lain ditetapkan sekali untuk semua bilik kamu.',
+    "For every room you're in. Foods that clash with anyone in a room stay off its wheel, and nearby ideas skip places that don't fit.":
+      'Untuk setiap bilik kamu. Makanan yang tak sesuai untuk sesiapa dalam bilik dikeluarkan dari roda, dan cadangan berdekatan langkau tempat yang tak sesuai.',
+    'Payment details saved in all your rooms.': 'Butiran bayaran disimpan dalam semua bilik kamu.',
+    'For every room on this phone: a reminder when it’s your turn, plus alerts when things happen. Mute a single room from its ⋯ on the main menu.':
+      'Untuk setiap bilik di telefon ini: peringatan bila giliran kamu, juga makluman bila sesuatu berlaku. Senyapkan satu bilik dari ⋯ di menu utama.',
+    'Notifications on for all your rooms. Reminders come at {time}.': 'Pemberitahuan dihidupkan untuk semua bilik. Peringatan pada {time}.',
+    'Notifications off on this phone.': 'Pemberitahuan dimatikan di telefon ini.',
+    'Join or create a room first.': 'Sertai atau cipta bilik dahulu.',
+    'Times are in each room’s timezone.': 'Masa ikut zon waktu setiap bilik.',
+    Advanced: 'Lanjutan',
+    'All your rooms ({n})': 'Semua bilik kamu ({n})',
+    'All rooms, or start another group': 'Semua bilik, atau mulakan kumpulan lain',
+    'e.g. Lai Kong, SS15': 'cth. Lai Kong, SS15',
+    'Late still counts as in: you can decide and you’re on the bill.': 'Lambat tetap dikira join: kamu boleh pilih dan masuk dalam bil.',
+    'You’re taken out of the turns and Who’s in. Your old meals and bills stay. Rejoin any time with code {code} and the same name.':
+      'Kamu dikeluarkan dari giliran dan senarai join. Makanan dan bil lama kekal. Sertai semula bila-bila masa dengan kod {code} dan nama yang sama.',
   },
   zh: {
     'Your rooms': '你的房间',
@@ -124,5 +145,25 @@ export const translations: Translations = {
     'Tap again to leave {room}': '再点一次退出{room}',
     'You left {room}.': '你已退出{room}。',
     'More for {room}': '{room}的更多操作',
+    // You & this phone, and clearer rooms
+    'You & this phone': '我和这台手机',
+    'Open You & this phone': '打开“我和这台手机”',
+    'Your food needs, DuitNow, language, notifications and more are set once for all your rooms.': '饮食需求、DuitNow、语言、通知等只需设置一次，适用于你所有的房间。',
+    "For every room you're in. Foods that clash with anyone in a room stay off its wheel, and nearby ideas skip places that don't fit.":
+      '适用于你所在的每个房间。不适合房间里任何人的食物不会上转盘，附近推荐也会跳过不合适的店。',
+    'Payment details saved in all your rooms.': '付款资料已保存到你所有的房间。',
+    'For every room on this phone: a reminder when it’s your turn, plus alerts when things happen. Mute a single room from its ⋯ on the main menu.':
+      '适用于这台手机上的每个房间：轮到你时提醒，以及动态提醒。想静音某个房间，在主菜单点它的 ⋯。',
+    'Notifications on for all your rooms. Reminders come at {time}.': '已为所有房间开启通知。提醒时间：{time}。',
+    'Notifications off on this phone.': '已关闭这台手机的通知。',
+    'Join or create a room first.': '请先加入或创建一个房间。',
+    'Times are in each room’s timezone.': '时间以各房间的时区为准。',
+    Advanced: '高级',
+    'All your rooms ({n})': '你所有的房间（{n}）',
+    'All rooms, or start another group': '所有房间，或开个新群',
+    'e.g. Lai Kong, SS15': '例如：Lai Kong, SS15',
+    'Late still counts as in: you can decide and you’re on the bill.': '晚到也算参加：你可以当选择人，也会算进账单。',
+    'You’re taken out of the turns and Who’s in. Your old meals and bills stay. Rejoin any time with code {code} and the same name.':
+      '你会被移出轮流和参加名单。以前的餐点和账单会保留。随时可用代码 {code} 和同样的名字重新加入。',
   },
 };

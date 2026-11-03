@@ -51,6 +51,7 @@ export function TapauLine({ tapau, members, meId, onOpen }: { tapau: TapauApi; m
 export function TapauSheet({
   tapau,
   foodName,
+  places = [],
   members,
   me,
   onMakeBill,
@@ -59,6 +60,8 @@ export function TapauSheet({
 }: {
   tapau: TapauApi;
   foodName: string;
+  /** Places nearby that serve it, closest first, to pick from. */
+  places?: string[];
   members: MemberRow[];
   me: MemberRow;
   /** The runner turns the orders into the meal's bill. */
@@ -67,7 +70,8 @@ export function TapauSheet({
   onClose: () => void;
 }) {
   const { run, orders } = tapau;
-  const [place, setPlace] = useState(foodName);
+  // A shop, not the dish: start with the closest place that serves it, if there is one.
+  const [place, setPlace] = useState(places[0] ?? '');
   const [who, setWho] = useState(me.id);
   const [item, setItem] = useState('');
   const [qty, setQty] = useState(1);
@@ -138,7 +142,16 @@ export function TapauSheet({
             <label className="field-label" htmlFor="tapau-place">
               {t('Buying from')}
             </label>
-            <input id="tapau-place" className="input" maxLength={60} value={place} onChange={(e) => setPlace(e.target.value)} />
+            <input id="tapau-place" className="input" maxLength={60} placeholder={t('e.g. Lai Kong, SS15')} value={place} onChange={(e) => setPlace(e.target.value)} />
+            {places.length > 1 && (
+              <div className="chip-row" style={{ flexWrap: 'wrap', margin: 0, padding: 0 }}>
+                {places.slice(0, 4).map((p) => (
+                  <button key={p} type="button" className="chip press" aria-pressed={place === p} onClick={() => setPlace(p)} style={{ height: 34, padding: '0 12px', fontSize: 13 }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
             <button type="submit" className="btn btn--primary press" disabled={busy || !place.trim()} style={{ height: 52 }}>
               {t('Start the run, I’m buying')}
             </button>

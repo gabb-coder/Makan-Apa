@@ -42,6 +42,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(host.locator('main li button').first()).toBeVisible();
       await host.waitForTimeout(1200);
       await scan(host, 'home');
+      await host.click('button:text-is("You")');
+      await expect(host.getByRole('heading', { name: 'You & this phone' })).toBeVisible();
+      await expect(host.getByText('Add your DuitNow or bank account so kaki can pay you back.')).toBeVisible();
+      await host.waitForTimeout(500);
+      await scan(host, 'profile');
+      await host.click('button[aria-label="Your rooms"]');
       await host.locator('main li button').first().click();
       await expect(host.locator('nav')).toBeVisible();
     } finally {

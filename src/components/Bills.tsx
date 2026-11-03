@@ -55,7 +55,7 @@ export function BillSheet({
   const bill = extras.bills.find((b) => b.day_entry_id === dayEntryId) ?? null;
   const nextKey = useRef(0);
   const row = (r: Omit<Row, 'key'>): Row => ({ ...r, key: nextKey.current++ });
-  const present = members.filter((m) => !away?.has(m.id));
+  const present = members.filter((m) => !away?.has(m.id) && !m.left_at);
   const eaters = present.length ? present : members;
   const [paidBy, setPaidBy] = useState(bill?.paid_by ?? start?.paidBy ?? meId);
   const [rows, setRows] = useState<Row[]>(() => {
@@ -107,6 +107,8 @@ export function BillSheet({
 
   const update = (key: number, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const togglePerson = (r: Row, id: string) => update(r.key, { people: r.people.includes(id) ? r.people.filter((p) => p !== id) : [...r.people, id] });
+  // Chips for people still in the room, plus anyone who left but is already on this bill.
+  const chipMembers = members.filter((m) => !m.left_at || m.id === paidBy || rows.some((r) => r.people.includes(m.id)));
   const everyone = eaters.map((m) => m.id);
 
   const placeholder = (r: Row) =>
@@ -185,7 +187,7 @@ export function BillSheet({
         <fieldset style={sectionStyle}>
           <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Paid by')}</legend>
           <div className="chip-row" style={{ flexWrap: 'wrap' }}>
-            {members.map((m) => (
+            {chipMembers.map((m) => (
               <button key={m.id} type="button" className="chip press" aria-pressed={paidBy === m.id} onClick={() => setPaidBy(m.id)}>
                 {nameOf(m.id)}
               </button>
@@ -240,7 +242,7 @@ export function BillSheet({
                     {t('Everyone')}
                   </button>
                 )}
-                {members.map((m) => (
+                {chipMembers.map((m) => (
                   <button
                     key={m.id}
                     type="button"
