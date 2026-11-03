@@ -14,3 +14,13 @@ describe('dates', () => {
     expect(todayIn('Europe/London', lateUtc)).toBe('2026-10-30');
   });
 });
+
+describe('mealNow', () => {
+  it('switches to dinner at 6pm in rooms that decide both', async () => {
+    const { mealNow } = await import('./dates');
+    // 17:59 and 18:00 in Kuala Lumpur (UTC+8)
+    expect(mealNow('both', 'Asia/Kuala_Lumpur', new Date('2026-11-04T09:59:00Z'))).toBe('lunch');
+    expect(mealNow('both', 'Asia/Kuala_Lumpur', new Date('2026-11-04T10:00:00Z'))).toBe('dinner');
+    expect(mealNow('lunch', 'Asia/Kuala_Lumpur', new Date('2026-11-04T12:00:00Z'))).toBe('lunch');
+  });
+});

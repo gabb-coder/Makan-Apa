@@ -12,7 +12,7 @@ import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
 import { deciderFor } from './lib/rotation';
 import type { Meal } from './lib/supabase';
-import { localHour } from './lib/dates';
+import { mealNow } from './lib/dates';
 import { useDays } from './lib/useDays';
 import { usePresence } from './lib/usePresence';
 import { useToday } from './lib/useToday';
@@ -352,8 +352,8 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
     }
   }, [removed]);
   const today = useToday(room.timezone);
-  // Lunch or dinner, for rooms that decide both: dinner from 3pm in the room's timezone.
-  const [mealChoice, setMeal] = useState<Meal>(() => (localHour(room.timezone) >= 15 ? 'dinner' : 'lunch'));
+  // Lunch or dinner, for rooms that decide both: dinner from 6pm in the room's timezone.
+  const [mealChoice, setMeal] = useState<Meal>(() => mealNow('both', room.timezone));
   const meal: Meal = room.meals === 'both' ? mealChoice : 'lunch';
   const attendance = useAttendance(room.id, today);
   const away = attendance.awayOn(today, meal);

@@ -21,6 +21,10 @@ test('one phone can be in several rooms and switch between them', async ({ brows
   await phone.fill('#room-name', 'Housemates');
   await phone.click('button:text-is("Create room")');
   await expect(phone.locator('header h1')).toContainText('Housemates');
+  // New rooms decide lunch and dinner (dinner shows from 6pm)
+  await phone.goto('/#settings');
+  await expect(phone.locator('button:text-is("Lunch and dinner")')).toHaveAttribute('aria-pressed', 'true');
+  await phone.goto('/#today');
 
   // Switch back, and the choice survives a reload
   await people();
