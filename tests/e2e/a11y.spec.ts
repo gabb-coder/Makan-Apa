@@ -10,6 +10,8 @@ const scan = async (page: Page, where: string) => {
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`every screen passes an accessibility scan (${colorScheme})`, async ({ browser }) => {
+    // Every screen twice over, with two phones: it needs longer than the default.
+    test.setTimeout(180_000);
     const host = await browser.newContext({ colorScheme }).then((c) => c.newPage());
     await host.goto('/');
     await scan(host, 'join');
