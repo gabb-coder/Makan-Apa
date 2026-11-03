@@ -47,6 +47,7 @@ interface Member {
   name: string;
   sort_order: number;
   created_at: string;
+  left_at: string | null;
 }
 interface Entry {
   id: string;
@@ -199,7 +200,7 @@ Deno.serve(async (req) => {
   const roomIds = [...new Set(subs.map((s) => s.room_id))];
   const [rooms, members, entries] = await Promise.all([
     db.from('rooms').select('id, timezone, rotation_start, decision_mode').in('id', roomIds),
-    db.from('members').select('id, room_id, name, sort_order, created_at').in('room_id', roomIds),
+    db.from('members').select('id, room_id, name, sort_order, created_at, left_at').in('room_id', roomIds),
     // A week back for the recap, plus enough for any timezone's "today".
     db
       .from('day_entries')
@@ -258,7 +259,9 @@ Deno.serve(async (req) => {
     summary.due++;
 
     const entry = (entries.data as Entry[]).find((e) => e.room_id === room.id && e.entry_date === local.date && (e.meal ?? 'lunch') === 'lunch');
-    const roomMembers = (members.data as Member[]).filter((m) => m.room_id === room.id);
+    const everyone = (members.data as Member[]).filter((m) => m.room_id === room.id);
+    // People who left are out of the turns (their names still show on what they're owed).
+    const roomMembers = everyone.filter((m) => !m.left_at);
     let reminder: { title: string; body: string } | null = null;
     const away = outOn(room.id, local.date);
 
@@ -277,7 +280,7 @@ Deno.serve(async (req) => {
     const owed = debtsIn(room.id).filter((p) => p.from_member === sub.member_id);
     if (sub.notify_events && owed.length && (!sub.last_nudge_on || daysBetween(sub.last_nudge_on, local.date) >= NUDGE_EVERY_DAYS)) {
       const total = owed.reduce((n, p) => n + p.amount_cents, 0);
-      const to = roomMembers.find((m) => m.id === owed[0].to_member)?.name ?? 'someone';
+      const to = everyone.find((m) => m.id === owed[0].to_member)?.name ?? 'someone';
       const nudge = message({ type: 'nudge', to, amount: formatRM(total), several: owed.length > 1 }, sub.lang);
       const result = await send(sub, { ...nudge, url: `/?room=${room.id}#bills`, tag: `makan-owe-${room.id}-${local.date}` });
       if (result === 'gone') {
