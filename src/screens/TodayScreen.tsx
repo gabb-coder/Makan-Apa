@@ -20,6 +20,10 @@ import type { BillItem } from '../lib/money';
 import type { AttendanceApi } from '../lib/useAttendance';
 import { useTapau } from '../lib/useTapau';
 import { shareCard } from '../lib/shareCard';
+import { MealPhotos, photoUrl, ReactionBar } from '../components/MealSocial';
+import { JoinRequestList } from '../components/JoinRequests';
+import { PlaceNotes } from '../components/PlaceNotes';
+import { useJoinRequests } from '../lib/useJoinRequests';
 import { clockTime } from '../lib/vote';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
@@ -29,9 +33,10 @@ import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
 import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
 import { locale, t, tNodes } from '../lib/i18n';
 import { shareInvite } from '../lib/invite';
-import { roomTitle } from '../lib/session';
+import { hostOf, roomTitle } from '../lib/session';
 import { useLocation } from '../lib/location';
-import { byDistance, isNearSunway, NEARBY_LABEL, roomSpot, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
+import { byDistance, coveredFirst, isNearSunway, NEARBY_LABEL, roomSpot, SUNWAY_CENTRE, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
+import { useRain } from '../lib/weather';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
@@ -55,6 +60,9 @@ interface Props {
   online: Set<string>;
   onAddFood: (draft: FoodDraft) => Promise<void>;
   onOpenSettings: () => void;
+  /** The room's chat, and how many messages are new there. */
+  onOpenChat?: () => void;
+  unreadChat?: number;
   onSpin: () => void;
   onSeeAll: () => void;
   /** Back to the home screen with every room. */
@@ -73,7 +81,7 @@ interface Props {
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onSpin, onSeeAll, onHome, onToast, extras, attendance, away, meal, onMealChange }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onOpenChat, unreadChat = 0, onSpin, onSeeAll, onHome, onToast, extras, attendance, away, meal, onMealChange }: Props) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
@@ -83,6 +91,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const joinRequests = useJoinRequests(room.id, hostOf(members, room.host_id)?.id === me.id);
   // Whoever's in for this meal: they decide, answer, pick and pay.
   const present = members.filter((m) => !away.has(m.id));
   const [addingSpot, setAddingSpot] = useState(false);
@@ -90,6 +99,17 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const location = useLocation();
   const here = location.status === 'ready' ? location.here : undefined;
   const nearSunway = !here || isNearSunway(here);
+  // Rain now or soon near Sunway: places you can walk to under cover come first.
+  const rain = useRain(nearSunway ? (here ?? SUNWAY_CENTRE) : undefined);
+  const wet = !!rain && (rain.now || rain.soon);
+  const dry = (spots: Spot[]) => (wet ? coveredFirst(spots) : spots);
+  const rainNote = wet ? (
+    <p role="status" style={{ margin: 0, padding: '10px 12px', borderRadius: 14, background: 'var(--accent-tint)', color: 'var(--accent-ink)', fontSize: 13, lineHeight: 1.45, fontWeight: 600 }}>
+      {rain?.now
+        ? t('🌧 It’s raining. Places you can reach under cover come first, or order in from a place’s page.')
+        : t('🌦 Rain is likely soon. Places you can reach under cover come first.')}
+    </p>
+  ) : null;
   // Places that suit everyone's diet and budget first; the rest only if nothing fits.
   const suiting = (spots: Spot[]) => {
     const fit = spots.filter((sp) => suitsEveryone(spotSuitability(sp), present));
@@ -209,10 +229,27 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         food={todayFood}
         tomorrowText={tomorrowText}
         here={here}
-        nearby={showNearby ? <NearbyList spots={suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).slice(0, 3)} here={here} /> : null}
+        nearby={
+          showNearby ? (
+            <>
+              {rainNote}
+              <NearbyList spots={dry(suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS]))).slice(0, 3)} here={here} />
+            </>
+          ) : null
+        }
         extras={
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 8 }}>
+            <ReactionBar dayEntryId={todayEntry.id} me={me} members={members} onError={onToast} />
             <RatingRow entryId={todayEntry.id} ratings={extras.ratings} meId={me.id} onRate={(r) => run(() => extras.rate(todayEntry.id, r))} />
+            <MealPhotos
+              photos={extras.photos.filter((p) => p.day_entry_id === todayEntry.id).reverse()}
+              me={me}
+              members={members}
+              isHost={hostOf(members, room.host_id)?.id === me.id}
+              onAdd={(file) => extras.addPhoto(todayEntry.id, file)}
+              onRemove={extras.removePhoto}
+              onError={onToast}
+            />
             <BillLine bill={extras.bills.find((b) => b.day_entry_id === todayEntry.id) ?? null} members={members} meId={me.id} onOpen={() => setBillOpen(true)} />
             {!extras.bills.some((b) => b.day_entry_id === todayEntry.id) && <TapauLine tapau={tapau} members={members} meId={me.id} onOpen={() => setTapauOpen(true)} />}
             <button
@@ -227,6 +264,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                     place: todayEntry.meet_place,
                     time: todayEntry.meet_at ? t('Leaving {time}', { time: clockTime(todayEntry.meet_at, room.timezone) }) : null,
                     by: todayEntry.method === 'wheel' ? t('Picked by the wheel') : t('{name} picked', { name: nameFor(todayEntry.decider_id, me.name) }),
+                    photo: await (async () => {
+                      const latest = extras.photos.find((p) => p.day_entry_id === todayEntry.id);
+                      return latest ? photoUrl(latest.path) : null;
+                    })(),
                   });
                   if (msg) onToast(msg);
                 })
@@ -407,6 +448,24 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               {roomTitle(room)}
             </h1>
           </div>
+          {onOpenChat && (
+            <button
+              type="button"
+              className="icon-btn press"
+              aria-label={unreadChat ? (unreadChat === 1 ? t('Chat, 1 new message') : t('Chat, {n} new messages', { n: unreadChat })) : t('Chat')}
+              onClick={onOpenChat}
+              style={{ flexShrink: 0, alignSelf: 'center', position: 'relative' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              {unreadChat > 0 && (
+                <span aria-hidden="true" style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 999, background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', boxShadow: '0 0 0 2px var(--bg)' }}>
+                  {unreadChat > 9 ? '9+' : unreadChat}
+                </span>
+              )}
+            </button>
+          )}
           <button type="button" className="icon-btn press" aria-label={t('Room settings')} onClick={onOpenSettings} style={{ flexShrink: 0, alignSelf: 'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -481,6 +540,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         </div>
       )}
 
+      {joinRequests.requests.length > 0 && !proposalView && (
+        <section className="card fade-up" aria-label={t('Waiting to join')} style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, borderColor: 'var(--accent)' }}>
+          <JoinRequestList requests={joinRequests.requests} onAnswer={joinRequests.answer} onToast={onToast} />
+        </section>
+      )}
+
       {main}
 
       {!proposalView && todayEntry?.status === 'accepted' && todayFood && present.length > 1 && (
@@ -494,6 +559,11 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           myStatus={attendance.statusOf(me.id, today, meal)}
           onSave={(at, where) => run(() => days.setMeetup(at, where))}
           onLate={() => run(() => attendance.setStatus(me.id, today, meal, 'late'))}
+          calendar={{
+            uid: `${todayEntry.id}-${todayEntry.meet_at ?? ''}`,
+            title: t('{meal}: {food}, with {room}', { meal: meal === 'dinner' ? t('Dinner') : t('Lunch'), food: todayFood.name, room: roomTitle(room) }),
+            description: t('Planned on Makan apa?'),
+          }}
         />
       )}
 
@@ -528,6 +598,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                   : t('How was your last {food}?', { food: lastMeal.food.name })
             }
             onRate={(r) => run(() => extras.rate(lastMeal.entry.id, r))}
+          />
+          <MealPhotos
+            compact
+            photos={extras.photos.filter((p) => p.day_entry_id === lastMeal.entry.id).reverse()}
+            me={me}
+            members={members}
+            isHost={hostOf(members, room.host_id)?.id === me.id}
+            onAdd={(file) => extras.addPhoto(lastMeal.entry.id, file)}
+            onRemove={extras.removePhoto}
+            onError={onToast}
           />
         </section>
       )}
@@ -613,11 +693,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                   {nearSunway ? t('See all {n}', { n: SUNWAY_SPOTS.length + roomSpots.length }) : t('Sunway picks')}
                 </button>
               </div>
+              {nearSunway && rainNote}
               {here && !nearSunway ? (
                 <NearYouStrip here={here} />
               ) : (
                 <NearbyStrip
-                  spots={suiting(here ? byDistance([...roomSpots, ...spotsOfTheDay(today)], here) : [...roomSpots, ...spotsOfTheDay(today)]).slice(0, 8 + Math.min(roomSpots.length, 4))}
+                  spots={dry(suiting(here ? byDistance([...roomSpots, ...spotsOfTheDay(today)], here) : [...roomSpots, ...spotsOfTheDay(today)])).slice(0, 8 + Math.min(roomSpots.length, 4))}
                   here={here}
                   onOpen={setSpot}
                 />
@@ -637,6 +718,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           extras={extras}
           away={away}
           start={billStart}
+          kittyKeeper={room.kitty_keeper}
           onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved. See who owes what in Bills.'))}
           onClose={() => {
             setBillOpen(false);
@@ -714,6 +796,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <SpotSheet
           spot={spot}
           here={here}
+          notes={<PlaceNotes roomId={room.id} spotId={spot.id} me={me} members={members} isHost={hostOf(members, room.host_id)?.id === me.id} onError={onToast} />}
           addedBy={spot.room?.addedBy ? (spot.room.addedBy === me.id ? t('you') : memberById.get(spot.room.addedBy)?.name) : undefined}
           onRemove={
             spot.room

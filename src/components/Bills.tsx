@@ -37,10 +37,13 @@ export function BillSheet({
   extras,
   away,
   start,
+  kittyKeeper,
   onSaved,
   onClose,
 }: {
   dayEntryId: string;
+  /** The room's kitty keeper, when it has a kitty: bills can then be paid from the kitty. */
+  kittyKeeper?: string | null;
   foodName: string;
   members: MemberRow[];
   meId: string;
@@ -59,6 +62,8 @@ export function BillSheet({
   const present = members.filter((m) => !away?.has(m.id) && !m.left_at);
   const eaters = present.length ? present : members;
   const [paidBy, setPaidBy] = useState(bill?.paid_by ?? start?.paidBy ?? meId);
+  // Paid from the kitty: its keeper hands over the cash, and nobody owes anybody.
+  const [fromKitty, setFromKitty] = useState(!!bill?.from_kitty && !!kittyKeeper);
   const [rows, setRows] = useState<Row[]>(() => {
     if (bill?.items?.length) return bill.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: i.people }));
     if (bill) return [row({ name: '', price: (bill.amount_cents / 100).toFixed(2), people: bill.split_between })];
@@ -126,7 +131,8 @@ export function BillSheet({
       const receipt_path = uploaded ?? (keepOld ? oldPath : null);
       await extras.saveBill({
         day_entry_id: dayEntryId,
-        paid_by: paidBy,
+        paid_by: fromKitty && kittyKeeper ? kittyKeeper : paidBy,
+        from_kitty: fromKitty && !!kittyKeeper,
         amount_cents: totals.total,
         split_between: [...new Set(items.flatMap((i) => i.people))],
         items: items.map((i) => ({ ...i, name: i.name || placeholder({ key: 0, name: '', price: '', people: i.people }) })),
@@ -189,10 +195,24 @@ export function BillSheet({
           <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Paid by')}</legend>
           <div className="chip-row" style={{ flexWrap: 'wrap' }}>
             {chipMembers.map((m) => (
-              <button key={m.id} type="button" className="chip press" aria-pressed={paidBy === m.id} onClick={() => setPaidBy(m.id)}>
+              <button
+                key={m.id}
+                type="button"
+                className="chip press"
+                aria-pressed={!fromKitty && paidBy === m.id}
+                onClick={() => {
+                  setPaidBy(m.id);
+                  setFromKitty(false);
+                }}
+              >
                 {nameOf(m.id)}
               </button>
             ))}
+            {kittyKeeper && (
+              <button type="button" className="chip press" aria-pressed={fromKitty} onClick={() => setFromKitty(true)}>
+                {t('🫙 The kitty')}
+              </button>
+            )}
           </div>
         </fieldset>
 
@@ -317,7 +337,7 @@ export function BillSheet({
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Avatar name={m.name} color={m.color} size={24} />
                       {nameOf(m.id)}
-                      {m.id === paidBy && <span style={{ color: 'var(--muted)', fontSize: 13 }}>· {t('paid')}</span>}
+                      {!fromKitty && m.id === paidBy && <span style={{ color: 'var(--muted)', fontSize: 13 }}>· {t('paid')}</span>}
                     </span>
                     <b>{formatRM(each.get(m.id) ?? 0)}</b>
                   </div>

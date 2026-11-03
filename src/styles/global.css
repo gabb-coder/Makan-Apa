@@ -20,6 +20,7 @@
   --hover: #fafaf8;
   --danger: #b42318;
   --success: #2f7a4f;
+  --warn: #8a5a00;
   --danger-tint: #fdecea;
   --streak-bg: #fff0c2;
   --streak-ink: #4a3000;
@@ -53,6 +54,7 @@
   --hover: #232327;
   --danger: #ff7b6b;
   --success: #6cc48f;
+  --warn: #f0b955;
   --danger-tint: #3a1714;
   --streak-bg: #3a2d06;
   --streak-ink: #ffe08a;
@@ -80,6 +82,7 @@
     --hover: #232327;
     --danger: #ff7b6b;
     --success: #6cc48f;
+  --warn: #f0b955;
     --danger-tint: #3a1714;
     --streak-bg: #3a2d06;
     --streak-ink: #ffe08a;
@@ -1050,5 +1053,21 @@ input[type='date'].input::-webkit-date-and-time-value {
   }
   60% {
     transform: scale(0.95, 1.1) rotate(-2deg);
+  }
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  animation: spinnerTurn 0.9s linear infinite;
+}
+
+@keyframes spinnerTurn {
+  to {
+    transform: rotate(360deg);
   }
 }

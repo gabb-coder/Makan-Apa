@@ -19,6 +19,7 @@ import {
   spotKnownFor,
   spotMenu,
   menuPrice,
+  spotIsCovered,
   spotOpenNow,
   spotMapsUrl,
   SUNWAY_CENTRE,
@@ -294,9 +295,11 @@ interface SheetProps {
   onClose: () => void;
   onAdd: () => void;
   onPick?: () => void;
+  /** Your room's tips on the place. */
+  notes?: React.ReactNode;
 }
 
-export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, onClose, onAdd, onPick }: SheetProps) {
+export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, onClose, onAdd, onPick, notes }: SheetProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -340,6 +343,11 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
             {priceLabel(spot.price)}
           </span>
           <DietBadge diet={spot.diet} />
+          {spotIsCovered(spot) && (
+            <span className="badge" style={{ background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
+              {t('☂ Under cover from campus')}
+            </span>
+          )}
           {spot.tags.map((t) => (
             <span key={t} className="badge" style={{ background: 'var(--bar-track)', color: 'var(--ink-2)' }}>
               {formatTag(t)}
@@ -348,6 +356,7 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
         </div>
         {spot.room ? <span style={{ fontSize: 13, color: 'var(--muted)' }}>{spotArea(spot)}</span> : <SpotHours spot={spot} />}
         <SpotMenu spot={spot} />
+        {notes}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {onPick && pickLabel && (
             <button type="button" className="btn btn--primary press" style={{ height: 52 }} onClick={onPick}>

@@ -533,6 +533,20 @@ export const SUNWAY_CENTRE = AREA_CENTRES['On campus'];
 /** Beyond this, the Sunway picks aren't "near you" and the app searches around you instead. */
 export const NEAR_SUNWAY_KM = 8;
 
+/**
+ * Areas you can reach from campus without getting wet: on campus, and the malls and food court
+ * along Sunway's covered canopy walk.
+ */
+const COVERED_AREAS = new Set(['On campus', 'Sunway Pyramid', 'Sunway Geo Avenue', 'Sunway Square']);
+export function spotIsCovered(spot: Pick<Spot, 'area' | 'room'>): boolean {
+  return !spot.room && COVERED_AREAS.has(spot.area);
+}
+
+/** On a rainy day: places under cover first, otherwise in the same order. */
+export function coveredFirst<T extends Pick<Spot, 'area' | 'room'>>(spots: T[]): T[] {
+  return [...spots.filter(spotIsCovered), ...spots.filter((s) => !spotIsCovered(s))];
+}
+
 /** A few dishes from the spot's menu; empty for room spots and places without one. */
 export function spotMenu(spot: Pick<Spot, 'id' | 'room'>): MenuItem[] {
   return spot.room ? [] : (SPOT_MENUS[spot.id] ?? []);

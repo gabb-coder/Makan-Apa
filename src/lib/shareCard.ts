@@ -11,6 +11,18 @@ export interface CardInfo {
   time?: string | null;
   /** "Wei picked" or "Picked by the wheel". */
   by?: string | null;
+  /** A photo of the meal (a link the canvas can load), shown at the top of the card. */
+  photo?: string | null;
+}
+
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
 }
 
 const W = 1080;
@@ -65,13 +77,31 @@ export async function drawCard(info: CardInfo): Promise<Blob> {
   ctx.beginPath();
   ctx.roundRect(60, top, W - 120, cardH, 48);
   ctx.fill();
+  // With a photo, it fills the top of the card (cropped to fit) and the words go underneath.
+  const img = info.photo ? await loadImage(info.photo) : null;
+  let textTop = top + 190;
+  let size = 128;
+  if (img) {
+    const ph = 400;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(60, top, W - 120, ph, [48, 48, 0, 0]);
+    ctx.clip();
+    const scale = Math.max((W - 120) / img.width, ph / img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    ctx.drawImage(img, 60 + (W - 120 - w) / 2, top + (ph - h) / 2, w, h);
+    ctx.restore();
+    textTop = top + ph + 120;
+    size = 96;
+  }
   ctx.fillStyle = '#18181B';
-  ctx.font = `800 128px ${display}`;
-  const lines = wrap(ctx, `${info.food}!`, W - 240);
-  lines.forEach((l, i) => ctx.fillText(l, 120, top + 190 + i * 140));
+  ctx.font = `800 ${size}px ${display}`;
+  const lines = wrap(ctx, `${info.food}!`, W - 240).slice(0, img ? 2 : 3);
+  lines.forEach((l, i) => ctx.fillText(l, 120, textTop + i * (size + 12)));
   ctx.fillStyle = '#52525B';
   ctx.font = `600 44px ${body}`;
-  let y = top + 190 + lines.length * 140 + 40;
+  let y = textTop + lines.length * (size + 12) + 30;
   for (const extra of [info.place && `📍 ${info.place}`, info.time && `🕧 ${info.time}`, info.by]) {
     if (!extra) continue;
     ctx.fillText(extra, 120, y);

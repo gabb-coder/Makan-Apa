@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { hostOf } from './session';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
 
-export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode' | 'name' | 'meals' | 'emoji' | 'color' | 'fixed_days'>>;
+export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode' | 'name' | 'meals' | 'emoji' | 'color' | 'fixed_days' | 'host_id' | 'locked' | 'kitty_keeper'>>;
 export type MemberPatch = Partial<Pick<MemberRow, 'name' | 'color' | 'sort_order' | 'diet' | 'budget' | 'pay_duitnow' | 'pay_bank' | 'pay_qr_path'>>;
 
 function upsert(rows: MemberRow[], row: MemberRow): MemberRow[] {
@@ -83,15 +83,16 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[], m
     }
   };
 
-  /** Remove someone who joined by mistake. Members with any history can't be removed yet. */
+  /**
+   * Host only: take someone out of the room. They stay in its history and money (like leaving),
+   * lose access on their phones, and need the host's OK to come back.
+   */
   const removeMember = async (id: string) => {
-    if (hostOf(members)?.id !== meId) throw new Error('Only the host can remove people from the room.');
+    if (hostOf(members, room.host_id)?.id !== meId) throw new Error('Only the host can remove people from the room.');
     if (id === meId) throw new Error('To leave, use “Leave room on this phone”.');
-    // Row-level security only lets the host delete, so an empty result means "not allowed".
-    const { data, error } = await supabase.from('members').delete().eq('id', id).select('id');
+    const { error } = await supabase.rpc('remove_member', { p_member_id: id });
     if (error) throw new Error(error.message);
-    if (!data?.length) throw new Error('Only the host can remove people from the room.');
-    setMembers((cur) => cur.filter((m) => m.id !== id));
+    await load();
   };
 
   /** Host only: delete the room and everything in it, for everyone. */

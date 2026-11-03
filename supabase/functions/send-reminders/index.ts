@@ -141,7 +141,7 @@ async function weeklyRecaps(entries: Entry[], members: Member[]) {
   const [foods, vetoes, bills] = await Promise.all([
     foodIds.length ? db.from('food_options').select('id, name').in('id', foodIds) : { data: [] },
     entries.length ? db.from('vetoes').select('day_entry_id, member_id').in('day_entry_id', entries.map((e) => e.id)) : { data: [] },
-    ids.length ? db.from('meal_bills').select('day_entry_id, paid_by, amount_cents').in('day_entry_id', ids) : { data: [] },
+    ids.length ? db.from('meal_bills').select('day_entry_id, paid_by, amount_cents').in('day_entry_id', ids).eq('from_kitty', false) : { data: [] },
   ]);
   const foodName = new Map(((foods.data ?? []) as { id: string; name: string }[]).map((f) => [f.id, f.name]));
   const memberName = new Map(members.map((m) => [m.id, m.name]));
@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
   const since = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
   const [attendance, bills, settlements] = await Promise.all([
     db.from('attendance').select('room_id, entry_date, member_id').in('room_id', roomIds).eq('meal', 'lunch').eq('status', 'out').gte('entry_date', since),
-    db.from('meal_bills').select('room_id, paid_by, amount_cents, split_between, items').in('room_id', roomIds),
+    db.from('meal_bills').select('room_id, paid_by, amount_cents, split_between, items, from_kitty').in('room_id', roomIds),
     db.from('settlements').select('room_id, from_member, to_member, amount_cents').in('room_id', roomIds),
   ]);
   const outOn = (roomId: string, date: string) =>

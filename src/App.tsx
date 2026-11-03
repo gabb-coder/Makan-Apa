@@ -6,7 +6,7 @@ import { disableReminders, followRoom } from './lib/push';
 import { HomeScreen } from './screens/HomeScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { carryProfile } from './lib/profile';
-import { markSeen } from './lib/seen';
+import { lastSeen, markSeen } from './lib/seen';
 import { closeCurrentRoom, currentRoomId, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
@@ -20,6 +20,9 @@ import { useFoods } from './lib/useFoods';
 import { useRoomData } from './lib/useRoomData';
 import { useRoomExtras } from './lib/useRoomExtras';
 import { useAttendance } from './lib/useAttendance';
+import { useChat } from './lib/useChat';
+import { useRain } from './lib/weather';
+import { SUNWAY_CENTRE, SUNWAY_SPOTS, spotIsCovered, spotsFor } from './lib/nearby';
 import { useConnection } from './lib/offline';
 import { JoinScreen } from './screens/JoinScreen';
 import { TodayScreen } from './screens/TodayScreen';
@@ -32,20 +35,22 @@ const loadPool = () => import('./screens/PoolScreen');
 const loadHistory = () => import('./screens/HistoryScreen');
 const loadBills = () => import('./screens/BillsScreen');
 const loadSettings = () => import('./screens/SettingsScreen');
+const loadChat = () => import('./screens/ChatScreen');
 const WheelScreen = lazy(() => loadWheel().then((m) => ({ default: m.WheelScreen })));
 const PoolScreen = lazy(() => loadPool().then((m) => ({ default: m.PoolScreen })));
 const HistoryScreen = lazy(() => loadHistory().then((m) => ({ default: m.HistoryScreen })));
 const BillsScreen = lazy(() => loadBills().then((m) => ({ default: m.BillsScreen })));
 const SettingsScreen = lazy(() => loadSettings().then((m) => ({ default: m.SettingsScreen })));
+const ChatScreen = lazy(() => loadChat().then((m) => ({ default: m.ChatScreen })));
 
 function preloadScreens() {
-  const go = () => [loadWheel, loadPool, loadBills, loadHistory, loadSettings].forEach((load) => void load().catch(() => {}));
+  const go = () => [loadWheel, loadPool, loadBills, loadHistory, loadSettings, loadChat].forEach((load) => void load().catch(() => {}));
   if ('requestIdleCallback' in window) window.requestIdleCallback(go, { timeout: 4000 });
   else setTimeout(go, 2000);
 }
 
-type Route = Tab | 'settings';
-const ROUTES: Route[] = ['today', 'wheel', 'pool', 'bills', 'history', 'settings'];
+type Route = Tab | 'settings' | 'chat';
+const ROUTES: Route[] = ['today', 'wheel', 'pool', 'bills', 'history', 'settings', 'chat'];
 
 function routeFromHash(): Route {
   const h = window.location.hash.replace('#', '') as Route;
@@ -116,6 +121,24 @@ export default function App() {
    */
   const start = () => {
     const params = new URLSearchParams(window.location.search);
+    // Home-screen shortcuts (long-press the app icon): ?go=today, bills or new.
+    const goParam = params.get('go');
+    if (goParam) {
+      clearParam('go');
+      if (goParam === 'new') {
+        generation.current++;
+        closeCurrentRoom();
+        return setState(knownRooms().length ? { status: 'join', mode: 'create' } : { status: 'join' });
+      }
+      if (goParam === 'today' || goParam === 'bills' || goParam === 'chat') {
+        // The room you were in most recently.
+        const recent = [...knownRooms()].sort((a, b) => (lastSeen(b.roomId) ?? '').localeCompare(lastSeen(a.roomId) ?? ''))[0];
+        if (recent && selectRoom(recent.roomId)) {
+          window.history.replaceState(null, '', `${window.location.pathname}#${goParam}`);
+          return restore();
+        }
+      }
+    }
     const roomParam = params.get('room');
     if (roomParam) {
       clearParam('room');
@@ -319,7 +342,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   // People who left stay in the room's history and money, but not in its turns, Who's in or new bills.
   const members = everyone.filter((m) => !m.left_at || m.id === session.me.id);
   const me = everyone.find((m) => m.id === session.me.id) ?? session.me;
-  const removed = !everyone.some((m) => m.id === session.me.id);
+  const removed = !everyone.some((m) => m.id === session.me.id) || !!me.removed_at;
 
   // Someone removed this phone's member from the room.
   useEffect(() => {
@@ -339,6 +362,11 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   const extras = useRoomExtras(room.id, me.id);
   const foodsApi = useFoods(room, me.id, days.entries, today, extras.ratings);
   const online = usePresence(room.id, me.id);
+  const chat = useChat(room.id, me.id);
+  // On a wet day the wheel leans towards foods you can get without leaving the canopy walk.
+  const rain = useRain(SUNWAY_CENTRE);
+  const wet = !!rain && (rain.now || rain.soon);
+  const rainBoost = wet ? (f: Food) => (spotsFor(f, 6, SUNWAY_SPOTS).some(spotIsCovered) ? 1.6 : 1) : undefined;
   const { foods, active } = foodsApi;
 
   useEffect(() => {
@@ -353,13 +381,13 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   };
 
   // Which way a new tab's screen slides in: from the right when it's further along the bar.
-  const tab: Tab = route === 'settings' ? 'today' : route;
+  const tab: Tab = route === 'settings' || route === 'chat' ? 'today' : route;
   const tabIndex = TAB_ORDER.indexOf(tab);
   // Worked out while rendering, so the new screen mounts already knowing its side.
   const tabEntry = useRef<{ index: number; from: 'left' | 'right' | null }>({ index: tabIndex, from: null });
   if (tabEntry.current.index !== tabIndex) tabEntry.current = { index: tabIndex, from: tabIndex > tabEntry.current.index ? 'right' : 'left' };
   const enterFrom = tabEntry.current.from;
-  const swipe = useTabSwipe(tabIndex, TAB_ORDER.length, (to) => go(TAB_ORDER[to]), route !== 'settings');
+  const swipe = useTabSwipe(tabIndex, TAB_ORDER.length, (to) => go(TAB_ORDER[to]), route !== 'settings' && route !== 'chat');
 
   // Today's decider and what the wheel may do about it.
   const memberById = new Map(members.map((m) => [m.id, m]));
@@ -452,6 +480,8 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
             online={online}
             onAddFood={foodsApi.addFood}
             onOpenSettings={() => go('settings')}
+            onOpenChat={() => go('chat')}
+            unreadChat={chat.unread}
             onSpin={() => go('wheel')}
             onSeeAll={() => go('history')}
             onHome={onHome}
@@ -465,6 +495,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
         ) : (
           loading
         ))}
+      {route === 'chat' && <ChatScreen room={room} me={me} members={everyone} today={today} chat={chat} onBack={() => go('today')} onToast={onToast} />}
       {route === 'settings' && (
         <SettingsScreen
           room={room}
@@ -496,7 +527,8 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
           <WheelScreen
             pool={pickable}
             vetoedNames={vetoedNames}
-            extraNote={dietNote}
+            extraNote={dietNote + (wet ? ' ' + t('🌧 Rainy, so foods you can get under cover come up more.') : '')}
+            boost={rainBoost}
             timezone={room.timezone}
             turnLabel={isDecider ? t('Your turn') : t("{name}'s turn", { name: decider?.name ?? t('Someone') })}
             send={wheelSend}

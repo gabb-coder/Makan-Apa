@@ -61,7 +61,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
   }, [onClose]);
 
   const hereNow = members.filter((m) => online.has(m.id)).length;
-  const host = hostOf(members);
+  const host = hostOf(members, room.host_id);
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>

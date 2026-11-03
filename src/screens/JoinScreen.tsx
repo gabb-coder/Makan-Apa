@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { t } from '../lib/i18n';
-import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, knownRoomTitle, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, type Session } from '../lib/session';
+import { CODE_LENGTH, createRoom, JoinError, joinRoom, type KnownRoom, knownRoomTitle, normalizeCode, ROOM_NAME_MAX, roomTitle, suggestedCode, watchJoinRequest, type Session } from '../lib/session';
 
 const SLICES = [
   ['M160 160L160 10A150 150 0 0 1 266.07 53.93Z', '#A8D8A0'],
@@ -46,8 +46,31 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
   // Shown once the name turns out to be taken by someone with a PIN.
   const [pinFor, setPinFor] = useState<string | null>(null);
   const [pin, setPin] = useState('');
+  // Asked to join a locked room: waiting for the host.
+  const [waiting, setWaiting] = useState<{ requestId: string; room: string } | null>(null);
 
   const trimmed = name.trim();
+
+  useEffect(() => {
+    if (!waiting) return;
+    return watchJoinRequest(waiting.requestId, (status) => {
+      if (status === 'declined') {
+        setWaiting(null);
+        setBusy(null);
+        setError(t('The host didn’t let you in this time. Check with them and try again.'));
+        return;
+      }
+      // Let in: joining again now goes straight through.
+      joinRoom(code, trimmed, pinFor ? pin : undefined).then(
+        (s) => onJoined(s, s.room.name ? t("You're in “{name}”.", { name: s.room.name }) : t("You're in room {code}.", { code: s.room.code })),
+        (e: unknown) => {
+          setWaiting(null);
+          setBusy(null);
+          setError(e instanceof Error ? e.message : t('Something went wrong. Try again.'));
+        },
+      );
+    });
+  }, [waiting]);
 
   const run = async (kind: 'join' | 'create') => {
     if (!trimmed) {
@@ -83,6 +106,10 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
         );
       }
     } catch (e) {
+      if (e instanceof JoinError && e.problem === 'approval_needed' && e.requestId) {
+        setWaiting({ requestId: e.requestId, room: e.memberName });
+        return;
+      }
       if (e instanceof JoinError && (e.problem === 'pin_required' || e.problem === 'wrong_pin')) {
         setPinFor(e.memberName);
         setPin('');
@@ -249,6 +276,27 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
           </div>
         )}
 
+        {waiting && (
+          <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
+            <span aria-hidden="true" className="spinner" />
+            <span style={{ fontSize: 14, lineHeight: 1.45, fontWeight: 600 }}>
+              {t('Asked to join {room}. Waiting for the host to let you in…', { room: waiting.room })}
+            </span>
+          </div>
+        )}
+        {waiting && (
+          <button
+            type="button"
+            className="btn btn--secondary press"
+            onClick={() => {
+              setWaiting(null);
+              setBusy(null);
+            }}
+            style={{ height: 46, borderRadius: 16 }}
+          >
+            {t('Stop waiting')}
+          </button>
+        )}
         {error && (
           <p role="alert" style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--danger)' }}>
             {error}

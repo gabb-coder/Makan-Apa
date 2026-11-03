@@ -179,7 +179,7 @@ async function finish(result: JoinResult): Promise<Session & { rejoined: boolean
   return { ...session, rejoined: result.rejoined };
 }
 
-export type JoinProblem = 'pin_required' | 'wrong_pin' | 'pin_locked' | 'name_in_use';
+export type JoinProblem = 'pin_required' | 'wrong_pin' | 'pin_locked' | 'name_in_use' | 'approval_needed';
 
 /** Joining with a name that's taken needs that person's PIN (see the member_pins migration). */
 export class JoinError extends Error {
@@ -187,6 +187,8 @@ export class JoinError extends Error {
     public problem: JoinProblem,
     public memberName: string,
     public triesLeft?: number,
+    /** approval_needed: the request the host answers. */
+    public requestId?: string,
   ) {
     super(joinProblemText(problem, memberName, triesLeft));
   }
@@ -206,6 +208,8 @@ export function joinProblemText(problem: JoinProblem, name: string, triesLeft?: 
       return t('Too many wrong PINs for {name}. Try again in 15 minutes, or ask the host to let you back in.', { name });
     case 'name_in_use':
       return t('{name} is already using this name on another phone. Pick a different name, or ask the host to let you back in from Settings.', { name });
+    case 'approval_needed':
+      return t('Asked to join {room}. Waiting for the host to let you in…', { room: name });
   }
 }
 
@@ -215,10 +219,43 @@ export async function joinRoom(rawCode: string, rawName: string, pin?: string): 
   const { data, error } = await supabase.rpc('join_room', { p_code: code, p_name: rawName.trim(), p_pin: pin || null });
   if (error) throw new Error(error.message);
   if (!data) throw new Error(t('No room with code {code}. Check it with your kaki.', { code }));
-  const problem = data as { error?: JoinProblem; name?: string; tries_left?: number };
+  const problem = data as { error?: JoinProblem; name?: string; tries_left?: number; request_id?: string; room_name?: string };
+  if (problem.error === 'approval_needed') throw new JoinError('approval_needed', problem.room_name ?? code, undefined, problem.request_id);
   if (problem.error) throw new JoinError(problem.error, problem.name ?? rawName.trim(), problem.tries_left);
   // Same name as someone already there continues as that member rather than adding a twin.
   return finish(data as JoinResult);
+}
+
+/**
+ * Waits for the host to answer a join request: calls back with 'approved' or 'declined'. Live,
+ * with a slow poll in case the live connection drops. Returns a function that stops waiting.
+ */
+export function watchJoinRequest(requestId: string, onAnswer: (status: 'approved' | 'declined') => void): () => void {
+  let done = false;
+  const check = async () => {
+    const { data } = await supabase.from('join_requests').select('status').eq('id', requestId).maybeSingle();
+    const status = (data as { status?: string } | null)?.status;
+    if (!done && (status === 'approved' || status === 'declined')) {
+      done = true;
+      onAnswer(status);
+    }
+  };
+  const channel = supabase
+    .channel(`join-request:${requestId}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'join_requests', filter: `id=eq.${requestId}` }, () => void check())
+    .subscribe();
+  const timer = window.setInterval(() => void check(), 6000);
+  return () => {
+    done = true;
+    window.clearInterval(timer);
+    void supabase.removeChannel(channel);
+  };
+}
+
+/** Host only: let someone in (true) or turn them away. */
+export async function answerJoinRequest(requestId: string, letIn: boolean): Promise<void> {
+  const { error } = await supabase.rpc('answer_join_request', { p_request_id: requestId, p_let_in: letIn });
+  if (error) throw new Error(error.message);
 }
 
 /** Set, change or (with null) remove this phone's member PIN. */
@@ -264,7 +301,10 @@ export async function createRoom(rawName: string, roomName = ''): Promise<Sessio
  * The room's host: whoever created it, i.e. the first member to join. Only the host can
  * remove people or delete the room (enforced by the database's row-level security).
  */
-export function hostOf(members: MemberRow[]): MemberRow | null {
+export function hostOf(members: MemberRow[], hostId?: string | null): MemberRow | null {
+  // Someone the host handed over to, while they're still in the room.
+  const chosen = hostId ? members.find((m) => m.id === hostId && !m.left_at) : undefined;
+  if (chosen) return chosen;
   // Someone who left can't be host: it passes to the next longest-standing member.
   return members.filter((m) => !m.left_at).reduce<MemberRow | null>(
     (first, m) => (!first || m.created_at < first.created_at || (m.created_at === first.created_at && m.id < first.id) ? m : first),
