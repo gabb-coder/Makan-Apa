@@ -32,8 +32,11 @@ export async function newPhone(browser: Browser): Promise<Page> {
   return context.newPage();
 }
 
-/** Creates a room in the app (optionally named) and returns its code. */
-export async function createRoom(page: Page, name: string, roomName = ''): Promise<string> {
+/**
+ * Creates a room in the app (optionally named) and returns its code. New rooms decide lunch and
+ * dinner; tests get lunch only unless they ask, so they behave the same at any time of day.
+ */
+export async function createRoom(page: Page, name: string, roomName = '', meals: 'lunch' | 'both' = 'lunch'): Promise<string> {
   await page.goto('/');
   await page.fill('#join-name', name);
   await page.click('text=Create a new room'); // reveals the optional room name
@@ -42,7 +45,15 @@ export async function createRoom(page: Page, name: string, roomName = ''): Promi
   // The room chip on Today: "<room name or Room CODE>, code CODE: …".
   const chip = page.locator('button[aria-label*=", code "]');
   await expect(chip).toBeVisible();
-  return (await chip.getAttribute('aria-label'))!.match(/code ([A-Z0-9]{6})/)![1];
+  const code = (await chip.getAttribute('aria-label'))!.match(/code ([A-Z0-9]{6})/)![1];
+  if (meals === 'lunch') {
+    await page.goto('/#settings');
+    await page.click('button:text-is("Lunch only")');
+    await expect(page.locator('button:text-is("Lunch only")')).toHaveAttribute('aria-pressed', 'true');
+    await page.goto('/#today');
+    await expect(chip).toBeVisible();
+  }
+  return code;
 }
 
 export async function joinRoom(page: Page, code: string, name: string): Promise<void> {

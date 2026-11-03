@@ -24,6 +24,14 @@ export function daysBetween(a: string, b: string): number {
 }
 
 /** The hour (0–23) right now in `timeZone`. */
+/** In rooms that decide both meals, dinner is the one on from 6pm (room's time). */
+export const DINNER_FROM_HOUR = 18;
+
+/** The meal that's on now: lunch, or dinner from 6pm in rooms that decide both. */
+export function mealNow(meals: 'lunch' | 'both', timeZone = DEFAULT_TZ, now = new Date()): 'lunch' | 'dinner' {
+  return meals === 'both' && localHour(timeZone, now) >= DINNER_FROM_HOUR ? 'dinner' : 'lunch';
+}
+
 export function localHour(timeZone = DEFAULT_TZ, now = new Date()): number {
   return Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(now));
 }

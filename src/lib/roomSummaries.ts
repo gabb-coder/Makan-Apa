@@ -1,4 +1,4 @@
-import { localHour, todayIn } from './dates';
+import { mealNow, todayIn } from './dates';
 import { balances, settleUp, type Payment } from './money';
 import { deciderFor } from './rotation';
 import { ensureSignedIn, forgetSession, knownRooms, openRoom, type KnownRoom } from './session';
@@ -23,7 +23,7 @@ export interface RoomSummary {
   meId: string;
   /** Today in the room's timezone. */
   date: string;
-  /** The meal that's on now (dinner from 3pm in rooms that decide both). */
+  /** The meal that's on now (dinner from 6pm in rooms that decide both). */
   meal: Meal;
   /** What's happening now, from this person's point of view. */
   status: MealStatus;
@@ -53,9 +53,9 @@ interface Bundle {
   runs: { room_id: string; day_entry_id: string; runner_id: string; status: string; created_at?: string }[];
 }
 
-/** Lunch, or dinner from 3pm in rooms that decide both (same rule as the room screen). */
-function mealNow(room: RoomRow): Meal {
-  return room.meals === 'both' && localHour(room.timezone) >= 15 ? 'dinner' : 'lunch';
+/** Lunch, or dinner from 6pm in rooms that decide both (same rule as the room screen). */
+function mealOn(room: RoomRow): Meal {
+  return mealNow(room.meals, room.timezone);
 }
 
 /** Turns everything loaded for the rooms into one summary each. Pure, for testing. */
@@ -70,7 +70,7 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
     const meId = k.memberId;
     const name = (id: string | null) => (id && everyone.find((m) => m.id === id)?.name) || '?';
     const date = today(room);
-    const meal = mealNow(room);
+    const meal = mealOn(room);
 
     const statusFor = (m: Meal): { status: MealStatus; entry: DayEntryRow | null } => {
       const away = new Set(b.attendance.filter((a) => a.room_id === room.id && a.entry_date === date && a.meal === m && a.status === 'out').map((a) => a.member_id));
