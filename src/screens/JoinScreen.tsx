@@ -23,17 +23,24 @@ interface Props {
   onOpenRoom?: (roomId: string) => void;
   /** Back to the home screen (when this phone already has rooms). */
   onBack?: () => void;
-  /** Opened from "Create a new room": show the room name field straight away. */
-  creating?: boolean;
+  /**
+   * From the + menu: 'create' shows only creating a room, 'join' only joining one with a code.
+   * Left out (the first launch, with no rooms yet), both are offered.
+   */
+  mode?: 'create' | 'join';
 }
 
-export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, creating = false }: Props) {
+export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, mode }: Props) {
+  const canJoin = mode !== 'create';
+  const canCreate = mode !== 'join';
   // Your name from your other rooms, so a new room doesn't ask again.
   const [name, setName] = useState(() => rooms[0]?.name ?? '');
-  const [code, setCode] = useState(suggestedCode);
+  // Joining from the + menu starts blank (the last code is likely a room you're already in),
+  // unless an invite link brought the code.
+  const [code, setCode] = useState(() => (mode === 'join' ? normalizeCode(new URLSearchParams(window.location.search).get('join') ?? '') : suggestedCode()));
   const [busy, setBusy] = useState<'join' | 'create' | null>(null);
   // "Create a new room" first reveals an optional room name, then creates.
-  const [naming, setNaming] = useState(creating);
+  const [naming, setNaming] = useState(mode === 'create');
   const [roomName, setRoomName] = useState('');
   const [error, setError] = useState<string | null>(notice ?? null);
   // Shown once the name turns out to be taken by someone with a PIN.
@@ -49,7 +56,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
       return;
     }
     if (kind === 'join' && code.length !== CODE_LENGTH) {
-      setError(t('Room codes are {n} characters. Or create a new room.', { n: CODE_LENGTH }));
+      setError(canCreate ? t('Room codes are {n} characters. Or create a new room.', { n: CODE_LENGTH }) : t('Room codes are {n} characters.', { n: CODE_LENGTH }));
       document.getElementById('join-code')?.focus();
       return;
     }
@@ -155,7 +162,11 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
           </span>
         </h1>
         <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5, color: 'var(--ink-2)', animation: fadeUp(0.45) }}>
-          {t('Take turns deciding what to eat, or let the wheel settle it.')}
+          {mode === 'create'
+            ? t('Start a room for a group you eat with, then share its code with them.')
+            : mode === 'join'
+              ? t('Enter the room code a friend sent you.')
+              : t('Take turns deciding what to eat, or let the wheel settle it.')}
         </p>
       </div>
 
@@ -163,7 +174,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          run('join');
+          run(canJoin ? 'join' : 'create');
         }}
         style={{
           position: 'relative',
@@ -179,7 +190,12 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
           animation: fadeUp(0.6),
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+        {mode && (
+          <h2 className="title title--sm" style={{ margin: 0, fontSize: 22 }}>
+            {mode === 'create' ? t('Create a new room') : t('Join a room')}
+          </h2>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: canJoin ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label htmlFor="join-name" className="field-label">{t('Your name')}</label>
             <input
@@ -196,20 +212,23 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
               style={{ height: 52 }}
             />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="join-code" className="field-label">{t('Room code')}</label>
-            <input
-              id="join-code"
-              className="input"
-              placeholder="K7M2QX"
-              autoCapitalize="characters"
-              autoComplete="off"
-              spellCheck={false}
-              value={code}
-              onChange={(e) => setCode(normalizeCode(e.target.value))}
-              style={{ height: 52, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}
-            />
-          </div>
+          {canJoin && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label htmlFor="join-code" className="field-label">{t('Room code')}</label>
+              <input
+                id="join-code"
+                className="input"
+                placeholder="K7M2QX"
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck={false}
+                autoFocus={mode === 'join' && !!trimmed && !code}
+                value={code}
+                onChange={(e) => setCode(normalizeCode(e.target.value))}
+                style={{ height: 52, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}
+              />
+            </div>
+          )}
         </div>
 
         {pinFor && (
@@ -236,20 +255,22 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
           </p>
         )}
 
-        <button
-          type="submit"
-          className="btn btn--primary press"
-          disabled={busy !== null}
-          style={{
-            height: 54,
-            borderRadius: 16,
-            fontSize: 16,
-            boxShadow: '0 8px 18px rgba(204, 63, 23, 0.3)',
-            animation: 'glowSoft 2.4s ease-in-out 1.4s infinite',
-          }}
-        >
-          {busy === 'join' ? t('Joining…') : t('Join room')}
-        </button>
+        {canJoin && (
+          <button
+            type="submit"
+            className="btn btn--primary press"
+            disabled={busy !== null}
+            style={{
+              height: 54,
+              borderRadius: 16,
+              fontSize: 16,
+              boxShadow: '0 8px 18px rgba(204, 63, 23, 0.3)',
+              animation: 'glowSoft 2.4s ease-in-out 1.4s infinite',
+            }}
+          >
+            {busy === 'join' ? t('Joining…') : t('Join room')}
+          </button>
+        )}
         {naming && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
             <label htmlFor="room-name" className="field-label">
@@ -260,7 +281,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
               className="input"
               placeholder={t('e.g. Sunway lunch gang')}
               maxLength={ROOM_NAME_MAX}
-              autoFocus
+              autoFocus={mode !== 'create' || !!trimmed}
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
               onKeyDown={(e) => {
@@ -273,15 +294,27 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, c
             />
           </div>
         )}
-        <button
-          type="button"
-          className="btn btn--secondary press"
-          disabled={busy !== null}
-          onClick={() => (naming ? run('create') : setNaming(true))}
-          style={{ height: 50, borderRadius: 16 }}
-        >
-          {busy === 'create' ? t('Creating…') : naming ? t('Create room') : t('Create a new room')}
-        </button>
+        {canCreate &&
+          (canJoin ? (
+            <button
+              type="button"
+              className="btn btn--secondary press"
+              disabled={busy !== null}
+              onClick={() => (naming ? run('create') : setNaming(true))}
+              style={{ height: 50, borderRadius: 16 }}
+            >
+              {busy === 'create' ? t('Creating…') : naming ? t('Create room') : t('Create a new room')}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="btn btn--primary press"
+              disabled={busy !== null}
+              style={{ height: 54, borderRadius: 16, fontSize: 16, boxShadow: '0 8px 18px rgba(204, 63, 23, 0.3)' }}
+            >
+              {busy === 'create' ? t('Creating…') : t('Create room')}
+            </button>
+          ))}
       </form>
 
       {rooms.length > 0 && onOpenRoom && !onBack && (
