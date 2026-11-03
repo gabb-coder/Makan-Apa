@@ -1,4 +1,4 @@
-// send-reminders: called every 15 minutes by pg_cron (see migrations/*_push_reminders.sql).
+// send-reminders: called every 5 minutes by pg_cron (see migrations/*_push_reminders.sql).
 //
 // For each browser subscribed to reminders, once a day at its chosen hour in the room's
 // timezone, it sends:

@@ -388,7 +388,14 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
               <span style={{ fontSize: 14, fontWeight: 800, color: b.earned ? 'var(--streak-ink)' : 'var(--ink)' }}>{t(b.title)}</span>
               <span style={{ fontSize: 12, lineHeight: 1.35, color: b.earned ? 'var(--streak-ink-2)' : 'var(--muted)' }}>{t(b.description)}</span>
               {!b.earned && (
-                <span aria-label={t('{value} of {target}', { value: b.value, target: b.target })} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <span
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={b.target}
+                  aria-valuenow={b.value}
+                  aria-label={t('{value} of {target}', { value: b.value, target: b.target })}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}
+                >
                   <span aria-hidden="true" style={{ flexGrow: 1, height: 6, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
                     <span style={{ display: 'block', width: `${(b.value / b.target) * 100}%`, height: '100%', background: 'var(--accent)' }} />
                   </span>
