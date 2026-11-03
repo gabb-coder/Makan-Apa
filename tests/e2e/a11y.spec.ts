@@ -31,7 +31,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await host.waitForTimeout(800);
       await scan(host, 'today');
 
-      for (const route of ['wheel', 'pool', 'bills', 'history', 'settings']) {
+      // A chat message, the kitty and a budget, so their screens and cards get scanned too.
+      await guest.click('button[aria-label="Chat"]');
+      await guest.fill('#chat-input', 'On my way');
+      await guest.click('button[aria-label="Send"]');
+      await host.goto('/#settings');
+      await host.selectOption('#kitty-keeper', { label: 'Wei (you)' });
+      await host.evaluate(() => localStorage.setItem('makan.monthlyBudget', '30000'));
+
+      for (const route of ['wheel', 'pool', 'bills', 'history', 'settings', 'chat']) {
         await host.goto(`/#${route}`);
         await host.waitForTimeout(1200);
         await scan(host, route);

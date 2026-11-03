@@ -172,6 +172,7 @@ export function MealPhotos({
           <input
             ref={input}
             type="file"
+            data-testid="meal-photo-input"
             accept="image/*"
             hidden
             onChange={async (e) => {

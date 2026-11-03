@@ -50,10 +50,12 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
     const text = draft.trim();
     if (!text || sending) return;
     setSending(true);
+    // Clear the box straight away, so typing the next message while this one sends isn't lost.
+    setDraft('');
     try {
       await chat.send(text);
-      setDraft('');
     } catch (e) {
+      setDraft((cur) => (cur ? cur : text));
       onToast(e instanceof Error ? e.message : t('Could not send that.'));
     } finally {
       setSending(false);
