@@ -192,18 +192,21 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
     <div className="app">
       <main className="screen" style={{ gap: 16 }}>
         <header style={{ display: 'flex', flexDirection: 'column', gap: 2, position: 'relative' }}>
-          <button
-            type="button"
-            className="press"
-            onClick={onProfile}
-            style={{ position: 'absolute', top: 0, right: 0, display: 'flex', alignItems: 'center', gap: 6, height: 44, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: 14, fontWeight: 700 }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 21a8 8 0 0 1 16 0" />
-            </svg>
-            {t('You')}
-          </button>
+          <div style={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="press"
+              onClick={onProfile}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 44, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: 14, fontWeight: 700 }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21a8 8 0 0 1 16 0" />
+              </svg>
+              {t('You')}
+            </button>
+            <AddRoomMenu onNew={onNew} onJoin={onJoin} />
+          </div>
           <span className="eyebrow">
             {new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'short' }).format(new Date())}
           </span>
@@ -249,7 +252,7 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
           </h2>
           {rows.length === 0 ? (
             <div className="card" style={{ padding: 16, fontSize: 14, color: 'var(--ink-2)' }}>
-              {t('No rooms yet. Create one for each group you eat with, or join one with a code.')}
+              {t('No rooms yet. Tap + to create one for each group you eat with, or join one with a code.')}
             </div>
           ) : (
             <ul className="card" style={{ margin: 0, padding: 0, listStyle: 'none', overflow: 'hidden' }}>
@@ -344,14 +347,6 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
           </section>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
-          <button type="button" className="btn btn--primary press" onClick={onNew} style={{ height: 52 }}>
-            {t('Create a new room')}
-          </button>
-          <button type="button" className="btn btn--secondary press" onClick={onJoin} style={{ height: 50 }}>
-            {t('Join a room with a code')}
-          </button>
-        </div>
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--muted)', textAlign: 'center', paddingBottom: 12 }}>
           {t('One room for each group you eat with: classmates, office, family. Each room has its own turns, food list and bills.')}
         </p>
@@ -390,6 +385,103 @@ export function HomeScreen({ onOpen, onNew, onJoin, onToast, onNoRooms, onProfil
           }
           onClose={() => setActionsFor(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/** The + at the top right: opens a small menu to create a room or join one with a code. */
+function AddRoomMenu({ onNew, onJoin }: { onNew: () => void; onJoin: () => void }) {
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const first = useRef<HTMLButtonElement>(null);
+  const close = useCallback((refocus = true) => {
+    setOpen(false);
+    if (refocus) button.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    first.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, close]);
+
+  const item = (ref: React.Ref<HTMLButtonElement> | undefined, icon: React.ReactNode, label: string, hint: string, onClick: () => void) => (
+    <button
+      ref={ref}
+      type="button"
+      role="menuitem"
+      className="row press"
+      onClick={() => {
+        close(false);
+        onClick();
+      }}
+      style={{ minHeight: 64, padding: '10px 14px' }}
+    >
+      <span aria-hidden="true" style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'var(--accent-tint)', color: 'var(--accent-ink)' }}>
+        {icon}
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{label}</span>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{hint}</span>
+      </span>
+    </button>
+  );
+  const svg = (children: React.ReactNode) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        ref={button}
+        type="button"
+        className="press"
+        aria-label={t('New room')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? 'add-room-menu' : undefined}
+        onClick={() => (open ? close() : setOpen(true))}
+        style={{ width: 44, height: 44, borderRadius: 999, border: 'none', display: 'grid', placeItems: 'center', background: 'var(--accent)', color: '#fff' }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true" style={{ transition: 'transform 0.2s var(--ease-out)', transform: open ? 'rotate(45deg)' : 'none' }}>
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div aria-hidden="true" onClick={() => close()} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+          <div id="add-room-menu" role="menu" aria-label={t('New room')} className="add-menu">
+            {item(
+              first,
+              svg(
+                <>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M20 8v6M23 11h-6" />
+                </>,
+              ),
+              t('Create a new room'),
+              t('Start one for a new group'),
+              onNew,
+            )}
+            {item(
+              undefined,
+              svg(
+                <>
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                  <path d="M10 17l5-5-5-5M15 12H3" />
+                </>,
+              ),
+              t('Join a room with a code'),
+              t('Use the code a friend sent you'),
+              onJoin,
+            )}
+          </div>
+        </>
       )}
     </div>
   );
