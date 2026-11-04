@@ -3,6 +3,7 @@ import { PayDetailsCard } from '../components/Bills';
 import { PhoneSettings } from '../components/PhoneSettings';
 import { BUDGETS, MEMBER_NEEDS } from '../lib/diet';
 import { monthlyBudget, setMonthlyBudget } from '../lib/budget';
+import { ALLERGENS } from '../lib/allergens';
 import { t } from '../lib/i18n';
 import { myMembers, updateEverywhere, type ProfilePatch } from '../lib/profile';
 import type { MemberRow } from '../lib/supabase';
@@ -69,6 +70,21 @@ export function ProfileScreen({ onBack, onToast }: { onBack: () => void; onToast
                 </button>
               );
             })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span id="avoid-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Things you avoid')}</span>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)', marginTop: -4 }}>{t('Dishes with them get flagged on menus for everyone in your rooms.')}</span>
+            <div className="chip-row" role="group" aria-labelledby="avoid-label" style={{ flexWrap: 'wrap' }}>
+              {ALLERGENS.map((a) => {
+                const mineA = me?.allergies ?? [];
+                const on = mineA.includes(a.key);
+                return (
+                  <button key={a.key} type="button" className="chip press" aria-pressed={on} disabled={!me} onClick={() => save({ allergies: on ? mineA.filter((x) => x !== a.key) : [...mineA, a.key] })}>
+                    {a.emoji} {t(a.label)}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Budget per meal')}</span>

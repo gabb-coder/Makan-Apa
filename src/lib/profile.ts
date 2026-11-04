@@ -3,7 +3,7 @@ import { supabase, type MemberRow } from './supabase';
 import type { MemberPatch } from './useRoomData';
 
 /** What follows you into every room: food needs, budget and how to pay you back. */
-export type ProfilePatch = Pick<MemberPatch, 'diet' | 'budget' | 'pay_duitnow' | 'pay_bank'>;
+export type ProfilePatch = Partial<Pick<MemberPatch, 'diet' | 'budget' | 'pay_duitnow' | 'pay_bank' | 'allergies'>>;
 
 /** You in each room on this phone (one member per room), most recently opened first. */
 export async function myMembers(): Promise<MemberRow[]> {
@@ -30,8 +30,8 @@ export async function updateEverywhere(patch: ProfilePatch): Promise<void> {
  */
 export async function carryProfile(newMemberId: string): Promise<void> {
   const others = (await myMembers()).filter((m) => m.id !== newMemberId);
-  const from = others.find((m) => (m.diet?.length ?? 0) > 0 || m.budget !== null || m.pay_duitnow || m.pay_bank);
+  const from = others.find((m) => (m.diet?.length ?? 0) > 0 || (m.allergies?.length ?? 0) > 0 || m.budget !== null || m.pay_duitnow || m.pay_bank);
   if (!from) return;
-  const patch: ProfilePatch = { diet: from.diet ?? [], budget: from.budget ?? null, pay_duitnow: from.pay_duitnow ?? null, pay_bank: from.pay_bank ?? null };
+  const patch: ProfilePatch = { diet: from.diet ?? [], allergies: from.allergies ?? [], budget: from.budget ?? null, pay_duitnow: from.pay_duitnow ?? null, pay_bank: from.pay_bank ?? null };
   await supabase.from('members').update(patch).eq('id', newMemberId);
 }

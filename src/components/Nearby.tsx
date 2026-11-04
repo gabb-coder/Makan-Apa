@@ -3,6 +3,8 @@ import { spotSuitability, suitsEveryone, type Needs } from '../lib/diet';
 import { formatTag } from '../lib/foods';
 import { dayHoursLabel, WEEKDAYS, weekdayLabel } from '../lib/hours';
 import { t, tk } from '../lib/i18n';
+import { allergenInfo, allergensIn } from '../lib/allergens';
+import type { MemberRow } from '../lib/supabase';
 import { distanceKm, formatDistance, mapsNearUrl, type LatLng } from '../lib/geo';
 import { turnOffLocation, turnOnLocation, type LocationState } from '../lib/location';
 import {
@@ -132,9 +134,11 @@ function MenuPreview({ spot }: { spot: Spot }) {
 }
 
 /** The spot sheet's menu: dish names with approximate prices. */
-function SpotMenu({ spot }: { spot: Spot }) {
+function SpotMenu({ spot, members = [] }: { spot: Spot; members?: MemberRow[] }) {
   const menu = spotMenu(spot);
   if (!menu.length) return null;
+  // Who in the room avoids what, to flag dishes that have it.
+  const avoiders = (key: string) => members.filter((m) => !m.left_at && (m.allergies ?? []).includes(key)).map((m) => m.name);
   return (
     <section aria-labelledby="spot-menu" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <h3 id="spot-menu" className="field-label" style={{ margin: 0 }}>
@@ -143,13 +147,29 @@ function SpotMenu({ spot }: { spot: Spot }) {
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', borderRadius: 14, background: 'var(--bg)' }}>
         {menu.map((m, i) => (
           <li key={m.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 12px', fontSize: 14, borderTop: i ? '1px solid var(--divider)' : 'none' }}>
-            <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{m.name}</span>
+            <span style={{ minWidth: 0, overflowWrap: 'anywhere', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span>
+                {m.name}
+                {allergensIn(m.name).length > 0 && (
+                  <span role="img" aria-label={t('Has: {list}', { list: allergensIn(m.name).map((k) => t(allergenInfo(k)!.label)).join(', ') })} style={{ marginLeft: 6, fontSize: 12 }}>
+                    {allergensIn(m.name).map((k) => allergenInfo(k)!.emoji).join('')}
+                  </span>
+                )}
+              </span>
+              {(() => {
+                const who = allergensIn(m.name).flatMap((k) => avoiders(k).map((n) => `${n} (${t(allergenInfo(k)!.label).toLowerCase()})`));
+                return who.length ? <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger)' }}>{t('Careful: {list}', { list: [...new Set(who)].join(', ') })}</span> : null;
+              })()}
+            </span>
             {m.price !== null && <span style={{ flexShrink: 0, color: 'var(--ink-2)', fontWeight: 700 }}>~{menuPrice(m.price)}</span>}
           </li>
         ))}
       </ul>
       {menu.some((m) => m.price !== null) && (
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('Prices are from online menus and may have changed.')}</span>
+      )}
+      {menu.some((m) => allergensIn(m.name).length > 0) && (
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('🥜🦐🌶️ flags are guessed from dish names. Always check with the stall.')}</span>
       )}
     </section>
   );
@@ -297,9 +317,11 @@ interface SheetProps {
   onPick?: () => void;
   /** Your room's tips on the place. */
   notes?: React.ReactNode;
+  /** The room's people, to flag dishes with things they avoid. */
+  members?: MemberRow[];
 }
 
-export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, onClose, onAdd, onPick, notes }: SheetProps) {
+export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, onClose, onAdd, onPick, notes, members }: SheetProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -355,7 +377,7 @@ export function SpotSheet({ spot, here, addedBy, onRemove, inList, pickLabel, on
           ))}
         </div>
         {spot.room ? <span style={{ fontSize: 13, color: 'var(--muted)' }}>{spotArea(spot)}</span> : <SpotHours spot={spot} />}
-        <SpotMenu spot={spot} />
+        <SpotMenu spot={spot} members={members} />
         {notes}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {onPick && pickLabel && (

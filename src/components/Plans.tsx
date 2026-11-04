@@ -54,7 +54,10 @@ export function MeetupCard({
   onSave,
   onLate,
   calendar,
+  warning,
 }: {
+  /** E.g. the meet-up place looks closed at that time. */
+  warning?: string | null;
   /** For "Add to calendar": the event's id, title and notes. */
   calendar?: { uid: string; title: string; description?: string };
   meetAt: string | null;
@@ -146,6 +149,11 @@ export function MeetupCard({
       <span style={{ fontSize: 20, fontWeight: 800 }}>
         {place ? t('Leaving {time} · {place}', { time: clockTime(meetAt!, timeZone), place }) : t('Leaving {time}', { time: clockTime(meetAt!, timeZone) })}
       </span>
+      {warning && (
+        <span role="status" style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)', lineHeight: 1.45 }}>
+          {warning}
+        </span>
+      )}
       {late.length > 0 && (
         <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>
           {late.length === 1 ? t('{names} is running late', { names: late[0].name }) : t('{names} are running late', { names: late.map((m) => m.name).join(', ') })}
