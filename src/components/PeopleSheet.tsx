@@ -4,7 +4,7 @@ import { eatingDaysAfter } from '../lib/calendar';
 import { needsLabel } from '../lib/diet';
 import { t } from '../lib/i18n';
 import { hostOf, knownRooms, roomTitle } from '../lib/session';
-import type { MemberRow, RoomRow } from '../lib/supabase';
+import type { Meal, MemberRow, RoomRow } from '../lib/supabase';
 import { Avatar, HostBadge } from './Avatar';
 import { InviteQrSheet } from './InviteQr';
 
@@ -15,6 +15,8 @@ interface Props {
   online: Set<string>;
   todayDeciderId: string | null;
   today: string;
+  /** The meal on now: turns are shown for it (dinner goes to the next person along). */
+  meal?: Meal;
   onClose: () => void;
   onInvite: () => void;
   onSettings: () => void;
@@ -25,11 +27,12 @@ interface Props {
 }
 
 /** When each member decides next, e.g. "Decides tomorrow". */
-function nextTurn(member: MemberRow, members: MemberRow[], room: RoomRow, today: string, todayDeciderId: string | null): string {
+export function nextTurn(member: MemberRow, members: MemberRow[], room: RoomRow, today: string, todayDeciderId: string | null, meal: Meal): string {
   if (member.id === todayDeciderId) return t('Deciding today');
   const rot = rotationOf(room);
+  // The same meal as "Deciding today", so the days follow on from it.
   for (const date of eatingDaysAfter(today, rot.cal, members.length)) {
-    if (deciderFor(members, rot, date)?.id === member.id) {
+    if (deciderFor(members, rot, date, meal)?.id === member.id) {
       return date === addDays(today, 1) ? t('Decides tomorrow') : t('Decides {day}', { day: dayLabel(date) });
     }
   }
@@ -54,7 +57,7 @@ export function OnlineDot({ size = 12 }: { size?: number }) {
   );
 }
 
-export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onHome, onPlan }: Props) {
+export function PeopleSheet({ room, me, members, online, todayDeciderId, today, meal = 'lunch', onClose, onInvite, onSettings, onHome, onPlan }: Props) {
   const otherRooms = knownRooms().filter((r) => r.roomId !== room.id);
   const [qrOpen, setQrOpen] = useState(false);
   useEffect(() => {
@@ -89,7 +92,7 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
         <ul className="card" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {members.map((m, i) => {
             const here = online.has(m.id);
-            const turn = nextTurn(m, members, room, today, todayDeciderId);
+            const turn = nextTurn(m, members, room, today, todayDeciderId, meal);
             return (
               <li
                 key={m.id}
