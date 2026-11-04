@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from './i18n';
-import { deciderFor } from './rotation';
+import { deciderFor, rotationOf } from './rotation';
+import { isEatingDay } from './calendar';
+import { maskMystery, useNow } from './mystery';
 import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow, type VoteRow } from './supabase';
 
 /** What the decider is proposing: a pool food, or a name typed in. */
@@ -23,7 +25,7 @@ function stripJoin({ day_entries: _, ...veto }: VetoWithEntry): VetoRow {
  * The room's day entries and vetoes, kept live, plus the propose / accept / veto actions
  * for today (SPEC.md section 6, day entry lifecycle).
  */
-export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string, meal: Meal = 'lunch', away?: ReadonlySet<string>) {
+export function useDays(room: RoomRow, members: MemberRow[], meId: string, today: string, meal: Meal = 'lunch', away?: ReadonlySet<string>, anyway = false) {
   const [entries, setEntries] = useState<DayEntryRow[] | null>(null);
   const [vetoes, setVetoes] = useState<VetoRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,11 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'day_entries', filter: `room_id=eq.${room.id}` }, (p) =>
         setEntries((cur) => (cur ? upsertEntry(cur, p.new as DayEntryRow) : cur)),
       )
+      // A day cleared because it became a day off (Settings). Deletes carry only the id.
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'day_entries' }, (p) => {
+        const id = (p.old as { id?: string }).id;
+        setEntries((cur) => (cur && id ? cur.filter((e) => e.id !== id) : cur));
+      })
       // vetoes has no room_id, so keep only those for this room's entries.
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vetoes' }, (p) => {
         const veto = p.new as VetoRow;
@@ -76,13 +83,19 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     };
   }, [room.id, load]);
 
-  const todayEntry = entries?.find((e) => e.entry_date === today && (e.meal ?? 'lunch') === meal) ?? null;
+  // A mystery pick stays hidden on this phone until it's revealed (or the meet-up time comes).
+  const now = useNow(30_000);
+  const shown = useMemo(() => entries?.map((e) => maskMystery(e, meId, today, now)) ?? null, [entries, meId, today, now]);
+  const todayEntry = shown?.find((e) => e.entry_date === today && (e.meal ?? 'lunch') === meal) ?? null;
   const todayVetoes = useMemo(
     () => (todayEntry ? vetoes.filter((v) => v.day_entry_id === todayEntry.id) : []),
     [vetoes, todayEntry],
   );
   // Whoever's out today is skipped; until the day has a pick, the turn follows them coming and going.
-  const computedDecider = deciderFor(members, room.rotation_start, today, meal, away);
+  // On a day off (weekend, public holiday) nobody's turn comes up, unless this phone chose to
+  // eat together anyway: then it decides.
+  const rot = rotationOf(room);
+  const computedDecider = anyway ? (members.find((m) => m.id === meId) ?? null) : isEatingDay(today, rot.cal) ? deciderFor(members, rot, today, meal, away) : null;
 
   // Secret picks for today, live. Every phone holds them all, but the UI only shows
   // other people's picks once everyone is in (the room code is the only lock).
@@ -335,8 +348,22 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     if (!ok) throw new Error(t('Could not save.'));
   };
 
+  /** The decider picks a mystery: agreed at once (no vetoes), hidden from the others for now. */
+  const proposeMystery = async (pick: Pick) => {
+    const ok = await updateToday(
+      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', mystery: true, mystery_revealed: false },
+      (q) => q.neq('status', 'accepted').eq('decider_id', meId),
+    );
+    if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
+  };
+  const revealMystery = async () => {
+    await updateToday({ mystery_revealed: true }, (q) => q.eq('decider_id', meId));
+  };
+
   return {
-    entries,
+    entries: shown,
+    proposeMystery,
+    revealMystery,
     votes,
     startVote,
     cancelVote,

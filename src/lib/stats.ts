@@ -91,7 +91,8 @@ export function monthStats(
   members: MemberRow[],
   foodsById: Map<string, Food>,
 ): MonthStats {
-  const inMonth = entries.filter((e) => monthKey(e.entry_date) === month);
+  // A month ("2026-11") or a whole year ("2026").
+  const inMonth = entries.filter((e) => e.entry_date.startsWith(month));
   const entryIds = new Set(inMonth.map((e) => e.id));
   const monthVetoes = vetoes.filter((v) => entryIds.has(v.day_entry_id));
 

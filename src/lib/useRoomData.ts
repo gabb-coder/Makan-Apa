@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { hostOf } from './session';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
 
-export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode' | 'name' | 'meals' | 'emoji' | 'color' | 'fixed_days' | 'host_id' | 'locked' | 'kitty_keeper'>>;
+export type RoomPatch = Partial<Pick<RoomRow, 'timezone' | 'rotation_start' | 'veto_limit' | 'decision_mode' | 'name' | 'meals' | 'emoji' | 'color' | 'fixed_days' | 'host_id' | 'locked' | 'kitty_keeper' | 'eat_days' | 'skip_holidays' | 'rotation_offset' | 'auto_decide'>>;
 export type MemberPatch = Partial<Pick<MemberRow, 'name' | 'color' | 'sort_order' | 'diet' | 'budget' | 'pay_duitnow' | 'pay_bank' | 'pay_qr_path' | 'allergies'>>;
 
 function upsert(rows: MemberRow[], row: MemberRow): MemberRow[] {

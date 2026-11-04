@@ -29,7 +29,13 @@ import { useJoinRequests } from '../lib/useJoinRequests';
 import { clockTime } from '../lib/vote';
 import { PickSheet } from '../components/PickSheet';
 import { SecretCollectCard, SecretRevealCard, type RevealedPick } from '../components/SecretCards';
-import { daysBetween } from '../lib/dates';
+import { AUTO_PICK_AT, daysBetween } from '../lib/dates';
+import { useQueues } from '../lib/queues';
+import { usualsAt } from '../lib/usual';
+import { QueueBadge, QueueRow } from '../components/Queue';
+import { DealSheet, DealsRow, SpotDeals } from '../components/Deals';
+import { Lifts } from '../components/Lifts';
+import type { DealsApi } from '../lib/useDeals';
 import { AddSpotSheet, LocationLine, NearbyAllSheet, NearbyList, NearbyStrip, NearYouStrip, SpotSheet } from '../components/Nearby';
 import { OnlineDot, PeopleSheet } from '../components/PeopleSheet';
 import { customFood, entryFood, joinNames, normalizeTag, timesWord, type Food, type FoodDraft } from '../lib/foods';
@@ -43,7 +49,8 @@ import { suggestions } from '../lib/suggest';
 import { SuggestCard } from '../components/SuggestCard';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
-import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
+import { addDays, dayLabel, dayMonthLabel, deciderFor, rotationOf } from '../lib/rotation';
+import { eatingDaysAfter, holidayOn, isEatingDay } from '../lib/calendar';
 import type { DayEntryRow, Meal, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
 import type { RoomExtras } from '../lib/useRoomExtras';
@@ -81,11 +88,19 @@ interface Props {
   /** Which meal this is about; rooms deciding both get a lunch/dinner switch. */
   meal: Meal;
   onMealChange?: (meal: Meal) => void;
+  /** On a day off (weekend, public holiday): eat together anyway, with this phone deciding. */
+  onEatAnyway?: () => void;
+  /** Promos people in the room spotted. */
+  deals: DealsApi;
 }
+
+/** "11:42" right now in the room's timezone, for comparing with times like "12:00". */
+const clockNow = (timeZone: string) => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date());
 
 type JustVetoed = { veto: VetoRow; previous: DayEntryRow; foodName: string };
 
-export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onOpenChat, unreadChat = 0, onSpin, onSeeAll, onHome, onToast, extras, attendance, away, meal, onMealChange }: Props) {
+export function TodayScreen({ room, me, members, today, foods, pickable, days, online, onAddFood, onOpenSettings, onOpenChat, unreadChat = 0, onSpin, onSeeAll, onHome, onToast, extras, attendance, away, meal, onMealChange, onEatAnyway, deals }: Props) {
+  const [dealFor, setDealFor] = useState<{ spotId: string | null } | null>(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [allSpots, setAllSpots] = useState(false);
@@ -97,6 +112,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [suggesting, setSuggesting] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const events = useEvents(room.id, me.id);
+  const queues = useQueues();
   const joinRequests = useJoinRequests(room.id, hostOf(members, room.host_id)?.id === me.id);
   // Whoever's in for this meal: they decide, answer, pick and pay.
   const present = members.filter((m) => !away.has(m.id));
@@ -131,11 +147,19 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const nameFor = (id: string | null, you = t('You')) => (id === me.id ? you : (id && memberById.get(id)?.name) || t('Someone'));
 
-  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal, away) || me;
+  const rot = rotationOf(room);
+  // Weekends and public holidays the room doesn't eat together use nobody's turn.
+  const offDay = !isEatingDay(today, rot.cal);
+  const decider = (todayEntry && memberById.get(todayEntry.decider_id ?? '')) || (offDay ? me : deciderFor(members, rot, today, meal, away)) || me;
   const isDecider = decider.id === me.id;
   const others = present.filter((m) => m.id !== decider.id);
   const waitingFor = others.length === 1 ? others[0].name : others.length === 0 ? t('nobody yet') : t('everyone');
   const todayFood = todayEntry ? entryFood(todayEntry, foodsById) : null;
+  // Everyone's usual where you're eating today, from old bills at the same place or food.
+  const usuals = useMemo(
+    () => (todayEntry?.status === 'accepted' && !todayEntry.mystery_hidden ? usualsAt([todayEntry.meet_place, todayFood?.name, tapau.run?.place], entries ?? [], extras.bills, foodsById, todayEntry.id) : new Map()),
+    [todayEntry, todayFood?.name, tapau.run?.place, entries, extras.bills, foodsById],
+  );
   const vetoedNames = todayVetoes.map((v) => v.rejected_food);
   // The last meal before today, if it was in the past couple of days and you haven't rated it.
   const lastEntry =
@@ -174,17 +198,27 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     }
   }, [todayEntry, justVetoed]);
 
-  const tomorrow = deciderFor(members, room.rotation_start, addDays(today, 1), meal, attendance.awayOn(addDays(today, 1), meal));
+  // The next day the room eats together: tomorrow, or after a weekend or holiday.
+  const nextDay = eatingDaysAfter(today, rot.cal, 1)[0] ?? addDays(today, 1);
+  const tomorrow = deciderFor(members, rot, nextDay, meal, attendance.awayOn(nextDay, meal));
   const tomorrowText = !tomorrow
     ? ''
-    : tomorrow.id === me.id
-      ? t('Tomorrow it’s your turn to decide.')
-      : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name });
+    : nextDay === addDays(today, 1)
+      ? tomorrow.id === me.id
+        ? t('Tomorrow it’s your turn to decide.')
+        : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name })
+      : tomorrow.id === me.id
+        ? t('Next turn, {day}: yours.', { day: dayLabel(nextDay) })
+        : t('Next turn, {day}: {name}.', { day: dayLabel(nextDay), name: tomorrow.name });
 
-  const pickFromSheet = async (p: { food: Food } | { name: string }) => {
-    if ('food' in p) return days.propose({ foodId: p.food.id, name: p.food.name }, 'direct');
-    const match = pickable.find((f) => f.name.toLowerCase() === p.name.toLowerCase());
-    return days.propose(match ? { foodId: match.id, name: match.name } : { foodId: null, name: p.name }, 'direct');
+  // A mystery pick: agreed at once and hidden from the others till the meet-up.
+  const [mysteryOn, setMysteryOn] = useState(false);
+  const pickFromSheet = async (p: { food: Food } | { name: string }, mystery = false) => {
+    const match = 'food' in p ? p.food : pickable.find((f) => f.name.toLowerCase() === p.name.toLowerCase());
+    const pick = match ? { foodId: match.id, name: match.name } : { foodId: null, name: 'name' in p ? p.name : '' };
+    // Nobody can veto a mystery, so it has to suit everyone's diet and budget.
+    if (mystery && match && !suitsEveryone(match, present)) throw new Error(t('A mystery has to suit everyone, and {food} doesn’t.', { food: match.name }));
+    return mystery ? days.proposeMystery(pick) : days.propose(pick, 'direct');
   };
 
   // Closed-today warnings: the pick (when it's a place) or the meet-up place, at the time you'd go.
@@ -214,7 +248,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   let main: React.ReactNode;
   let proposalView = false;
 
-  if (!todayEntry || !entries) {
+  if (offDay && !todayEntry && entries) {
+    const holiday = holidayOn(today, rot.cal);
+    main = <OffDayCard holiday={holiday ? t(holiday) : null} nextText={tomorrowText} onAnyway={onEatAnyway} />;
+  } else if (!todayEntry || !entries) {
     main = (
       <section className="card" style={{ padding: 22, color: 'var(--muted)', flexShrink: 0 }}>
         {days.error ? t("Couldn't load today. {error}", { error: days.error }) : t('Getting today ready…')}
@@ -251,6 +288,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         onError={onToast}
       />
     );
+  } else if (todayEntry.status === 'accepted' && todayEntry.mystery_hidden) {
+    main = <MysteryCard decider={decider.name} meal={meal} meetAt={todayEntry.meet_at ?? null} timeZone={room.timezone} />;
   } else if (todayEntry.status === 'accepted' && todayFood) {
     main = (
       <DecidedCard
@@ -331,6 +370,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           me={me}
           food={todayFood}
           method={todayEntry.method}
+          autoAt={todayEntry.auto_picked ? AUTO_PICK_AT[meal] : undefined}
           waitingFor={waitingFor}
           answerers={joinNames(others.map((m) => m.name), 'or')}
           several={others.length > 1}
@@ -351,6 +391,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             ? t('{name} can veto {times}', { name: others[0].name, times: timesWord(left) })
             : t('{name} is out of vetoes, so your pick stands.', { name: others[0].name });
       } else sub = t('Everyone else can veto {times}', { times: timesWord(room.veto_limit) });
+      // The wheel steps in if nobody's picked by 12:00 (7pm for dinner).
+      if (room.auto_decide !== false && others.length > 0 && !latestVeto && clockNow(room.timezone) < AUTO_PICK_AT[meal]) {
+        sub = `${sub} ${t('If you haven’t picked by {time}, the wheel will.', { time: AUTO_PICK_AT[meal] })}`;
+      }
       main = (
         <>
           <YourTurnCard
@@ -395,6 +439,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       <ProposalCard
         food={todayFood}
         method={todayEntry.method}
+        autoAt={todayEntry.auto_picked ? AUTO_PICK_AT[meal] : undefined}
         deciderName={decider.name}
         lastEatenText={lastEatenText(past ? daysBetween(past.entry_date, today) : null, past ? nameFor(past.decider_id, t('you')) : null)}
         vetoesLeft={myVetoesLeft}
@@ -451,10 +496,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
   /* ----- Up next and Recently ----- */
 
-  const upNext = [1, 2, 3].map((i) => {
-    const date = addDays(today, i);
-    return { date, member: deciderFor(members, room.rotation_start, date, meal, attendance.awayOn(date, meal)) };
-  });
+  const upNext = eatingDaysAfter(today, rot.cal, 3).map((date) => ({ date, member: deciderFor(members, rot, date, meal, attendance.awayOn(date, meal)) }));
 
   const backHome = onHome && (
     <button type="button" className="icon-btn press" aria-label={t('All rooms')} onClick={onHome} style={{ flexShrink: 0, alignSelf: 'center' }}>
@@ -595,6 +637,14 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       )}
 
       {main}
+      {isDecider && todayEntry?.status === 'accepted' && todayEntry.mystery && !todayEntry.mystery_revealed && (
+        <section className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <span style={{ flexGrow: 1, fontSize: 14, lineHeight: 1.45 }}>{t('🎁 It’s a mystery to the others. They find out at the meet-up time, or when you reveal it.')}</span>
+          <button type="button" className="btn btn--secondary press" disabled={busy} onClick={() => run(days.revealMystery)} style={{ height: 40, padding: '0 14px', flexShrink: 0 }}>
+            {t('Reveal now')}
+          </button>
+        </section>
+      )}
 
       {!proposalView && todayEntry?.status === 'accepted' && todayFood && present.length > 1 && (
         <MeetupCard
@@ -602,12 +652,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           place={todayEntry.meet_place ?? null}
           today={today}
           timeZone={room.timezone}
-          places={[t('Lobby'), ...suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).map((sp) => sp.name)]}
+          places={todayEntry.mystery_hidden ? [t('Lobby')] : [t('Lobby'), ...suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).map((sp) => sp.name)]}
           late={members.filter((m) => m.id !== me.id && attendance.statusOf(m.id, today, meal) === 'late')}
           myStatus={attendance.statusOf(me.id, today, meal)}
           onSave={(at, where) => run(() => days.setMeetup(at, where))}
           onLate={() => run(() => attendance.setStatus(me.id, today, meal, 'late'))}
           warning={todayEntry.meet_at ? closedNote : null}
+          extra={members.length > 1 ? <Lifts roomId={room.id} me={me} members={members} trip={{ dayEntryId: todayEntry.id }} onError={onToast} /> : undefined}
           calendar={{
             uid: `${todayEntry.id}-${todayEntry.meet_at ?? ''}`,
             title: t('{meal}: {food}, with {room}', { meal: meal === 'dinner' ? t('Dinner') : t('Lunch'), food: todayFood.name, room: roomTitle(room) }),
@@ -747,6 +798,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                 </button>
               </div>
               {nearSunway && rainNote}
+              {nearSunway && <DealsRow api={deals} spots={[...SUNWAY_SPOTS, ...roomSpots]} today={today} onOpenSpot={setSpot} onPost={() => setDealFor({ spotId: null })} />}
               {here && !nearSunway ? (
                 <NearYouStrip here={here} />
               ) : (
@@ -754,6 +806,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
                   spots={dry(suiting(here ? byDistance([...roomSpots, ...spotsOfTheDay(today)], here) : [...roomSpots, ...spotsOfTheDay(today)])).slice(0, 8 + Math.min(roomSpots.length, 4))}
                   here={here}
                   onOpen={setSpot}
+                  extraFor={(s) => <QueueBadge q={queues.byPlace.get(s.id)} />}
                 />
               )}
               <LocationLine location={location} nearSunway={nearSunway} />
@@ -765,6 +818,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       {billOpen && todayEntry && todayFood && (
         <BillSheet
           dayEntryId={todayEntry.id}
+          usuals={usuals}
           foodName={todayFood.name}
           members={members}
           meId={me.id}
@@ -803,6 +857,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           members={members}
           me={me}
           onToast={onToast}
+          usuals={usuals}
           onMakeBill={(items, paidBy) => {
             setTapauOpen(false);
             setBillStart({ items, paidBy });
@@ -855,7 +910,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           spot={spot}
           here={here}
           members={members}
-          notes={<PlaceNotes roomId={room.id} spotId={spot.id} me={me} members={members} isHost={hostOf(members, room.host_id)?.id === me.id} onError={onToast} />}
+          notes={
+            <>
+              <QueueRow spotId={spot.id} queues={queues} onError={onToast} />
+              <SpotDeals spot={spot} api={deals} today={today} me={me} members={members} isHost={hostOf(members, room.host_id)?.id === me.id} onPost={() => setDealFor({ spotId: spot.id })} onError={onToast} />
+              <PlaceNotes roomId={room.id} spotId={spot.id} me={me} members={members} isHost={hostOf(members, room.host_id)?.id === me.id} onError={onToast} />
+            </>
+          }
           addedBy={spot.room?.addedBy ? (spot.room.addedBy === me.id ? t('you') : memberById.get(spot.room.addedBy)?.name) : undefined}
           onRemove={
             spot.room
@@ -903,6 +964,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           sendTo={others.length === 0 ? null : waitingFor}
           secret={secret && todayEntry?.status === 'pending'}
           members={present}
+          mystery={!secret && others.length > 0 ? { on: mysteryOn, onToggle: setMysteryOn } : undefined}
           onClose={() => setSheet(null)}
           onPick={async (p) => {
             const name = 'food' in p ? p.food.name : p.name;
@@ -911,11 +973,74 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               onToast(t('Locked in. Only you can see {name} until the reveal.', { name }));
               return;
             }
-            await pickFromSheet(p);
-            onToast(others.length === 0 ? t('{name} it is.', { name }) : t('Sent {name} to {who}.', { name, who: waitingFor }));
+            const mystery = mysteryOn && others.length > 0;
+            await pickFromSheet(p, mystery);
+            setMysteryOn(false);
+            onToast(
+              mystery
+                ? t('{name} it is, and it’s a mystery to the others. Set where to meet so they know where to go.', { name })
+                : others.length === 0
+                  ? t('{name} it is.', { name })
+                  : t('Sent {name} to {who}.', { name, who: waitingFor }),
+            );
           }}
+        />
+      )}
+      {dealFor && (
+        <DealSheet
+          spots={[...SUNWAY_SPOTS, ...roomSpots]}
+          today={today}
+          spotId={dealFor.spotId}
+          onPost={async (d) => {
+            await deals.post(d);
+            onToast(t('Deal posted. Everyone in the room can see it.'));
+          }}
+          onClose={() => setDealFor(null)}
         />
       )}
     </main>
   );
 }
+
+/** A weekend or public holiday the room doesn't eat together: no turns, unless you want to. */
+function OffDayCard({ holiday, nextText, onAnyway }: { holiday: string | null; nextText: string; onAnyway?: () => void }) {
+  return (
+    <section aria-labelledby="off-day-label" className="card fade-up" style={{ padding: '18px 18px 14px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+      <span aria-hidden="true" style={{ fontSize: 32, lineHeight: 1 }}>
+        {holiday ? '🇲🇾' : '🏖️'}
+      </span>
+      <h2 id="off-day-label" style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.01em' }}>
+        {holiday ? t('Public holiday: {name}', { name: holiday }) : t('Day off')}
+      </h2>
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+        {t('No turns today, so nobody’s turn is used up.')} {nextText}
+      </p>
+      {onAnyway && (
+        <button type="button" className="btn btn--secondary press" onClick={onAnyway} style={{ height: 44, marginTop: 4 }}>
+          {t('Eating together anyway? I’ll decide')}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Everyone but the decider, on a mystery day: where and when to meet, but not what. */
+function MysteryCard({ decider, meal, meetAt, timeZone }: { decider: string; meal: Meal; meetAt: string | null; timeZone: string }) {
+  const time = meetAt ? new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(meetAt)) : null;
+  return (
+    <section aria-labelledby="mystery-label" className="card fade-up" style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, background: 'var(--accent-tint)', color: 'var(--accent-ink)', borderColor: 'transparent' }}>
+      <span aria-hidden="true" style={{ fontSize: 40, lineHeight: 1 }}>
+        🎁
+      </span>
+      <h2 id="mystery-label" style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: '-0.01em' }}>
+        {meal === 'dinner' ? t('Mystery dinner!') : t('Mystery lunch!')}
+      </h2>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>
+        {time
+          ? t('{name} picked, and it suits everyone. Meet at {time}: you’ll find out what it is then.', { name: decider, time })
+          : t('{name} picked, and it suits everyone. You’ll find out once they say where to meet.', { name: decider })}
+      </p>
+    </section>
+  );
+}
+

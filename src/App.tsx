@@ -10,7 +10,8 @@ import { lastSeen, markSeen } from './lib/seen';
 import { closeCurrentRoom, currentRoomId, forgetSession, knownRooms, leaveRoom, restoreSession, roomTitle, selectRoom, type Session } from './lib/session';
 import { suitsEveryone } from './lib/diet';
 import { entryFood, type Food } from './lib/foods';
-import { deciderFor } from './lib/rotation';
+import { deciderFor, rotationOf } from './lib/rotation';
+import { isEatingDay } from './lib/calendar';
 import type { Meal } from './lib/supabase';
 import { mealNow } from './lib/dates';
 import { useDays } from './lib/useDays';
@@ -24,7 +25,10 @@ import { useChat } from './lib/useChat';
 import { useLiveSpin } from './lib/liveSpin';
 import { LiveSpinOverlay } from './components/LiveSpinOverlay';
 import { useRain } from './lib/weather';
-import { SUNWAY_CENTRE, SUNWAY_SPOTS, spotIsCovered, spotsFor } from './lib/nearby';
+import { roomSpot, SUNWAY_CENTRE, SUNWAY_SPOTS, spotIsCovered, spotsFor } from './lib/nearby';
+import { useDeals } from './lib/useDeals';
+import { decodeFoods, PENDING_FOODS_KEY } from './lib/foodShare';
+import { storage } from './lib/storage';
 import { useConnection } from './lib/offline';
 import { JoinScreen } from './screens/JoinScreen';
 import { TodayScreen } from './screens/TodayScreen';
@@ -123,6 +127,15 @@ export default function App() {
    */
   const start = () => {
     const params = new URLSearchParams(window.location.search);
+    // A shared food list (?foods=): kept until a room is open, then offered on its Food list.
+    const sharedFoods = params.get('foods');
+    if (sharedFoods) {
+      clearParam('foods');
+      if (decodeFoods(sharedFoods)) {
+        storage.set(PENDING_FOODS_KEY, sharedFoods);
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#pool`);
+      }
+    }
     // Home-screen shortcuts (long-press the app icon): ?go=today, bills or new.
     const goParam = params.get('go');
     if (goParam) {
@@ -360,7 +373,12 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   const attendance = useAttendance(room.id, today);
   const away = attendance.awayOn(today, meal);
   const present = members.filter((m) => !away.has(m.id));
-  const days = useDays(room, members, me.id, today, meal, away);
+  // Days the room doesn't eat together (weekends, public holidays) have no turn, unless someone
+  // decides to eat together anyway: then they're the decider.
+  const offDay = !isEatingDay(today, rotationOf(room).cal);
+  const [anywayOn, setAnywayOn] = useState<string | null>(null);
+  const anyway = offDay && anywayOn === `${today}:${meal}`;
+  const days = useDays(room, members, me.id, today, meal, away, anyway);
   const extras = useRoomExtras(room.id, me.id);
   const foodsApi = useFoods(room, me.id, days.entries, today, extras.ratings);
   const online = usePresence(room.id, me.id);
@@ -369,7 +387,17 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   // On a wet day the wheel leans towards foods you can get without leaving the canopy walk.
   const rain = useRain(SUNWAY_CENTRE);
   const wet = !!rain && (rain.now || rain.soon);
-  const rainBoost = wet ? (f: Food) => (spotsFor(f, 6, SUNWAY_SPOTS).some(spotIsCovered) ? 1.6 : 1) : undefined;
+  // Deals someone spotted: the wheel leans a little towards food you can get where they are on.
+  const deals = useDeals(room.id, me.id, today);
+  const dealSpots = new Set(deals.deals.map((d) => d.spot_id).filter((x): x is string => !!x));
+  const allSpots = [...SUNWAY_SPOTS, ...extras.spots.map(roomSpot)];
+  const wheelBoost =
+    wet || dealSpots.size
+      ? (f: Food) => {
+          const at = spotsFor(f, 6, allSpots);
+          return (wet && at.some(spotIsCovered) ? 1.6 : 1) * (at.some((s) => dealSpots.has(s.id)) ? 1.3 : 1);
+        }
+      : undefined;
   const { foods, active } = foodsApi;
 
   useEffect(() => {
@@ -383,6 +411,11 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
     setRoute(next);
   };
 
+  // A food list someone shared waits for the first room you open: show it on the Food list.
+  useEffect(() => {
+    if (storage.get(PENDING_FOODS_KEY)) go('pool');
+  }, [room.id]);
+
   // Which way a new tab's screen slides in: from the right when it's further along the bar.
   const tab: Tab = route === 'settings' || route === 'chat' ? 'today' : route;
   const tabIndex = TAB_ORDER.indexOf(tab);
@@ -395,7 +428,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   // Today's decider and what the wheel may do about it.
   const memberById = new Map(members.map((m) => [m.id, m]));
   const entry = days.todayEntry;
-  const decider = (entry && memberById.get(entry.decider_id ?? '')) || deciderFor(members, room.rotation_start, today, meal, away);
+  const decider = (entry && memberById.get(entry.decider_id ?? '')) || (offDay && !anyway ? null : anyway && !entry ? me : deciderFor(members, rotationOf(room), today, meal, away));
   const isDecider = decider?.id === me.id;
   const others = present.filter((m) => m.id !== decider?.id);
   const sendTo = others.length === 1 ? others[0].name : others.length === 0 ? null : t('everyone');
@@ -492,7 +525,9 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
             attendance={attendance}
             away={away}
             meal={meal}
-            onMealChange={room.meals === 'both' ? setMeal : undefined}
+            deals={deals}
+          onEatAnyway={offDay ? () => setAnywayOn(`${today}:${meal}`) : undefined}
+          onMealChange={room.meals === 'both' ? setMeal : undefined}
             onToast={onToast}
           />
         ) : (
@@ -531,7 +566,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
             pool={pickable}
             vetoedNames={vetoedNames}
             extraNote={dietNote + (wet ? ' ' + t('🌧 Rainy, so foods you can get under cover come up more.') : '')}
-            boost={rainBoost}
+            boost={wheelBoost}
             onSpin={liveSpin.send}
             timezone={room.timezone}
             turnLabel={isDecider ? t('Your turn') : t("{name}'s turn", { name: decider?.name ?? t('Someone') })}
@@ -542,7 +577,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
         ) : (
           loading
         ))}
-      {route === 'pool' && (foods ? <PoolScreen foods={foods} api={foodsApi} onError={onToast} /> : loading)}
+      {route === 'pool' && (foods ? <PoolScreen foods={foods} api={foodsApi} onError={onToast} onToast={onToast} roomId={room.id} roomName={roomTitle(room)} /> : loading)}
       {route === 'bills' &&
         (foods && days.entries ? (
           <BillsScreen

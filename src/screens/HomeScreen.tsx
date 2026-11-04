@@ -86,6 +86,8 @@ export function statusText(s: RoomSummary): string {
         return st.mine ? t('Secret picks: {n} of {total} in', { n: st.picked, total: st.total }) : t('Make your secret pick ({n} of {total} in)', { n: st.picked, total: st.total });
       case 'out':
         return t('You’re out today');
+      case 'off':
+        return st.holiday ? t('Public holiday: {name}', { name: t(st.holiday) }) : t('Day off: no turns today');
     }
   })();
   return s.room.meals === 'both' ? `${s.meal === 'dinner' ? t('Dinner') : t('Lunch')} · ${text}` : text;

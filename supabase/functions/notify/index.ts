@@ -1,7 +1,8 @@
 // notify: called by database triggers (migrations/*_attendance_tapau_alerts.sql) when something
 // happens in a room, and pushes it to the other phones that have notifications on:
 //   proposed  the decider sent a pick         → everyone else who's in: accept or veto
-//   decided   the meal was agreed             → everyone else who's in
+//   decided   the meal was agreed             → everyone else who's in (a mystery pick: no food named)
+//             the wheel picked as nobody had  → everyone who's in, the decider too (as a proposal)
 //   bill      a bill was added or changed     → everyone with a share, but not the payer
 //   tapau     someone started a tapau run     → everyone else who's in: add your order
 //   order     someone added a tapau order     → the runner
@@ -40,7 +41,13 @@ interface Entry {
   vote_options: string[] | null;
   meet_at: string | null;
   meet_place: string | null;
+  auto_picked: boolean;
+  mystery: boolean;
+  mystery_revealed: boolean;
 }
+
+/** When the wheel picks if nobody has (send-reminders), by meal. */
+const AUTO_AT: Record<Meal, string> = { lunch: '12:00', dinner: '19:00' };
 
 /** "12:30" in the room's timezone. */
 function clock(iso: string, timeZone: string): string {
@@ -58,7 +65,7 @@ async function foodName(entry: Entry): Promise<string> {
 }
 
 async function entry(id: string): Promise<Entry | null> {
-  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food, vote_options, meet_at, meet_place').eq('id', id).maybeSingle();
+  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food, vote_options, meet_at, meet_place, auto_picked, mystery, mystery_revealed').eq('id', id).maybeSingle();
   return (data as Entry | null) ?? null;
 }
 
@@ -96,8 +103,19 @@ Deno.serve(async (req) => {
     if (!e || e.status !== (type === 'proposed' ? 'proposed' : 'accepted')) return json({ skipped: 'stale' });
     const [food, away] = await Promise.all([foodName(e), awayFor(e)]);
     const meal = e.meal ?? 'lunch';
-    const ev: Event = type === 'proposed' ? { type, decider: nameOf(e.decider_id), food, meal } : { type, food, meal };
-    for (const s of subs) if (s.member_id !== actor && s.member_id !== (type === 'proposed' ? e.decider_id : null) && !away.has(s.member_id)) recipients.set(s.member_id, ev);
+    // The wheel picked because nobody had: everyone hears, the decider included. A mystery pick
+    // keeps the food out of the alert.
+    const auto = type === 'proposed' && e.auto_picked;
+    const mystery = type === 'decided' && e.mystery && !e.mystery_revealed;
+    const ev: Event = auto
+      ? { type: 'auto-picked', decider: nameOf(e.decider_id), food, meal, time: AUTO_AT[meal] }
+      : mystery
+        ? { type: 'mystery', decider: nameOf(e.decider_id), meal }
+        : type === 'proposed'
+          ? { type, decider: nameOf(e.decider_id), food, meal }
+          : { type, food, meal };
+    const skip = auto ? null : type === 'proposed' || mystery ? e.decider_id : null;
+    for (const s of subs) if (s.member_id !== actor && s.member_id !== skip && !away.has(s.member_id)) recipients.set(s.member_id, ev);
     tag = `makan-day-${id}`;
   } else if (type === 'bill') {
     const { data } = await db.from('meal_bills').select('*').eq('day_entry_id', id).maybeSingle();

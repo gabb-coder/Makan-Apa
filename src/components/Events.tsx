@@ -8,6 +8,7 @@ import type { EventsApi } from '../lib/useEvents';
 import type { RoomExtras } from '../lib/useRoomExtras';
 import { zonedTime } from '../lib/vote';
 import { BillSheet } from './Bills';
+import { Lifts } from './Lifts';
 
 const RSVPS: { key: Rsvp; label: () => string }[] = [
   { key: 'yes', label: () => t('Going') },
@@ -229,6 +230,7 @@ function EventSheet({
           })}
           {answers.length === 0 && <span style={{ color: 'var(--muted)' }}>{t('Nobody’s answered yet.')}</span>}
         </div>
+        <Lifts roomId={room.id} me={me} members={members} trip={{ eventId: event.id }} onError={onToast} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button
             type="button"

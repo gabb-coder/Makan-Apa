@@ -1,6 +1,8 @@
 import { mealNow, todayIn } from './dates';
 import { balances, settleUp, type Payment } from './money';
-import { deciderFor } from './rotation';
+import { deciderFor, rotationOf } from './rotation';
+import { holidayOn, isEatingDay } from './calendar';
+import { maskMystery } from './mystery';
 import { ensureSignedIn, forgetSession, knownRooms, openRoom, type KnownRoom } from './session';
 import { supabase, type DayEntryRow, type Meal, type MealBillRow, type MemberRow, type RoomRow, type SettlementRow } from './supabase';
 
@@ -11,7 +13,9 @@ export type MealStatus =
   | { kind: 'answer'; decider: string; food: string }
   | { kind: 'decided'; food: string }
   | { kind: 'secret'; picked: number; total: number; mine: boolean }
-  | { kind: 'out' };
+  | { kind: 'out' }
+  /** A day the room doesn't eat together: a weekend, or this public holiday. */
+  | { kind: 'off'; holiday: string | null };
 
 /** What the home screen shows for one room: like a chat list's last message. */
 export interface RoomSummary {
@@ -75,9 +79,14 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
     const statusFor = (m: Meal): { status: MealStatus; entry: DayEntryRow | null } => {
       const away = new Set(b.attendance.filter((a) => a.room_id === room.id && a.entry_date === date && a.meal === m && a.status === 'out').map((a) => a.member_id));
       const present = members.filter((x) => !away.has(x.id));
-      const entry = b.entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === m) ?? null;
+      const found = b.entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === m);
+      // A mystery pick stays hidden from everyone but the decider for now.
+      const entry = found ? maskMystery(found, meId, date) : null;
       const food = entry ? (entry.food_option_id && foodName.get(entry.food_option_id)) || entry.custom_food || '' : '';
       if (entry?.status === 'accepted') return { entry, status: away.has(meId) ? { kind: 'out' } : { kind: 'decided', food } };
+      // Weekends and public holidays the room doesn't eat together: nothing to do.
+      const cal = rotationOf(room).cal;
+      if (!entry && !isEatingDay(date, cal)) return { entry, status: { kind: 'off', holiday: holidayOn(date, cal) } };
       // A fixed day nobody has opened yet is decided all the same.
       const fixed = m === 'lunch' ? room.fixed_days?.[String(new Date(`${date}T00:00:00Z`).getUTCDay())] : undefined;
       if (fixed && !entry?.food_option_id && !entry?.custom_food) return { entry, status: away.has(meId) ? { kind: 'out' } : { kind: 'decided', food: fixed } };
@@ -86,7 +95,7 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
         const picked = new Set(b.picks.filter((p) => p.day_entry_id === entry?.id).map((p) => p.member_id));
         return { entry, status: { kind: 'secret', picked: present.filter((x) => picked.has(x.id)).length, total: present.length, mine: picked.has(meId) } };
       }
-      const decider = entry?.decider_id ?? deciderFor(members, room.rotation_start, date, m, away)?.id ?? null;
+      const decider = entry?.decider_id ?? deciderFor(members, rotationOf(room), date, m, away)?.id ?? null;
       if (entry?.status === 'proposed') return { entry, status: decider === meId ? { kind: 'sent', food } : { kind: 'answer', decider: name(decider), food } };
       return { entry, status: decider === meId ? { kind: 'your-turn' } : { kind: 'choosing', decider: name(decider) } };
     };

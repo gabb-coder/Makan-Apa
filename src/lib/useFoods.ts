@@ -110,14 +110,20 @@ export function useFoods(room: RoomRow, memberId: string, entries: DayEntryRow[]
     setRows((cur) => (cur ? cur.filter((r) => r.id !== id) : cur));
   };
 
-  const loadStarterPack = async () => {
+  /** Add foods the room doesn't have yet (by name); returns how many were added. */
+  const importFoods = async (drafts: FoodDraft[]): Promise<number> => {
     const have = new Set((rows ?? []).map((r) => r.name.toLowerCase()));
-    const missing = STARTER_PACK.filter((f) => !have.has(f.name.toLowerCase()));
-    if (missing.length === 0) return;
+    const missing = drafts.filter((f, i) => !have.has(f.name.toLowerCase()) && drafts.findIndex((g) => g.name.toLowerCase() === f.name.toLowerCase()) === i);
+    if (missing.length === 0) return 0;
     const inserted = await run(
       supabase.from('food_options').insert(missing.map((f) => ({ ...f, room_id: room.id, added_by: memberId }))).select(),
     );
     setRows((cur) => (inserted as FoodOptionRow[]).reduce(upsert, cur ?? []));
+    return missing.length;
+  };
+
+  const loadStarterPack = async () => {
+    await importFoods(STARTER_PACK);
   };
 
   return {
@@ -129,5 +135,6 @@ export function useFoods(room: RoomRow, memberId: string, entries: DayEntryRow[]
     updateFood,
     deleteFood,
     loadStarterPack,
+    importFoods,
   };
 }

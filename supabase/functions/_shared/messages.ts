@@ -21,7 +21,10 @@ export type Event =
   | { type: 'treat'; payer: string; food: string }
   | { type: 'event'; who: string; title: string; when: string }
   | { type: 'your-turn' }
-  | { type: 'secret-open' };
+  | { type: 'secret-open' }
+  | { type: 'auto-nudge'; meal: Meal; time: string }
+  | { type: 'auto-picked'; decider: string; food: string; meal: Meal; time: string }
+  | { type: 'mystery'; decider: string; meal: Meal };
 
 type Text = { title: string; body: string };
 
@@ -118,6 +121,21 @@ const TEXT: Record<Event['type'], Record<Lang, [string, string]>> = {
     en: ['Secret picks are open', 'Make your pick so the wheel can spin.'],
     ms: ['Pilihan rahsia dibuka', 'Buat pilihan kamu supaya roda boleh berputar.'],
     zh: ['秘密选择开始了', '选好你的，转盘才能转。'],
+  },
+  'auto-nudge': {
+    en: ['Nobody’s picked {meal} yet', 'It’s your turn. Pick by {time}, or the wheel picks for you.'],
+    ms: ['Belum ada yang pilih {meal}', 'Giliran kamu. Pilih sebelum {time}, atau roda pilihkan untuk kamu.'],
+    zh: ['还没人选{meal}', '轮到你了。{time}前选好，不然转盘帮你选。'],
+  },
+  'auto-picked': {
+    en: ['The wheel picked {food} for {meal}', 'Nobody had by {time}, so it spun for {decider}. Tap to accept or veto.'],
+    ms: ['Roda pilih {food} untuk {meal}', 'Tiada yang pilih sebelum {time}, jadi roda berputar untuk {decider}. Tekan untuk terima atau veto.'],
+    zh: ['转盘选了{food}作为{meal}', '{time}前没人选，所以转盘替{decider}转了。点开接受或否决。'],
+  },
+  mystery: {
+    en: ['{decider} picked a mystery {meal} 🎁', 'It’s a surprise till you get there. Tap for where to meet.'],
+    ms: ['{decider} pilih {meal} misteri 🎁', 'Kejutan sampai kamu tiba. Tekan untuk tempat jumpa.'],
+    zh: ['{decider}选了神秘{meal} 🎁', '到了才揭晓。点开看在哪集合。'],
   },
 };
 

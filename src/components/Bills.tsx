@@ -5,6 +5,7 @@ import type { MealBillRow, MemberRow, SettlementRow } from '../lib/supabase';
 import type { RoomExtras } from '../lib/useRoomExtras';
 import { qrUrl, removeQrEverywhere, saveQrEverywhere } from '../lib/payQr';
 import { Avatar } from './Avatar';
+import type { Usual } from '../lib/usual';
 
 const CLOSE_ICON = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
@@ -40,10 +41,13 @@ export function BillSheet({
   kittyKeeper,
   guests = [],
   forEvent = false,
+  usuals,
   onSaved,
   onClose,
 }: {
   dayEntryId: string;
+  /** What each person had last time here: fills their empty line in one tap. */
+  usuals?: Map<string, Usual>;
   /** Friends people brought who aren't on the app (from Who's in): a new bill gets a line each. */
   guests?: { hostId: string; count: number }[];
   /** An event's bill rather than a meal's (dayEntryId is then the event's id). */
@@ -240,6 +244,30 @@ export function BillSheet({
         <fieldset style={sectionStyle}>
           <legend className="field-label" style={{ padding: 0, marginBottom: 4 }}>{t('What everyone had')}</legend>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>{t('Type each price from the receipt, before service charge and SST. Tick more than one person to share an item.')}</p>
+          {(() => {
+            // Empty lines for one person whose usual here we know.
+            const fillable = rows.filter((r) => !r.name.trim() && !r.price.trim() && r.people.length === 1 && usuals?.has(r.people[0]));
+            if (!fillable.length) return null;
+            return (
+              <button
+                type="button"
+                className="btn btn--secondary press"
+                onClick={() =>
+                  setRows((cur) =>
+                    cur.map((r) => {
+                      const u = !r.name.trim() && !r.price.trim() && r.people.length === 1 ? usuals?.get(r.people[0]) : undefined;
+                      return u ? { ...r, name: u.name, price: (u.cents / 100).toFixed(2) } : r;
+                    }),
+                  )
+                }
+                style={{ height: 40, fontSize: 14 }}
+              >
+                {fillable.length === 1 && fillable[0].people[0] === meId
+                  ? t('↺ Fill in your usual: {item}', { item: usuals!.get(meId)!.name })
+                  : t('↺ Fill in the usuals ({n} people)', { n: fillable.length })}
+              </button>
+            );
+          })()}
           {rows.map((r, i) => (
             <div key={r.key} className="card" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: 'none' }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

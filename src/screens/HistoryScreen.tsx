@@ -19,6 +19,8 @@ const SpotMap = lazy(() => import('../components/SpotMap'));
 import { PhotoGrid, PhotoViewer, Thumb } from '../components/MealSocial';
 import { hostOf } from '../lib/session';
 import { storage } from '../lib/storage';
+import { wrapped } from '../lib/wrapped';
+import { WrappedStory } from '../components/Wrapped';
 
 interface Props {
   room: RoomRow;
@@ -72,6 +74,8 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const months = useMemo(() => availableMonths(entries, today), [entries, today]);
   const [month, setMonth] = useState(() => monthKey(today));
   const [showAllEaten, setShowAllEaten] = useState(false);
+  // A month ("2026-11") or year ("2026") being shown as a story.
+  const [wrapping, setWrapping] = useState<string | null>(null);
   // Challenges, the passport and badges fold away so the month's meals come first.
   const [showFun, setShowFun] = useState(() => storage.get(FUN_KEY) === '1');
   const p = useCountUp(month);
@@ -163,6 +167,17 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           </select>
         </label>
       </header>
+
+      {stats.meals.length > 0 && (
+        <div className="chip-row" style={{ gap: 8, flexShrink: 0 }}>
+          <button type="button" className="chip press" onClick={() => setWrapping(month)} style={{ flexShrink: 0 }}>
+            {t('🎁 {period} wrapped', { period: monthLabel(month, currentYear) })}
+          </button>
+          <button type="button" className="chip press" onClick={() => setWrapping(month.slice(0, 4))} style={{ flexShrink: 0 }}>
+            {t('🎁 {period} wrapped', { period: month.slice(0, 4) })}
+          </button>
+        </div>
+      )}
 
       <div key={`stats-${month}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
         <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -522,6 +537,15 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
 
       {entries.some((e) => e.status === 'accepted') && (
         <ExportCard room={room} members={members} today={today} foodsById={foodsById} onToast={onToast} />
+      )}
+      {wrapping && (
+        <WrappedStory
+          data={wrapped(wrapping, entries, vetoes, members, foodsById, extras.bills, [...extras.spots.map(roomSpot), ...SUNWAY_SPOTS], (id) => nameFor(id))}
+          room={roomTitle(room)}
+          label={wrapping.length === 4 ? wrapping : monthLabel(wrapping, currentYear)}
+          onClose={() => setWrapping(null)}
+          onToast={onToast}
+        />
       )}
       {viewing && (
         <PhotoViewer

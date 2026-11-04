@@ -5,18 +5,36 @@ import { formatTag, isRecent, lastEatenLabel, popularTags, type Food, type FoodD
 import { t } from '../lib/i18n';
 import { nextColor } from '../lib/palette';
 import type { useFoods } from '../lib/useFoods';
+import { CopyFromRoomSheet, IncomingFoodsSheet, shareFoodList } from '../components/FoodCopy';
+import { decodeFoods, PENDING_FOODS_KEY } from '../lib/foodShare';
+import { knownRooms } from '../lib/session';
+import { storage } from '../lib/storage';
+
+const linkStyle = { minHeight: 40, padding: 0, border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: 'var(--accent-text)' } as const;
 
 type FoodsApi = ReturnType<typeof useFoods>;
 
 interface Props {
   foods: Food[];
-  api: Pick<FoodsApi, 'addFood' | 'updateFood' | 'deleteFood' | 'loadStarterPack'>;
+  api: Pick<FoodsApi, 'addFood' | 'updateFood' | 'deleteFood' | 'loadStarterPack' | 'importFoods'>;
   onError: (message: string) => void;
+  /** This room, to copy into and to name it. */
+  roomId?: string;
+  roomName?: string;
+  onToast?: (message: string) => void;
 }
 
 type Editing = { mode: 'add' } | { mode: 'edit'; food: Food } | null;
 
-export function PoolScreen({ foods, api, onError }: Props) {
+export function PoolScreen({ foods, api, onError, roomId, roomName = '', onToast = onError }: Props) {
+  const [copyOpen, setCopyOpen] = useState(false);
+  // A food list someone shared as a link, waiting to be added.
+  const [incoming, setIncoming] = useState(() => decodeFoods(storage.get(PENDING_FOODS_KEY)));
+  const otherRooms = knownRooms().filter((r) => r.roomId !== roomId).length;
+  const dropIncoming = () => {
+    storage.remove(PENDING_FOODS_KEY);
+    setIncoming(null);
+  };
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -113,6 +131,11 @@ export function PoolScreen({ foods, api, onError }: Props) {
           <button type="button" className="btn btn--primary press" disabled={loadingPack} onClick={loadPack}>
             {loadingPack ? t('Loading…') : t('Load starter pack')}
           </button>
+          {roomId && otherRooms > 0 && (
+            <button type="button" className="btn btn--secondary press" onClick={() => setCopyOpen(true)}>
+              {t('Copy from another room')}
+            </button>
+          )}
         </section>
       )}
 
@@ -193,6 +216,39 @@ export function PoolScreen({ foods, api, onError }: Props) {
             </div>
           )}
         </section>
+      )}
+
+      {roomId && active.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, flexShrink: 0 }}>
+          {otherRooms > 0 && (
+            <button type="button" className="press" onClick={() => setCopyOpen(true)} style={linkStyle}>
+              {t('Copy from another room')}
+            </button>
+          )}
+          <button type="button" className="press" onClick={() => shareFoodList(active, roomName).then((m) => m && onToast(m), (e: unknown) => onError(e instanceof Error ? e.message : String(e)))} style={linkStyle}>
+            {t('Share this list as a link')}
+          </button>
+        </div>
+      )}
+
+      {copyOpen && roomId && <CopyFromRoomSheet roomId={roomId} onImport={api.importFoods} onDone={onToast} onClose={() => setCopyOpen(false)} />}
+
+      {incoming && (
+        <IncomingFoodsSheet
+          foods={incoming}
+          have={new Set(foods.map((f) => f.name.toLowerCase()))}
+          roomName={roomName}
+          onAdd={async () => {
+            try {
+              const n = await api.importFoods(incoming);
+              onToast(n === 1 ? t('Added 1 food.') : t('Added {n} foods.', { n }));
+              dropIncoming();
+            } catch (e) {
+              onError(e instanceof Error ? e.message : t('Something went wrong. Try again.'));
+            }
+          }}
+          onClose={dropIncoming}
+        />
       )}
 
       {editing && (

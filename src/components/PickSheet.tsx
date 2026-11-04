@@ -17,10 +17,12 @@ interface Props {
   members?: (Needs & { name: string })[];
   onClose: () => void;
   onPick: (pick: { food: Food } | { name: string }) => Promise<void>;
+  /** Make it a mystery: agreed at once, hidden from the others till the meet-up. */
+  mystery?: { on: boolean; onToggle: (on: boolean) => void };
 }
 
 /** Bottom sheet for the decider: pick straight from the food list, or type a food. */
-export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, members = [], onClose, onPick }: Props) {
+export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, members = [], onClose, onPick, mystery }: Props) {
   const [query, setQuery] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,7 +59,7 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, members
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center' }} />
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="eyebrow">{secret ? t('Secret pick · hidden until everyone’s in') : sendTo ? t('Your turn · goes to {name}', { name: sendTo }) : t('Your turn · this one’s final')}</span>
+            <span className="eyebrow">{secret ? t('Secret pick · hidden until everyone’s in') : mystery?.on ? t('Your turn · a mystery, and final') : sendTo ? t('Your turn · goes to {name}', { name: sendTo }) : t('Your turn · this one’s final')}</span>
             <h2 id="pick-title" className="title title--sm" style={{ fontSize: 24 }}>
               {mode === 'list' ? t('Pick from list') : t('Type my own')}
             </h2>
@@ -68,6 +70,13 @@ export function PickSheet({ mode, foods, vetoed, sendTo, secret = false, members
             </svg>
           </button>
         </header>
+
+        {mystery && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '8px 12px', borderRadius: 14, background: 'var(--accent-tint)', color: 'var(--accent-ink)', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
+            <input type="checkbox" checked={mystery.on} onChange={(e) => mystery.onToggle(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--accent)', flexShrink: 0 }} />
+            {t('🎁 Make it a mystery: the others find out at the meet-up (no vetoes)')}
+          </label>
+        )}
 
         {mode === 'list' ? (
           <>

@@ -34,7 +34,8 @@ export async function newPhone(browser: Browser): Promise<Page> {
 
 /**
  * Creates a room in the app (optionally named) and returns its code. New rooms decide lunch and
- * dinner; tests get lunch only unless they ask, so they behave the same at any time of day.
+ * dinner; tests get lunch only unless they ask, so they behave the same at any time of day. They
+ * also eat together every day (holidays too) with auto-decide off, so they behave the same any day.
  */
 export async function createRoom(page: Page, name: string, roomName = '', meals: 'lunch' | 'both' = 'lunch'): Promise<string> {
   await page.goto('/');
@@ -46,13 +47,25 @@ export async function createRoom(page: Page, name: string, roomName = '', meals:
   const chip = page.locator('button[aria-label*=", code "]');
   await expect(chip).toBeVisible();
   const code = (await chip.getAttribute('aria-label'))!.match(/code ([A-Z0-9]{6})/)![1];
+  // Tests run any day: every day is an eating day, holidays included, and the wheel never
+  // steps in by itself mid-test.
+  await page.goto('/#settings');
   if (meals === 'lunch') {
-    await page.goto('/#settings');
     await page.click('button:text-is("Lunch only")');
     await expect(page.locator('button:text-is("Lunch only")')).toHaveAttribute('aria-pressed', 'true');
-    await page.goto('/#today');
-    await expect(chip).toBeVisible();
   }
+  for (const day of ['Saturday', 'Sunday']) {
+    const chipDay = page.locator(`button[aria-label="${day}"]`);
+    if ((await chipDay.getAttribute('aria-pressed')) !== 'true') await chipDay.click();
+    await expect(chipDay).toHaveAttribute('aria-pressed', 'true');
+  }
+  for (const name of ['Skip public holidays', 'Let the wheel decide if nobody has']) {
+    const sw = page.getByRole('switch', { name: new RegExp(name) });
+    await sw.click();
+    await expect(sw).not.toBeChecked();
+  }
+  await page.goto('/#today');
+  await expect(chip).toBeVisible();
   return code;
 }
 

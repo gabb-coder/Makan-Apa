@@ -32,6 +32,14 @@ export interface RoomRow {
   locked?: boolean;
   /** Holds the group kitty's cash; the kitty is on while someone does. */
   kitty_keeper?: string | null;
+  /** Days of the week the room eats together (0 Sunday … 6 Saturday); turns skip the rest. */
+  eat_days?: number[];
+  /** Turns skip public holidays in Selangor. */
+  skip_holidays?: boolean;
+  /** If the decider hasn't picked by 12:00 (7pm for dinner), the wheel picks for them. */
+  auto_decide?: boolean;
+  /** Added to the turn count, so changing the eating days doesn't move whose turn it is. */
+  rotation_offset?: number;
   created_at: string;
 }
 
@@ -93,6 +101,13 @@ export interface DayEntryRow {
   vote_options?: string[] | null;
   vote_ends_at?: string | null;
   updated_at?: string;
+  /** The wheel picked it because the decider hadn't by 12:00 (7pm for dinner). */
+  auto_picked?: boolean;
+  /** A mystery pick: hidden from everyone but the decider until it's revealed. */
+  mystery?: boolean;
+  mystery_revealed?: boolean;
+  /** Set on this phone only: the food is a mystery to me for now (see lib/mystery.ts). */
+  mystery_hidden?: boolean;
   created_at: string;
 }
 
