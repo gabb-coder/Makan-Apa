@@ -16,6 +16,10 @@ export default defineConfig({
     timezoneId: 'Asia/Kuala_Lumpur',
     reducedMotion: 'reduce',
     trace: 'retain-on-failure',
+    // A stuck click or page load fails on its own (naming what it waited for) instead of
+    // silently using up the whole test's time.
+    actionTimeout: 30_000,
+    navigationTimeout: 30_000,
   },
   webServer: {
     command: 'npm run build && npx vite preview --port 4173 --strictPort',
