@@ -16,6 +16,12 @@ export function LiveSpinOverlay({ spin, byName, onClose }: { spin: LiveSpin; byN
     const timer = window.setTimeout(() => wheel.spinTo(spin.k, spin.foods.length, () => setLanded(true)), 150);
     return () => window.clearTimeout(timer);
   }, [spin.at]);
+  // It gets out of the way on its own a few seconds after landing (the pick usually follows).
+  useEffect(() => {
+    if (!landed) return;
+    const timer = window.setTimeout(onClose, 3500);
+    return () => window.clearTimeout(timer);
+  }, [landed, onClose]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -23,7 +29,7 @@ export function LiveSpinOverlay({ spin, byName, onClose }: { spin: LiveSpin; byN
   }, [onClose]);
 
   return (
-    <div className="sheet-backdrop" onClick={landed ? onClose : undefined} style={{ alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 40 }}>
+    <div className="sheet-backdrop" onClick={onClose} style={{ alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 40 }}>
       <div
         className="card"
         role="dialog"
