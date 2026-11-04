@@ -6,6 +6,10 @@ const KLCC = { latitude: 3.1579, longitude: 101.7116 };
 
 test('location sorts Sunway ideas by distance, and searches around you when far away', async ({ browser }) => {
   const context = await browser.newContext({ geolocation: SS15, permissions: ['geolocation'] });
+  // A dry day, whatever the real weather: on a wet one, places under cover come first.
+  await context.route('**/api.open-meteo.com/**', (route) =>
+    route.fulfill({ json: { current: { precipitation: 0, weather_code: 1 }, hourly: { precipitation_probability: [0, 0] } } }),
+  );
   const page = await context.newPage();
   await createRoom(page, 'Wei', 'Location test');
 

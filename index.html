@@ -22,10 +22,29 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
-    />
+    <script>
+      // The fonts load once the page has, so a slow or blocked Google Fonts never holds the app
+      // up: it shows in the phone's own fonts until they arrive (the service worker keeps them
+      // for next time).
+      (function () {
+        var href =
+          'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap';
+        function add() {
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = href;
+          document.head.appendChild(link);
+        }
+        if (document.readyState === 'complete') add();
+        else window.addEventListener('load', add);
+      })();
+    </script>
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

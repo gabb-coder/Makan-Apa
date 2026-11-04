@@ -23,6 +23,8 @@ import { shareCard } from '../lib/shareCard';
 import { MealPhotos, photoUrl, ReactionBar } from '../components/MealSocial';
 import { JoinRequestList } from '../components/JoinRequests';
 import { PlaceNotes } from '../components/PlaceNotes';
+import { EventsCard } from '../components/Events';
+import { useEvents } from '../lib/useEvents';
 import { useJoinRequests } from '../lib/useJoinRequests';
 import { clockTime } from '../lib/vote';
 import { PickSheet } from '../components/PickSheet';
@@ -35,8 +37,10 @@ import { locale, t, tNodes } from '../lib/i18n';
 import { shareInvite } from '../lib/invite';
 import { hostOf, roomTitle } from '../lib/session';
 import { useLocation } from '../lib/location';
-import { byDistance, coveredFirst, isNearSunway, NEARBY_LABEL, roomSpot, SUNWAY_CENTRE, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
+import { byDistance, coveredFirst, spotIsCovered, spotOpenNow, isNearSunway, NEARBY_LABEL, roomSpot, SUNWAY_CENTRE, SUNWAY_SPOTS, spotsFor, spotsOfTheDay, type Spot } from '../lib/nearby';
 import { useRain } from '../lib/weather';
+import { suggestions } from '../lib/suggest';
+import { SuggestCard } from '../components/SuggestCard';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor } from '../lib/rotation';
@@ -91,6 +95,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const events = useEvents(room.id, me.id);
   const joinRequests = useJoinRequests(room.id, hostOf(members, room.host_id)?.id === me.id);
   // Whoever's in for this meal: they decide, answer, pick and pay.
   const present = members.filter((m) => !away.has(m.id));
@@ -181,6 +186,28 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
     return days.propose(match ? { foodId: match.id, name: match.name } : { foodId: null, name: p.name }, 'direct');
   };
 
+  // Closed-today warnings: the pick (when it's a place) or the meet-up place, at the time you'd go.
+  const placeNamed = (name: string) => [...roomSpots, ...SUNWAY_SPOTS].find((sp) => sp.name.toLowerCase() === name.trim().toLowerCase());
+  const closedNote = (() => {
+    if (!todayEntry || todayEntry.status !== 'accepted' || !todayFood) return null;
+    const at = todayEntry.meet_at ? new Date(todayEntry.meet_at) : new Date();
+    const when = todayEntry.meet_at ? clockTime(todayEntry.meet_at, room.timezone) : null;
+    for (const name of [todayEntry.meet_place, todayFood.name]) {
+      const place = name ? placeNamed(name) : undefined;
+      const state = place ? spotOpenNow(place, at) : null;
+      if (place && state && !state.open)
+        return when ? t('⚠️ {place} looks closed at {time} ({hours}). Check before heading out.', { place: place.name, time: when, hours: state.label }) : t('⚠️ {place} looks closed right now ({hours}).', { place: place.name, hours: state.label });
+    }
+    const near = spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS]).map((sp) => spotOpenNow(sp, at)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (near.length >= 2 && near.every((x) => !x.open)) return t('⚠️ The places for {food} nearby look closed at that time. Check before heading out.', { food: todayFood.name });
+    return null;
+  })();
+  const closedBanner = closedNote ? (
+    <p role="status" style={{ margin: 0, padding: '10px 12px', borderRadius: 14, background: 'var(--danger-tint)', color: 'var(--danger)', fontSize: 13, lineHeight: 1.45, fontWeight: 700 }}>
+      {closedNote}
+    </p>
+  ) : null;
+
   /* ----- The main card for today's state ----- */
 
   let main: React.ReactNode;
@@ -232,6 +259,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         nearby={
           showNearby ? (
             <>
+              {closedBanner}
               {rainNote}
               <NearbyList spots={dry(suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS]))).slice(0, 3)} here={here} />
             </>
@@ -323,14 +351,26 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             : t('{name} is out of vetoes, so your pick stands.', { name: others[0].name });
       } else sub = t('Everyone else can veto {times}', { times: timesWord(room.veto_limit) });
       main = (
-        <YourTurnCard
-          me={me}
-          sub={sub}
-          onSpin={onSpin}
-          onPickList={() => setSheet('list')}
-          onType={() => setSheet('type')}
-          onVote={others.length > 0 && pickable.length >= 2 ? () => setVoteSheet(true) : undefined}
-        />
+        <>
+          <YourTurnCard
+            me={me}
+            sub={sub}
+            onSpin={onSpin}
+            onPickList={() => setSheet('list')}
+            onType={() => setSheet('type')}
+            onVote={others.length > 0 && pickable.length >= 2 ? () => setVoteSheet(true) : undefined}
+          />
+          <SuggestCard
+            list={suggestions({
+              foods: pickable,
+              suits: (f) => suitsEveryone(f, present),
+              wet,
+              covered: (f) => spotsFor(f, 6, SUNWAY_SPOTS).some(spotIsCovered),
+            })}
+            onPick={(food) => pickFromSheet({ food })}
+            onError={onToast}
+          />
+        </>
       );
     }
   } else if (todayEntry.status === 'proposed' && todayFood) {
@@ -559,6 +599,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           myStatus={attendance.statusOf(me.id, today, meal)}
           onSave={(at, where) => run(() => days.setMeetup(at, where))}
           onLate={() => run(() => attendance.setStatus(me.id, today, meal, 'late'))}
+          warning={todayEntry.meet_at ? closedNote : null}
           calendar={{
             uid: `${todayEntry.id}-${todayEntry.meet_at ?? ''}`,
             title: t('{meal}: {food}, with {room}', { meal: meal === 'dinner' ? t('Dinner') : t('Lunch'), food: todayFood.name, room: roomTitle(room) }),
@@ -575,8 +616,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           meal={meal}
           statusOf={(id) => attendance.statusOf(id, today, meal)}
           onSet={(status) => run(() => attendance.setStatus(me.id, today, meal, status))}
+          guests={attendance.guestsOn(today, meal)}
+          onGuests={(n) => run(() => attendance.setGuests(me.id, today, meal, n))}
         />
       )}
+
+      {!proposalView && <EventsCard room={room} me={me} members={members} api={events} extras={extras} onToast={onToast} />}
 
       {vetoedNames.length > 0 && isDecider && todayEntry?.status === 'pending' && (
         <p style={{ margin: '-6px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
@@ -719,6 +764,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           away={away}
           start={billStart}
           kittyKeeper={room.kitty_keeper}
+          guests={attendance.guestsOn(today, meal)}
           onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved. See who owes what in Bills.'))}
           onClose={() => {
             setBillOpen(false);
@@ -767,6 +813,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           todayDeciderId={todayEntry?.decider_id ?? decider.id}
           today={today}
           onClose={() => setPeopleOpen(false)}
+          onPlan={() => {
+            setPeopleOpen(false);
+            setPlanOpen(true);
+          }}
           onInvite={() => run(async () => {
             const message = await shareInvite(room.code, room.name);
             if (message) onToast(message);
@@ -796,6 +846,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         <SpotSheet
           spot={spot}
           here={here}
+          members={members}
           notes={<PlaceNotes roomId={room.id} spotId={spot.id} me={me} members={members} isHost={hostOf(members, room.host_id)?.id === me.id} onError={onToast} />}
           addedBy={spot.room?.addedBy ? (spot.room.addedBy === me.id ? t('you') : memberById.get(spot.room.addedBy)?.name) : undefined}
           onRemove={

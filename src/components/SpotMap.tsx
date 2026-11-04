@@ -9,7 +9,26 @@ import { priceLabel, spotOpenNow, spotPoint, type Spot } from '../lib/nearby';
  * Every place on a map (OpenStreetMap). Pins are green when open now, grey when closed, and amber
  * when the hours aren't listed; a tap opens the place. Loaded only when the map is opened.
  */
-export default function SpotMap({ spots, here, onOpen }: { spots: Spot[]; here?: LatLng; onOpen: (spot: Spot) => void }) {
+export default function SpotMap({
+  spots,
+  here,
+  onOpen,
+  labelFor,
+  colorFor,
+  legend = true,
+  label,
+}: {
+  spots: Spot[];
+  here?: LatLng;
+  onOpen: (spot: Spot) => void;
+  /** Tooltip text; the name and price by default. */
+  labelFor?: (spot: Spot) => string;
+  /** Pin colour; by opening hours by default. */
+  colorFor?: (spot: Spot) => string;
+  legend?: boolean;
+  /** The map's accessible name. */
+  label?: string;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const opened = useRef(onOpen);
   opened.current = onOpen;
@@ -25,11 +44,11 @@ export default function SpotMap({ spots, here, onOpen }: { spots: Spot[]; here?:
     const points: L.LatLngExpression[] = [];
     for (const s of spots) {
       const p = spotPoint(s);
-      const open = spotOpenNow(s);
-      const color = open === null ? '#B7791F' : open.open ? '#2F8F5B' : '#6B6B73';
+      const open = colorFor ? null : spotOpenNow(s);
+      const color = colorFor ? colorFor(s) : open === null ? '#B7791F' : open.open ? '#2F8F5B' : '#6B6B73';
       const marker = L.circleMarker([p.lat, p.lng], { radius: 9, color: '#FFFFFF', weight: 2, fillColor: color, fillOpacity: 1 })
         .addTo(map)
-        .bindTooltip(`${s.name} · ${priceLabel(s.price)}`, { direction: 'top', offset: [0, -8] });
+        .bindTooltip(labelFor ? labelFor(s) : `${s.name} · ${priceLabel(s.price)}`, { direction: 'top', offset: [0, -8] });
       marker.on('click', () => opened.current(s));
       points.push([p.lat, p.lng]);
     }
@@ -47,12 +66,12 @@ export default function SpotMap({ spots, here, onOpen }: { spots: Spot[]; here?:
       window.clearTimeout(timer);
       map.remove();
     };
-  }, [spots, here]);
+  }, [spots, here, labelFor, colorFor]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div ref={box} data-no-swipe role="application" aria-label={t('Map of places')} style={{ height: '58dvh', minHeight: 320, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)' }} />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 12, color: 'var(--muted)' }}>
+      <div ref={box} data-no-swipe role="application" aria-label={label ?? t('Map of places')} style={{ height: legend ? '58dvh' : '40dvh', minHeight: legend ? 320 : 240, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)' }} />
+      {legend && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 12, color: 'var(--muted)' }}>
         {(
           [
             ['#2F8F5B', t('Open now')],
@@ -65,7 +84,7 @@ export default function SpotMap({ spots, here, onOpen }: { spots: Spot[]; here?:
             {label}
           </span>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

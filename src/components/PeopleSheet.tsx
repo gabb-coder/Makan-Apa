@@ -17,6 +17,8 @@ interface Props {
   onClose: () => void;
   onInvite: () => void;
   onSettings: () => void;
+  /** Mark days you're away ahead of time. */
+  onPlan?: () => void;
   /** The main menu, with every room on this phone. */
   onHome?: () => void;
 }
@@ -51,7 +53,7 @@ export function OnlineDot({ size = 12 }: { size?: number }) {
   );
 }
 
-export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onHome }: Props) {
+export function PeopleSheet({ room, me, members, online, todayDeciderId, today, onClose, onInvite, onSettings, onHome, onPlan }: Props) {
   const otherRooms = knownRooms().filter((r) => r.roomId !== room.id);
   const [qrOpen, setQrOpen] = useState(false);
   useEffect(() => {
@@ -129,6 +131,11 @@ export function PeopleSheet({ room, me, members, online, todayDeciderId, today, 
             {t('Room settings')}
           </button>
         </div>
+        {onPlan && (
+          <button type="button" className="btn btn--secondary press" onClick={onPlan}>
+            {t('📅 Plan ahead: days you’re away')}
+          </button>
+        )}
         <button type="button" onClick={() => setQrOpen(true)} style={{ minHeight: 40, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
           {t('Sitting together? Show a QR code to scan')}
         </button>

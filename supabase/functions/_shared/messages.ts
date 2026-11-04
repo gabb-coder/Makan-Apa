@@ -18,6 +18,8 @@ export type Event =
   | { type: 'chat'; who: string; room: string; text: string }
   | { type: 'join'; who: string; room: string }
   | { type: 'kitty'; amount: string; food: string; share: string }
+  | { type: 'treat'; payer: string; food: string }
+  | { type: 'event'; who: string; title: string; when: string }
   | { type: 'your-turn' }
   | { type: 'secret-open' };
 
@@ -96,6 +98,16 @@ const TEXT: Record<Event['type'], Record<Lang, [string, string]>> = {
     en: ['{amount} for {food} came out of the kitty', 'Your share is {share}.'],
     ms: ['{amount} untuk {food} dibayar daripada tabung', 'Bahagian kamu {share}.'],
     zh: ['公款付了{food}的{amount}', '你的份额是{share}。'],
+  },
+  treat: {
+    en: ['{payer} is treating you to {food} 🎉', 'Nothing to pay back. Say thanks!'],
+    ms: ['{payer} belanja kamu {food} 🎉', 'Tak perlu bayar balik. Ucap terima kasih!'],
+    zh: ['{payer}请你吃{food} 🎉', '不用还钱，记得说声谢谢！'],
+  },
+  event: {
+    en: ['{who} planned {title}', '{when}. Tap to say if you’re going.'],
+    ms: ['{who} rancang {title}', '{when}. Tekan untuk beritahu kamu datang atau tidak.'],
+    zh: ['{who}安排了{title}', '{when}。点开告诉大家你去不去。'],
   },
   'your-turn': {
     en: ['It’s your turn to choose', 'Makan apa? Spin the wheel or pick something for today.'],

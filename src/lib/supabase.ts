@@ -68,6 +68,8 @@ export interface MemberRow {
   pay_qr_path?: string | null;
   /** Set when the host removed them: they need the host's OK to come back. */
   removed_at?: string | null;
+  /** Things they avoid, flagged on menus: nuts, seafood, spicy, dairy, gluten, egg. */
+  allergies?: string[];
   created_at: string;
 }
 
@@ -139,6 +141,12 @@ export interface MealBillRow {
   receipt_path?: string | null;
   /** Paid out of the room's kitty (by its keeper): no debts, it comes off kitty balances. */
   from_kitty?: boolean;
+  /** The payer's treat: nobody owes anything for it. */
+  treat?: boolean;
+  /** Whose birthday it is: their share is spread over everyone else. */
+  birthday?: string | null;
+  /** An event's bill (event_bills), with day_entry_id holding the event's id. */
+  event?: boolean;
   updated_at: string;
 }
 
@@ -174,6 +182,8 @@ export interface AttendanceRow {
   meal: Meal;
   member_id: string;
   status: Attendance;
+  /** Friends they're bringing who aren't on the app (+1, +2). */
+  guests?: number;
   updated_at: string;
 }
 
@@ -205,6 +215,8 @@ export interface MessageRow {
   room_id: string;
   member_id: string;
   body: string;
+  /** A poll shown in the chat. */
+  poll_id?: string | null;
   created_at: string;
 }
 
@@ -255,4 +267,41 @@ export interface JoinRequestRow {
   name: string;
   status: 'pending' | 'approved' | 'declined';
   created_at: string;
+}
+
+export interface PollRow {
+  id: string;
+  room_id: string;
+  member_id: string;
+  question: string;
+  options: string[];
+  created_at: string;
+}
+
+export interface PollVoteRow {
+  poll_id: string;
+  member_id: string;
+  choice: number;
+  created_at: string;
+}
+
+/** A one-off plan: a birthday dinner, a Friday outing. */
+export interface EventRow {
+  id: string;
+  room_id: string;
+  created_by: string | null;
+  title: string;
+  starts_at: string;
+  place: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export type Rsvp = 'yes' | 'maybe' | 'no';
+
+export interface EventRsvpRow {
+  event_id: string;
+  member_id: string;
+  status: Rsvp;
+  updated_at: string;
 }

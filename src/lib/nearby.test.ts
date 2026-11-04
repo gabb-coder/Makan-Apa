@@ -177,3 +177,15 @@ describe('spot menus', () => {
     expect(menuPrice(31)).toBe('RM31');
   });
 });
+
+describe('coveredFirst', () => {
+  it('puts places under cover from campus first on a rainy day, keeping the order otherwise', async () => {
+    const { coveredFirst, spotIsCovered, SUNWAY_SPOTS } = await import('./nearby');
+    const mixed = [...SUNWAY_SPOTS].reverse();
+    const sorted = coveredFirst(mixed);
+    const firstOpen = sorted.findIndex((s) => !spotIsCovered(s));
+    expect(sorted.slice(0, firstOpen).every(spotIsCovered)).toBe(true);
+    expect(sorted.slice(firstOpen).some(spotIsCovered)).toBe(false);
+    expect(sorted.filter((s) => !spotIsCovered(s))).toEqual(mixed.filter((s) => !spotIsCovered(s)));
+  });
+});

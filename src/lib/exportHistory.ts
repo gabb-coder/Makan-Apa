@@ -100,13 +100,15 @@ interface MoneyData {
   settlements: SettlementRow[];
   topUps: KittyTopUpRow[];
   foodsById: Map<string, Food>;
+  /** Events, for their bills' names and dates. */
+  events?: { id: string; title: string; starts_at: string }[];
 }
 
 /**
  * Every bill, payment and kitty top-up, oldest first, with a column per person for their share
  * of each bill. In English, like the meals export.
  */
-export function moneySheet({ room, members, entries, bills, settlements, topUps, foodsById }: MoneyData): Sheet {
+export function moneySheet({ room, members, entries, bills, settlements, topUps, foodsById, events = [] }: MoneyData): Sheet {
   const nameOf = new Map(members.map((m) => [m.id, m.name]));
   const who = (id: string | null) => (id && nameOf.get(id)) || 'Removed member';
   const entryById = new Map(entries.map((e) => [e.id, e]));
@@ -117,12 +119,13 @@ export function moneySheet({ room, members, entries, bills, settlements, topUps,
   const rows: Row[] = [];
   for (const b of bills) {
     const e = entryById.get(b.day_entry_id);
-    const date = e?.entry_date ?? day(b.updated_at);
-    const food = e ? (e.food_option_id && !foodsById.has(e.food_option_id) ? 'A deleted food' : (entryFood(e, foodsById)?.name ?? 'Unknown')) : 'Unknown';
+    const ev = events.find((x) => x.id === b.day_entry_id);
+    const date = e?.entry_date ?? (ev ? day(ev.starts_at) : day(b.updated_at));
+    const food = e ? (e.food_option_id && !foodsById.has(e.food_option_id) ? 'A deleted food' : (entryFood(e, foodsById)?.name ?? 'Unknown')) : ev ? `Event: ${ev.title}` : 'Unknown';
     const each = shares(b);
     rows.push({
       sort: `${date}0`,
-      cells: [{ date }, b.from_kitty ? 'Bill (from the kitty)' : 'Bill', `${food}${e?.meal === 'dinner' ? ' (dinner)' : ''}`, b.from_kitty ? 'Kitty' : who(b.paid_by), '', b.amount_cents / 100, ...people.map((m) => (each.has(m.id) ? each.get(m.id)! / 100 : null))],
+      cells: [{ date }, b.from_kitty ? 'Bill (from the kitty)' : b.treat ? 'Bill (a treat)' : b.birthday ? `Bill (${who(b.birthday)}'s birthday)` : 'Bill', `${food}${e?.meal === 'dinner' ? ' (dinner)' : ''}`, b.from_kitty ? 'Kitty' : who(b.paid_by), '', b.amount_cents / 100, ...people.map((m) => (each.has(m.id) ? each.get(m.id)! / 100 : null))],
     });
   }
   for (const p of settlements) {
@@ -148,16 +151,25 @@ export function moneySheet({ room, members, entries, bills, settlements, topUps,
 }
 
 /** Bills, payments and kitty top-ups, straight from the database. */
-export async function loadMoney(roomId: string): Promise<Pick<MoneyData, 'entries' | 'bills' | 'settlements' | 'topUps'>> {
-  const [e, b, s, k] = await Promise.all([
+export async function loadMoney(roomId: string): Promise<Pick<MoneyData, 'entries' | 'bills' | 'settlements' | 'topUps' | 'events'>> {
+  const [e, b, s, k, ev, eb] = await Promise.all([
     supabase.from('day_entries').select('*').eq('room_id', roomId).eq('status', 'accepted').limit(10_000),
     supabase.from('meal_bills').select('*').eq('room_id', roomId).limit(50_000),
     supabase.from('settlements').select('*').eq('room_id', roomId).limit(50_000),
     supabase.from('kitty_topups').select('*').eq('room_id', roomId).limit(50_000),
+    supabase.from('events').select('id, title, starts_at').eq('room_id', roomId).limit(10_000),
+    supabase.from('event_bills').select('*').eq('room_id', roomId).limit(50_000),
   ]);
-  const error = e.error ?? b.error ?? s.error ?? k.error;
+  const error = e.error ?? b.error ?? s.error ?? k.error ?? ev.error ?? eb.error;
   if (error) throw new Error(error.message);
-  return { entries: e.data as DayEntryRow[], bills: b.data as MealBillRow[], settlements: s.data as SettlementRow[], topUps: k.data as KittyTopUpRow[] };
+  const eventBills = ((eb.data ?? []) as (Omit<MealBillRow, 'day_entry_id'> & { event_id: string })[]).map(({ event_id, ...x }) => ({ ...x, day_entry_id: event_id }));
+  return {
+    entries: e.data as DayEntryRow[],
+    bills: [...(b.data as MealBillRow[]), ...eventBills],
+    settlements: s.data as SettlementRow[],
+    topUps: k.data as KittyTopUpRow[],
+    events: (ev.data ?? []) as { id: string; title: string; starts_at: string }[],
+  };
 }
 
 /** Every agreed day in the room, straight from the database (the app only keeps recent ones). */

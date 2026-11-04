@@ -18,6 +18,25 @@ export interface Bill {
   sst_pct?: number | string | null;
   /** Paid out of the room's kitty: everyone's share comes off their kitty balance, not a debt. */
   from_kitty?: boolean | null;
+  /** The payer's treat: nobody owes anything for it. */
+  treat?: boolean | null;
+  /** Whose birthday it is: their share is spread over everyone else. */
+  birthday?: string | null;
+}
+
+/**
+ * A guest someone brought (not on the app) is "<their member id>+<n>" on a bill's items; what the
+ * guest had is charged to whoever brought them.
+ */
+export function guestKey(hostId: string, n: number): string {
+  return `${hostId}+${n}`;
+}
+export function guestHost(id: string): string {
+  const i = id.indexOf('+');
+  return i === -1 ? id : id.slice(0, i);
+}
+export function isGuest(id: string): boolean {
+  return id.includes('+');
 }
 
 export interface Payment {
@@ -91,11 +110,25 @@ export function itemSubtotals(items: BillItem[]): Map<string, number> {
  * proportion to what each person had; older bills split it equally.
  */
 export function shares(bill: Bill): Map<string, number> {
+  let raw: Map<string, number> | null = null;
   if (bill.items?.length) {
     const subs = itemSubtotals(bill.items);
-    if (subs.size) return allocate(bill.amount_cents, subs);
+    if (subs.size) raw = allocate(bill.amount_cents, subs);
   }
-  return evenly(bill.amount_cents, bill.split_between);
+  raw ??= evenly(bill.amount_cents, bill.split_between);
+  // Guests' shares go to whoever brought them.
+  const out = new Map<string, number>();
+  for (const [id, cents] of raw) out.set(guestHost(id), (out.get(guestHost(id)) ?? 0) + cents);
+  // Birthday: their share is spread over everyone else, in proportion to what they had.
+  const bday = bill.birthday;
+  if (bday && out.has(bday) && out.size > 1) {
+    const theirs = out.get(bday)!;
+    out.delete(bday);
+    const others = [...out.values()].some((c) => c > 0) ? new Map(out) : new Map([...out.keys()].map((id) => [id, 1]));
+    for (const [id, cents] of allocate(theirs, others)) out.set(id, (out.get(id) ?? 0) + cents);
+    out.set(bday, 0);
+  }
+  return out;
 }
 
 /** "6", "6.5" or "" typed as a percentage → a number between 0 and 30, or null. */
@@ -112,7 +145,7 @@ export function balances(bills: Bill[], payments: Payment[]): Map<string, number
   const net = new Map<string, number>();
   const add = (id: string, cents: number) => net.set(id, (net.get(id) ?? 0) + cents);
   for (const bill of bills) {
-    if (bill.from_kitty) continue;
+    if (bill.from_kitty || bill.treat) continue;
     add(bill.paid_by, bill.amount_cents);
     for (const [id, share] of shares(bill)) add(id, -share);
   }

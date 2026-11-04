@@ -119,7 +119,7 @@ export function summarize(known: KnownRoom[], b: Bundle, today: (room: RoomRow) 
 
 async function fetchBundle(roomIds: string[]): Promise<Bundle> {
   const since = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
-  const [rooms, members, entries, bills, settlements, attendance, runs] = await Promise.all([
+  const [rooms, members, entries, bills, settlements, attendance, runs, eventBills] = await Promise.all([
     supabase.from('rooms').select('*').in('id', roomIds),
     supabase.from('members').select('*').in('room_id', roomIds),
     supabase.from('day_entries').select('*').in('room_id', roomIds).gte('entry_date', since),
@@ -127,6 +127,7 @@ async function fetchBundle(roomIds: string[]): Promise<Bundle> {
     supabase.from('settlements').select('*').in('room_id', roomIds),
     supabase.from('attendance').select('room_id, entry_date, meal, member_id, status').in('room_id', roomIds).gte('entry_date', since),
     supabase.from('tapau_runs').select('room_id, day_entry_id, runner_id, status, created_at').in('room_id', roomIds),
+    supabase.from('event_bills').select('*').in('room_id', roomIds),
   ]);
   const failed = [rooms, members, entries, bills, settlements].find((r) => r.error);
   if (failed?.error) throw new Error(failed.error.message);
@@ -142,7 +143,11 @@ async function fetchBundle(roomIds: string[]): Promise<Bundle> {
     members: (members.data ?? []) as MemberRow[],
     entries: entryRows,
     foods: (foods.data ?? []) as { id: string; name: string }[],
-    bills: (bills.data ?? []) as MealBillRow[],
+    // Event bills count towards who owes whom too (their id stands in for the day).
+    bills: [
+      ...((bills.data ?? []) as MealBillRow[]),
+      ...((eventBills.data ?? []) as (Omit<MealBillRow, 'day_entry_id'> & { event_id: string })[]).map(({ event_id, ...x }) => ({ ...x, day_entry_id: event_id, event: true })),
+    ],
     settlements: (settlements.data ?? []) as SettlementRow[],
     picks: (picks.data ?? []) as { day_entry_id: string; member_id: string }[],
     attendance: (attendance.data ?? []) as Bundle['attendance'],

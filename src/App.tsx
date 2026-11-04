@@ -21,6 +21,8 @@ import { useRoomData } from './lib/useRoomData';
 import { useRoomExtras } from './lib/useRoomExtras';
 import { useAttendance } from './lib/useAttendance';
 import { useChat } from './lib/useChat';
+import { useLiveSpin } from './lib/liveSpin';
+import { LiveSpinOverlay } from './components/LiveSpinOverlay';
 import { useRain } from './lib/weather';
 import { SUNWAY_CENTRE, SUNWAY_SPOTS, spotIsCovered, spotsFor } from './lib/nearby';
 import { useConnection } from './lib/offline';
@@ -363,6 +365,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   const foodsApi = useFoods(room, me.id, days.entries, today, extras.ratings);
   const online = usePresence(room.id, me.id);
   const chat = useChat(room.id, me.id);
+  const liveSpin = useLiveSpin(room.id, me.id);
   // On a wet day the wheel leans towards foods you can get without leaving the canopy walk.
   const rain = useRain(SUNWAY_CENTRE);
   const wet = !!rain && (rain.now || rain.soon);
@@ -529,6 +532,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
             vetoedNames={vetoedNames}
             extraNote={dietNote + (wet ? ' ' + t('🌧 Rainy, so foods you can get under cover come up more.') : '')}
             boost={rainBoost}
+            onSpin={liveSpin.send}
             timezone={room.timezone}
             turnLabel={isDecider ? t('Your turn') : t("{name}'s turn", { name: decider?.name ?? t('Someone') })}
             send={wheelSend}
@@ -577,6 +581,9 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
       </div>
       </div>
       <TabBar active={tab} onChange={go} dragFraction={swipe.dragFraction} />
+      {liveSpin.incoming && (
+        <LiveSpinOverlay spin={liveSpin.incoming} byName={everyone.find((m) => m.id === liveSpin.incoming!.by)?.name ?? t('Someone')} onClose={liveSpin.dismiss} />
+      )}
     </div>
   );
 }

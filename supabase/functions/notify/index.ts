@@ -10,6 +10,7 @@
 //   late      someone's running late          → everyone else who's in
 //   chat      a message in the room's chat    → everyone else
 //   join      someone asked to join a locked room → the host
+//   event     someone planned an event        → everyone else
 // The person who did it (actor) never gets their own alert.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
@@ -110,7 +111,9 @@ Deno.serve(async (req) => {
       if ((!bill.from_kitty && mid === bill.paid_by) || mid === actor || cents <= 0) continue;
       recipients.set(
         mid,
-        bill.from_kitty
+        bill.treat && !bill.from_kitty
+          ? { type: 'treat', payer: nameOf(bill.paid_by), food }
+          : bill.from_kitty
           ? { type: 'kitty', amount: formatRM(bill.amount_cents), food, share: formatRM(cents) }
           : { type: 'bill', payer: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents), food, share: formatRM(cents) },
       );
@@ -178,6 +181,17 @@ Deno.serve(async (req) => {
     if (!r || r.status !== 'pending' || !host) return json({ skipped: 'stale' });
     recipients.set(host, { type: 'join', who: r.name, room: rm?.name || rm?.code || '' });
     tag = `makan-join-${id}`;
+  } else if (type === 'event') {
+    const [{ data: ev }, { data: room }] = await Promise.all([
+      db.from('events').select('title, starts_at, place, created_by').eq('id', id).maybeSingle(),
+      db.from('rooms').select('timezone').eq('id', roomId).maybeSingle(),
+    ]);
+    const e = ev as { title: string; starts_at: string; place: string | null; created_by: string | null } | null;
+    if (!e) return json({ skipped: 'stale' });
+    const tz = (room as { timezone: string } | null)?.timezone ?? 'Asia/Kuala_Lumpur';
+    const when = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz }).format(new Date(e.starts_at)) + (e.place ? ` · ${e.place}` : '');
+    for (const s of subs) if (s.member_id !== e.created_by && s.member_id !== actor) recipients.set(s.member_id, { type: 'event', who: nameOf(e.created_by), title: e.title, when });
+    tag = `makan-event-${id}`;
   } else {
     return json({ error: 'unknown type' }, 400);
   }

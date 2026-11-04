@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { FoodTile } from '../components/FoodTile';
 import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
@@ -11,6 +11,11 @@ import type { DayEntryRow, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { t } from '../lib/i18n';
 import { badgesFor } from '../lib/badges';
+import { challengesFor } from '../lib/challenges';
+import { passport } from '../lib/passport';
+import { roomSpot, SUNWAY_SPOTS } from '../lib/nearby';
+
+const SpotMap = lazy(() => import('../components/SpotMap'));
 import { PhotoGrid, PhotoViewer, Thumb } from '../components/MealSocial';
 import { hostOf } from '../lib/session';
 
@@ -86,8 +91,10 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const photosByEntry = new Map<string, (typeof extras.photos)[number]>();
   for (const p of extras.photos) if (!photosByEntry.has(p.day_entry_id)) photosByEntry.set(p.day_entry_id, p);
 
+  const stamps = useMemo(() => passport(entries, foodsById, [...extras.spots.map(roomSpot), ...SUNWAY_SPOTS]), [entries, foodsById, extras.spots]);
+
   const badges = useMemo(
-    () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements }),
+    () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements, today }),
     [me.id, entries, vetoes, extras.bills, extras.settlements],
   );
 
@@ -261,6 +268,31 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
           </div>
         )}
       </section>
+
+      {isCurrent && (
+        <section aria-labelledby="challenges-label" className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+          <h2 id="challenges-label" className="section-label" style={{ margin: 0 }}>
+            {t('This week’s challenges')}
+          </h2>
+          {challengesFor(entries, today).map((c) => (
+            <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 14 }}>
+                <span style={{ fontWeight: 600 }}>
+                  {c.done ? '✅ ' : c.failed ? '❌ ' : ''}
+                  {t(c.title)}
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{c.failed ? t('Next week!') : `${c.progress}/${c.goal}`}</span>
+              </div>
+              <div role="progressbar" aria-label={t(c.title)} aria-valuemin={0} aria-valuemax={c.goal} aria-valuenow={c.progress} style={{ height: 8, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
+                <div style={{ width: `${(c.progress / c.goal) * 100}%`, height: '100%', borderRadius: 999, background: c.done ? 'var(--success)' : 'var(--accent)' }} />
+              </div>
+            </div>
+          ))}
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('New challenges every Monday. Finish them all 3 weeks for the 🏆 badge.')}</span>
+        </section>
+      )}
+
+      <PassportCard stamps={stamps} />
 
       {monthPhotos.length > 0 && (
         <section aria-labelledby="photos-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
@@ -536,5 +568,53 @@ function Bar({ name, count, pct, color, delay }: { name: string; count: number; 
       </div>
       <span style={{ fontWeight: 800, textAlign: 'right' }}>{count}</span>
     </>
+  );
+}
+
+/** Every place the room has eaten at, on a map, most visited first. */
+function PassportCard({ stamps }: { stamps: ReturnType<typeof passport> }) {
+  const [showMap, setShowMap] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const byId = new Map(stamps.map((s) => [s.spot.id, s]));
+  return (
+    <section aria-labelledby="passport-label" className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <h2 id="passport-label" className="section-label" style={{ margin: 0 }}>
+          {t('Food passport')}
+        </h2>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>{stamps.length === 1 ? t('1 place') : t('{n} places', { n: stamps.length })}</span>
+      </div>
+      {stamps.length === 0 ? (
+        <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+          {t('No stamps yet. Pick a place from Nearby, or set a meet-up at one, and it gets stamped here.')}
+        </span>
+      ) : (
+        <>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {stamps.slice(0, 12).map((s) => (
+              <li key={s.spot.id} className="badge" style={{ background: picked === s.spot.id ? 'var(--accent-tint)' : 'var(--bar-track)', color: 'var(--ink)', fontSize: 12, padding: '5px 10px' }}>
+                📍 {s.spot.name} · {s.count}×
+              </li>
+            ))}
+          </ul>
+          {showMap ? (
+            <Suspense fallback={<span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Loading map…')}</span>}>
+              <SpotMap
+                spots={stamps.map((s) => s.spot)}
+                onOpen={(sp) => setPicked(sp.id)}
+                labelFor={(sp) => `${sp.name} · ${byId.get(sp.id)?.count ?? 0}×`}
+                colorFor={() => '#CC3F17'}
+                legend={false}
+                label={t('Map of places your room has eaten at')}
+              />
+            </Suspense>
+          ) : (
+            <button type="button" className="btn btn--secondary press" onClick={() => setShowMap(true)} style={{ height: 44 }}>
+              {t('Show on a map')}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }

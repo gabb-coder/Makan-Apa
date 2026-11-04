@@ -21,7 +21,12 @@ export function WhosInCard({
   statusOf,
   onSet,
   onPlan,
+  guests = [],
+  onGuests,
 }: {
+  /** Friends people are bringing, and changing how many you're bringing. */
+  guests?: { hostId: string; count: number }[];
+  onGuests?: (n: number) => Promise<void>;
   me: MemberRow;
   members: MemberRow[];
   meal: Meal;
@@ -36,6 +41,19 @@ export function WhosInCard({
   const out = others.filter((m) => statusOf(m.id) === 'out');
   const late = others.filter((m) => statusOf(m.id) === 'late');
   const inCount = members.filter((m) => statusOf(m.id) !== 'out').length;
+  const myGuests = guests.find((g) => g.hostId === me.id)?.count ?? 0;
+  const guestTotal = guests.reduce((n, g) => n + g.count, 0);
+  const bringing = guests.filter((g) => g.hostId !== me.id).map((g) => `${members.find((m) => m.id === g.hostId)?.name ?? t('Someone')} +${g.count}`);
+
+  const change = async (n: number) => {
+    if (!onGuests) return;
+    setBusy(true);
+    try {
+      await onGuests(n);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const summary = [
     out.length ? (out.length === 1 ? t('{names} is out', { names: out[0].name }) : t('{names} are out', { names: joinNames(out.map((m) => m.name)) })) : null,
@@ -52,7 +70,10 @@ export function WhosInCard({
         <h2 id="whos-in" className="section-label" style={{ margin: 0 }}>
           {meal === 'dinner' ? t("Who's in for dinner?") : t("Who's in for lunch?")}
         </h2>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>{t('{n} of {total} in', { n: inCount, total: members.length })}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
+          {t('{n} of {total} in', { n: inCount, total: members.length })}
+          {guestTotal > 0 && ` · ${guestTotal === 1 ? t('1 guest') : t('{n} guests', { n: guestTotal })}`}
+        </span>
       </div>
       <div className="segmented" role="group" aria-label={t('Are you joining?')} style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
         {CHOICES.map((c) => (
@@ -85,10 +106,29 @@ export function WhosInCard({
         </span>
         <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.4 }}>
           {summary.length ? summary.join(' · ') : t("Everyone's in so far.")}
+          {bringing.length > 0 && ` ${t('Bringing friends: {list}.', { list: bringing.join(', ') })}`}
           {mine === 'out' && ` ${t("You won't be the decider or on the bill.")}`}
           {mine === 'late' && ` ${t('Late still counts as in: you can decide and you’re on the bill.')}`}
         </span>
       </div>
+      {onGuests && mine !== 'out' && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span id="guests-label" style={{ fontSize: 14, fontWeight: 600 }}>
+            {t('Bringing a friend who isn’t on the app?')}
+          </span>
+          <span role="group" aria-labelledby="guests-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button type="button" className="icon-btn press" aria-label={t('One guest fewer')} disabled={busy || myGuests === 0} onClick={() => change(myGuests - 1)} style={{ width: 36, height: 36, opacity: myGuests === 0 ? 0.4 : 1 }}>
+              −
+            </button>
+            <span aria-live="polite" style={{ minWidth: 28, textAlign: 'center', fontWeight: 800 }}>
+              +{myGuests}
+            </span>
+            <button type="button" className="icon-btn press" aria-label={t('One more guest')} disabled={busy || myGuests >= 5} onClick={() => change(myGuests + 1)} style={{ width: 36, height: 36 }}>
+              +
+            </button>
+          </span>
+        </div>
+      )}
       {onPlan && (
         <button type="button" onClick={onPlan} style={{ alignSelf: 'flex-start', minHeight: 36, padding: 0, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
           {t('Away on other days? Plan ahead')}

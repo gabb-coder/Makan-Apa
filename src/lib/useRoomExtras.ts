@@ -28,9 +28,18 @@ export function useRoomExtras(roomId: string, meId: string) {
     const { data } = await supabase.from('meal_ratings').select('*, day_entries!inner(room_id)').eq('day_entries.room_id', roomId);
     if (data) setRatings((data as (MealRatingRow & { day_entries?: unknown })[]).map(({ day_entries: _, ...r }) => r));
   }, [roomId]);
+  // Meal bills and event bills together (an event bill's day_entry_id is its event's id), so
+  // settling up covers both.
   const loadBills = useCallback(async () => {
-    const { data } = await supabase.from('meal_bills').select('*').eq('room_id', roomId);
-    if (data) setBills(data as MealBillRow[]);
+    const [meals, events] = await Promise.all([
+      supabase.from('meal_bills').select('*').eq('room_id', roomId),
+      supabase.from('event_bills').select('*').eq('room_id', roomId),
+    ]);
+    if (meals.data)
+      setBills([
+        ...(meals.data as MealBillRow[]),
+        ...((events.data ?? []) as (Omit<MealBillRow, 'day_entry_id'> & { event_id: string })[]).map(({ event_id, ...b }) => ({ ...b, day_entry_id: event_id, event: true })),
+      ]);
   }, [roomId]);
   const loadSettlements = useCallback(async () => {
     const { data } = await supabase.from('settlements').select('*').eq('room_id', roomId).order('created_at');
@@ -60,6 +69,8 @@ export function useRoomExtras(roomId: string, meId: string) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meal_ratings' }, () => void loadRatings())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meal_bills', filter: room }, () => void loadBills())
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'meal_bills' }, () => void loadBills())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_bills', filter: room }, () => void loadBills())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'event_bills' }, () => void loadBills())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements', filter: room }, () => void loadSettlements())
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'settlements' }, () => void loadSettlements())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_spots', filter: room }, () => void loadSpots())
@@ -83,13 +94,21 @@ export function useRoomExtras(roomId: string, meId: string) {
     await loadRatings();
   };
 
-  const saveBill = async (bill: Omit<MealBillRow, 'room_id' | 'updated_at'>) => {
-    await must(supabase.from('meal_bills').upsert({ ...bill, room_id: roomId, updated_at: new Date().toISOString() }));
+  /** A meal's bill, or (forEvent) an event's: day_entry_id is then the event's id. */
+  const saveBill = async (bill: Omit<MealBillRow, 'room_id' | 'updated_at'>, forEvent = false) => {
+    const { event: _, ...row } = bill;
+    const updated_at = new Date().toISOString();
+    if (forEvent) {
+      const { day_entry_id, ...rest } = row;
+      await must(supabase.from('event_bills').upsert({ ...rest, event_id: day_entry_id, room_id: roomId, updated_at }));
+    } else await must(supabase.from('meal_bills').upsert({ ...row, room_id: roomId, updated_at }));
     await loadBills();
   };
   const removeBill = async (dayEntryId: string) => {
-    const old = bills.find((b) => b.day_entry_id === dayEntryId)?.receipt_path;
-    await must(supabase.from('meal_bills').delete().eq('day_entry_id', dayEntryId));
+    const bill = bills.find((b) => b.day_entry_id === dayEntryId);
+    const old = bill?.receipt_path;
+    if (bill?.event) await must(supabase.from('event_bills').delete().eq('event_id', dayEntryId));
+    else await must(supabase.from('meal_bills').delete().eq('day_entry_id', dayEntryId));
     if (old) void deleteReceipt(old);
     await loadBills();
   };
