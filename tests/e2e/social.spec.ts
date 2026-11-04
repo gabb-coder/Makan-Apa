@@ -63,7 +63,8 @@ test('chat, reactions, meal photos, place tips and the kitty', async ({ browser 
 
     // The kitty: Wei keeps it, both top up, and a bill paid from it leaves nobody owing
     await wei.goto('/#settings');
-    await wei.selectOption('#kitty-keeper', { label: 'Wei (you)' });
+    await wei.getByRole('switch', { name: 'Use a group kitty' }).check();
+    await expect(wei.locator('#kitty-keeper option:checked')).toHaveText('Wei (you)');
     await wei.click('nav >> text=Bills');
     const kittyCard = wei.locator('section[aria-labelledby="kitty-label"]');
     await kittyCard.locator('button:text-is("Record a top-up")').click();

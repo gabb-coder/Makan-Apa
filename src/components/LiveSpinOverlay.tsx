@@ -36,7 +36,7 @@ export function LiveSpinOverlay({ spin, byName, onClose }: { spin: LiveSpin; byN
         aria-modal="true"
         aria-labelledby="live-spin-title"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 380, padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, animation: 'popIn 0.3s var(--ease-out) both' }}
+        style={{ width: '100%', maxWidth: 380, padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, animation: 'popIn 0.3s var(--ease-out) backwards' }}
       >
         <h2 id="live-spin-title" className="title title--sm" style={{ fontSize: 22, textAlign: 'center' }}>
           {landed ? t('{food} it is!', { food: winner.name }) : t('{name} is spinning…', { name: byName })}

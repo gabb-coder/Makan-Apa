@@ -27,9 +27,9 @@ test('live spin, guests, suggestions, a treat and challenges', async ({ browser 
     await expect(wei.locator('section[aria-labelledby="whos-in"]')).toContainText('1 guest');
 
     // Whoever's turn it is asks for a suggestion and picks it; the other accepts
-    const decider: Page = (await wei.getByText('✨ Suggest something').count()) ? wei : alex;
+    const decider: Page = (await wei.getByText('✨ Suggest one').count()) ? wei : alex;
     const other = decider === wei ? alex : wei;
-    await decider.click('text=✨ Suggest something');
+    await decider.click('text=✨ Suggest one');
     await expect(decider.getByText('How about…')).toBeVisible();
     await expect(decider.locator('section[aria-labelledby="suggest-label"] li').first()).toBeVisible();
     await decider.locator('section[aria-labelledby="suggest-label"] button:has-text("Pick ")').click();
@@ -48,8 +48,10 @@ test('live spin, guests, suggestions, a treat and challenges', async ({ browser 
     await wei.click('nav >> text=Bills');
     await expect(wei.locator('main')).toContainText("Everyone's settled up.");
 
-    // This week's challenges and the food passport are in History
+    // This week's challenges and the food passport fold away at the bottom of History
     await wei.click('nav >> text=History');
+    await expect(wei.getByRole('heading', { name: 'Food passport' })).toHaveCount(0);
+    await wei.click('button[aria-controls="fun-stuff"]');
     await expect(wei.getByRole('heading', { name: 'This week’s challenges' })).toBeVisible();
     await expect(wei.getByRole('heading', { name: 'Food passport' })).toBeVisible();
   } finally {
@@ -65,17 +67,17 @@ test('polls in chat, events, allergy flags and plan ahead from people', async ({
     const alex = await newPhone(browser);
     await joinRoom(alex, code, 'Alex');
 
-    // A poll in the chat; Alex votes and Wei sees it
+    // A question in the chat; Alex answers and Wei sees it
     await wei.click('button[aria-label="Chat"]');
-    await wei.click('button[aria-label="Start a poll"]');
+    await wei.click('button[aria-label="Ask everyone a question"]');
     await wei.fill('#poll-question', 'Mamak after dinner?');
     await wei.locator('.sheet input').nth(1).fill('Yes');
     await wei.locator('.sheet input').nth(2).fill('No');
-    await wei.click('.sheet button:text-is("Post poll")');
+    await wei.click('.sheet button:text-is("Ask")');
     await expect(wei.getByRole('log')).toContainText('Mamak after dinner?');
     await alex.click('button[aria-label^="Chat, 1 new"]');
     await alex.getByRole('log').locator('button:has-text("Yes")').click();
-    await expect(wei.getByRole('log')).toContainText('1 vote');
+    await expect(wei.getByRole('log')).toContainText('1 answer');
     await wei.click('button[aria-label="Back"]');
     await alex.click('button[aria-label="Back"]');
 
@@ -92,6 +94,13 @@ test('polls in chat, events, allergy flags and plan ahead from people', async ({
     await expect(alex.locator('.sheet')).toContainText('Going: Wei, You');
     await alex.click('.sheet button:text-is("Done")');
     await expect(wei.locator('section[aria-labelledby="events-label"]')).toContainText('2 going');
+
+    // Only the host changes the rules: Alex sees them but can't tap them
+    await alex.goto('/#settings');
+    await expect(alex.getByText('Only Wei, the host, can change these.')).toBeVisible();
+    await expect(alex.locator('button:text-is("Lunch only")')).toBeDisabled();
+    await expect(alex.locator('button[aria-label^="Move "]')).toHaveCount(0);
+    await alex.goto('/#today');
 
     // Plan ahead from the people pop-up
     await wei.click('button[aria-label*=", code "]');

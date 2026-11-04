@@ -154,7 +154,7 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
           <p style={{ margin: 'auto', color: 'var(--muted)' }}>{t('Loading…')}</p>
         ) : messages.length === 0 ? (
           <p style={{ margin: 'auto', maxWidth: 260, textAlign: 'center', fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {t('No messages yet. Say who’s running late, or tap 📊 to start a poll.')}
+            {t('No messages yet. Say who’s running late, or tap 📊 to ask everyone a question.')}
           </p>
         ) : (
           rows
@@ -168,7 +168,7 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
         }}
         style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}
       >
-        <button type="button" className="icon-btn press" aria-label={t('Start a poll')} onClick={() => setAsking(true)} style={{ width: 48, height: 48, flexShrink: 0, fontSize: 20 }}>
+        <button type="button" className="icon-btn press" aria-label={t('Ask everyone a question')} onClick={() => setAsking(true)} style={{ width: 48, height: 48, flexShrink: 0, fontSize: 20 }}>
           📊
         </button>
         <label htmlFor="chat-input" className="sr-only">
@@ -241,9 +241,9 @@ function PollBubble({
   const nameOf = (id: string) => (id === meId ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
   return (
     <div style={{ alignSelf: mine ? 'flex-end' : 'flex-start', width: 'min(86%, 340px)', marginTop: 8 }}>
-      <div role="group" aria-label={t('Poll by {name}: {question}', { name: author?.name ?? t('Someone'), question: poll.question })} className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: 'none' }}>
+      <div role="group" aria-label={t('Question from {name}: {question}', { name: author?.name ?? t('Someone'), question: poll.question })} className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: 'none' }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
-          📊 {mine ? t('Your poll') : t('Poll by {name}', { name: author?.name ?? t('Someone') })} · {time}
+          📊 {mine ? t('Your question') : t('Question from {name}', { name: author?.name ?? t('Someone') })} · {time}
         </span>
         <span style={{ fontSize: 16, fontWeight: 800, overflowWrap: 'anywhere' }}>{poll.question}</span>
         {poll.options.map((opt, i) => {
@@ -282,7 +282,7 @@ function PollBubble({
             </button>
           );
         })}
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{total === 1 ? t('1 vote') : t('{n} votes', { n: total })}</span>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{total === 1 ? t('1 answer') : t('{n} answers', { n: total })}</span>
       </div>
     </div>
   );
@@ -321,8 +321,11 @@ function PollSheet({ onClose, onAsk }: { onClose: () => void; onAsk: (question: 
         }}
       >
         <h2 id="poll-title" className="title title--sm" style={{ fontSize: 22 }}>
-          {t('Start a poll')}
+          {t('Ask everyone')}
         </h2>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+          {t('A quick question for the room, like where to meet or who wants dessert. It doesn’t pick today’s food: for that, use “Put it to a vote” on Today.')}
+        </p>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span className="field-label">{t('Question')}</span>
           <input id="poll-question" className="input" maxLength={120} placeholder={t('e.g. Mamak after dinner?')} value={question} onChange={(e) => setQuestion(e.target.value)} autoFocus />
@@ -354,7 +357,7 @@ function PollSheet({ onClose, onAsk }: { onClose: () => void; onAsk: (question: 
             {t('Cancel')}
           </button>
           <button type="submit" className="btn btn--primary press" disabled={busy || !ready} style={{ flex: 2 }}>
-            {t('Post poll')}
+            {t('Ask')}
           </button>
         </div>
       </form>
