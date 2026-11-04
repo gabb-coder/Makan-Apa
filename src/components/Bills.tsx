@@ -126,7 +126,7 @@ export function BillSheet({
   if (svc === null) problems.push(t('Service charge should be a percentage from 0 to 30.'));
   if (sst === null) problems.push(t('SST should be a percentage from 0 to 30.'));
   const totals = billTotals(items, svc ?? 0, sst ?? 0);
-  const each = items.length ? shares({ paid_by: paidBy, amount_cents: totals.total, split_between: [], items, birthday: birthday || null }) : new Map<string, number>();
+  const each = items.length ? shares({ paid_by: paidBy, amount_cents: totals.total, split_between: [], items, birthday: treat && !fromKitty ? null : birthday || null }) : new Map<string, number>();
   const ready = items.length > 0 && problems.length === 0 && totals.total <= 10_000_000;
 
   const update = (key: number, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -154,7 +154,8 @@ export function BillSheet({
         amount_cents: totals.total,
         split_between: [...new Set(items.flatMap((i) => i.people).map(guestHost))],
         treat: treat && !fromKitty,
-        birthday: birthday || null,
+        // A treat already covers everyone, so a birthday on it would mean nothing.
+        birthday: treat && !fromKitty ? null : birthday || null,
         items: items.map((i) => ({ ...i, name: i.name || placeholder({ key: 0, name: '', price: '', people: i.people }) })),
         service_pct: svc ?? 0,
         sst_pct: sst ?? 0,
@@ -341,17 +342,19 @@ export function BillSheet({
               {paidBy === meId ? t('🎉 I’m treating: nobody owes me') : t('🎉 {name} is treating: nobody owes them', { name: nameOf(paidBy) })}
             </label>
           )}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>{t('🎂 Birthday: their share is split among everyone else')}</span>
-            <select className="input" value={birthday} onChange={(e) => setBirthday(e.target.value)} style={{ height: 44 }}>
-              <option value="">{t('No birthday')}</option>
-              {chipMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {nameOf(m.id)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!(treat && !fromKitty) && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>{t('🎂 Birthday: their share is split among everyone else')}</span>
+              <select className="input" value={birthday} onChange={(e) => setBirthday(e.target.value)} style={{ height: 44 }}>
+                <option value="">{t('No birthday')}</option>
+                {chipMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {nameOf(m.id)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </fieldset>
 
         <fieldset style={sectionStyle}>

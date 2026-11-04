@@ -248,7 +248,7 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <section
         style={{
-          animation: 'popInScale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+          animation: 'popInScale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
           position: 'relative',
           overflow: 'hidden',
           background: c.tile,
@@ -331,7 +331,7 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
         <span style={{ position: 'relative', fontSize: 14, color: deep }}>{lastEatenText}</span>
       </section>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeUp 0.55s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeUp 0.55s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
         <span style={{ ...display, fontSize: 20 }}>{t('Good with this?')}</span>
         <button
           type="button"
@@ -464,7 +464,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
       <div
         aria-hidden="true"
         style={{
-          animation: 'popInScale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+          animation: 'popInScale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
           position: 'relative',
           width: 84,
           height: 84,
@@ -496,7 +496,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
           letterSpacing: '-0.04em',
           lineHeight: 0.95,
           overflowWrap: 'anywhere',
-          animation: 'popInScale 0.6s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+          animation: 'popInScale 0.6s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
         }}
       >
         {food.name}!
@@ -550,7 +550,7 @@ export function VetoedCard({ foodName, deciderName, vetoesLeft, busy, onUndo }: 
     <section
       className="card"
       style={{
-        animation: 'shake 0.55s ease both',
+        animation: 'shake 0.55s ease backwards',
         borderRadius: 28,
         padding: '40px 24px 24px',
         display: 'flex',
@@ -564,7 +564,7 @@ export function VetoedCard({ foodName, deciderName, vetoesLeft, busy, onUndo }: 
       <div
         aria-hidden="true"
         style={{
-          animation: 'spinIn 0.55s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+          animation: 'spinIn 0.55s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
           width: 84,
           height: 84,
           borderRadius: 999,
