@@ -55,7 +55,10 @@ export function MeetupCard({
   onLate,
   calendar,
   warning,
+  extra,
 }: {
+  /** Shown under a set meet-up, e.g. lifts. */
+  extra?: React.ReactNode;
   /** E.g. the meet-up place looks closed at that time. */
   warning?: string | null;
   /** For "Add to calendar": the event's id, title and notes. */
@@ -183,6 +186,7 @@ export function MeetupCard({
           {t('Add to calendar')}
         </button>
       )}
+      {extra}
     </section>
   );
 }

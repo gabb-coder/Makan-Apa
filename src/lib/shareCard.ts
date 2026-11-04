@@ -137,3 +137,64 @@ export async function shareCard(info: CardInfo): Promise<string | null> {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   return t('Picture saved. Send it to your group chat.');
 }
+
+/** A 1080×1350 picture of a room's month or year, for sharing. `lines` are the highlights. */
+export async function drawWrapped(title: string, subtitle: string, lines: string[]): Promise<Blob> {
+  await document.fonts?.ready;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const display = "'Bricolage Grotesque', 'Plus Jakarta Sans', sans-serif";
+  const body = "'Plus Jakarta Sans', system-ui, sans-serif";
+  ctx.fillStyle = '#18181B';
+  ctx.fillRect(0, 0, W, H);
+  const colours = ['#CC3F17', '#E8B931', '#3C8D5A', '#2F6FD6', '#8E44AD'];
+  colours.forEach((c, i) => {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(W - 140 + i * 18, 160 + i * 40, 220 - i * 36, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `600 44px ${body}`;
+  ctx.fillText(subtitle, 80, 140);
+  ctx.font = `800 96px ${display}`;
+  wrap(ctx, title, W - 160).slice(0, 2).forEach((l, i) => ctx.fillText(l, 80, 270 + i * 104));
+  ctx.font = `700 52px ${body}`;
+  let y = 560;
+  for (const line of lines.slice(0, 6)) {
+    for (const l of wrap(ctx, line, W - 160).slice(0, 2)) {
+      ctx.fillText(l, 80, y);
+      y += 66;
+    }
+    y += 34;
+  }
+  ctx.font = `800 72px ${display}`;
+  ctx.fillText('Makan apa?', 80, H - 110);
+  ctx.font = `500 36px ${body}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillText(t('Decided together on Makan apa?'), 80, H - 60);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No image'))), 'image/png'));
+}
+
+/** Share a picture where the phone can, or save it. Returns a toast or null. */
+export async function shareBlob(blob: Blob, text: string): Promise<string | null> {
+  const file = new File([blob], 'makan-apa.png', { type: 'image/png' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], text });
+    } catch {
+      /* closed the share sheet */
+    }
+    return null;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'makan-apa.png';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return t('Picture saved. Send it to your group chat.');
+}
+

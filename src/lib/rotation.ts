@@ -1,6 +1,6 @@
-import { daysBetween } from './dates';
+import { EVERY_DAY, turnIndex, WEEKDAYS, type EatCalendar, type Rotation } from './calendar';
 import { locale } from './i18n';
-import type { Meal, MemberRow } from './supabase';
+import type { Meal, MemberRow, RoomRow } from './supabase';
 
 /** YYYY-MM-DD plus `n` days. */
 export function addDays(date: string, n: number): string {
@@ -26,16 +26,29 @@ export function dayMonthLabel(date: string, loc = locale()): string {
   return `${dayLabel(date, loc)} ${month}`;
 }
 
+/** The room's calendar: which days it eats together, and whether it skips public holidays. */
+export function calendarOf(room: Pick<RoomRow, 'eat_days' | 'skip_holidays'>): EatCalendar {
+  return { days: room.eat_days ?? EVERY_DAY, holidays: room.skip_holidays ?? false };
+}
+
+/** How the room's turns run. */
+export function rotationOf(room: Pick<RoomRow, 'rotation_start' | 'rotation_offset' | 'eat_days' | 'skip_holidays'>): Rotation {
+  return { start: room.rotation_start, offset: room.rotation_offset ?? 0, cal: calendarOf(room) };
+}
+
+export { WEEKDAYS };
+
 /**
- * Who decides on `date`: members sorted by sort_order, then
- * daysBetween(rotation_start, date) mod member count (SPEC.md section 6).
+ * Who decides on `date`: members sorted by sort_order, one eating day each from the rotation
+ * start (SPEC.md section 6). Days the room doesn't eat together don't use a turn: on one, this
+ * is whoever's up on the next eating day.
  */
-export function deciderFor(members: MemberRow[], rotationStart: string, date: string, meal: Meal = 'lunch', away?: ReadonlySet<string>): MemberRow | null {
+export function deciderFor(members: MemberRow[], rot: Rotation, date: string, meal: Meal = 'lunch', away?: ReadonlySet<string>): MemberRow | null {
   if (members.length === 0) return null;
   const sorted = [...members].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
   const n = sorted.length;
   // Dinner goes to the next person along, so nobody decides both meals.
-  const i = (((daysBetween(rotationStart, date) + (meal === 'dinner' ? 1 : 0)) % n) + n) % n;
+  const i = (((turnIndex(rot, date) + (meal === 'dinner' ? 1 : 0)) % n) + n) % n;
   // Someone who's out today is skipped: the next person along who's in decides instead.
   for (let k = 0; k < n; k++) {
     const m = sorted[(i + k) % n];

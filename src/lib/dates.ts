@@ -24,6 +24,9 @@ export function daysBetween(a: string, b: string): number {
 }
 
 /** The hour (0–23) right now in `timeZone`. */
+/** When the wheel picks if the decider hasn't (rooms with auto-decide on; send-reminders does it). */
+export const AUTO_PICK_AT: Record<'lunch' | 'dinner', string> = { lunch: '12:00', dinner: '19:00' };
+
 /** In rooms that decide both meals, dinner is the one on from 6pm (room's time). */
 export const DINNER_FROM_HOUR = 18;
 

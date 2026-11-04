@@ -4,6 +4,7 @@ import { formatRM, parseRM, type BillItem } from '../lib/money';
 import type { MemberRow, TapauOrderRow } from '../lib/supabase';
 import type { TapauApi } from '../lib/useTapau';
 import { Avatar } from './Avatar';
+import type { Usual } from '../lib/usual';
 
 const CLOSE_ICON = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
@@ -57,7 +58,10 @@ export function TapauSheet({
   onMakeBill,
   onToast,
   onClose,
+  usuals,
 }: {
+  /** What each person had last time here, to fill in their order. */
+  usuals?: Map<string, Usual>;
   tapau: TapauApi;
   foodName: string;
   /** Places nearby that serve it, closest first, to pick from. */
@@ -230,6 +234,20 @@ export function TapauSheet({
                       </button>
                     ))}
                   </div>
+                )}
+                {usuals?.get(who) && !item.trim() && (
+                  <button
+                    type="button"
+                    className="chip press"
+                    onClick={() => {
+                      const u = usuals.get(who)!;
+                      setItem(u.name);
+                      setPrice((u.cents / 100).toFixed(2));
+                    }}
+                    style={{ alignSelf: 'flex-start', height: 'auto', minHeight: 36, padding: '6px 12px', fontSize: 13 }}
+                  >
+                    {who === me.id ? t('↺ Your usual: {item}', { item: usuals.get(who)!.name }) : t('↺ {name}’s usual: {item}', { name: nameOf(who), item: usuals.get(who)!.name })}
+                  </button>
                 )}
                 <input className="input" aria-label={t('What do you want?')} placeholder={t('e.g. Nasi lemak ayam')} maxLength={60} value={item} onChange={(e) => setItem(e.target.value)} />
                 <div style={{ display: 'flex', gap: 8 }}>

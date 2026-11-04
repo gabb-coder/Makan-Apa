@@ -196,7 +196,7 @@ interface SentProps {
   onRetract: () => void;
 }
 
-export function SentCard({ me, food, method, waitingFor, answerers, several = false, busy, onChange, onRetract }: SentProps) {
+export function SentCard({ me, food, method, autoAt, waitingFor, answerers, several = false, busy, onChange, onRetract }: SentProps & { autoAt?: string }) {
   return (
     <DeciderShell decider={me} label={t("Today's decider")}>
       <DeciderHeading
@@ -219,7 +219,7 @@ export function SentCard({ me, food, method, waitingFor, answerers, several = fa
         <FoodTile food={food} size={44} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
           <span style={{ fontSize: 17, fontWeight: 800, overflowWrap: 'anywhere' }}>{food.name}</span>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{method === 'wheel' ? t('Wheel pick') : t('Picked directly')}</span>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{autoAt ? t('The wheel picked for you at {time}', { time: autoAt }) : method === 'wheel' ? t('Wheel pick') : t('Picked directly')}</span>
         </div>
       </div>
       <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
@@ -247,7 +247,7 @@ interface ProposalProps {
   onVeto: () => void;
 }
 
-export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesLeft, busy, onAccept, onVeto }: ProposalProps) {
+export function ProposalCard({ food, method, autoAt, deciderName, lastEatenText, vetoesLeft, busy, onAccept, onVeto }: ProposalProps & { autoAt?: string }) {
   const c = FOOD_COLORS[food.color];
   const deep = darken(c.ink, 0.45);
   const nameSize = food.name.length > 14 ? 40 : food.name.length > 9 ? 48 : 56;
@@ -320,7 +320,7 @@ export function ProposalCard({ food, method, deciderName, lastEatenText, vetoesL
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             )}
-            {method === 'wheel' ? t('Wheel pick') : t('Picked directly')}
+            {autoAt ? t('Wheel picked at {time}', { time: autoAt }) : method === 'wheel' ? t('Wheel pick') : t('Picked directly')}
           </span>
         </div>
         <span style={{ position: 'relative', ...display, fontSize: nameSize, letterSpacing: '-0.04em', lineHeight: 0.95, color: deep, overflowWrap: 'anywhere' }}>

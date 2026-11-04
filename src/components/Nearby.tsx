@@ -60,7 +60,7 @@ function OpenText({ spot, short = false }: { spot: Spot; short?: boolean }) {
 }
 
 /** Horizontal strip of spot cards for Today. */
-export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: LatLng; onOpen: (spot: Spot) => void }) {
+export function NearbyStrip({ spots, here, onOpen, extraFor }: { spots: Spot[]; here?: LatLng; onOpen: (spot: Spot) => void; extraFor?: (spot: Spot) => React.ReactNode }) {
   return (
     <div className="chip-row" style={{ gap: 10, paddingBottom: 4 }}>
       {spots.map((s) => (
@@ -103,6 +103,7 @@ export function NearbyStrip({ spots, here, onOpen }: { spots: Spot[]; here?: Lat
             {spotKnownFor(s)}
           </span>
           <MenuPreview spot={s} />
+          {extraFor?.(s)}
           <span style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-ink)', whiteSpace: 'nowrap' }}>{priceLabel(s.price)}</span>
             <OpenText spot={s} short />

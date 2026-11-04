@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { addDays, dayLabel, deciderFor } from '../lib/rotation';
+import { addDays, dayLabel, deciderFor, rotationOf } from '../lib/rotation';
+import { eatingDaysAfter } from '../lib/calendar';
 import { needsLabel } from '../lib/diet';
 import { t } from '../lib/i18n';
 import { hostOf, knownRooms, roomTitle } from '../lib/session';
@@ -26,10 +27,10 @@ interface Props {
 /** When each member decides next, e.g. "Decides tomorrow". */
 function nextTurn(member: MemberRow, members: MemberRow[], room: RoomRow, today: string, todayDeciderId: string | null): string {
   if (member.id === todayDeciderId) return t('Deciding today');
-  for (let i = 1; i <= members.length; i++) {
-    const date = addDays(today, i);
-    if (deciderFor(members, room.rotation_start, date)?.id === member.id) {
-      return i === 1 ? t('Decides tomorrow') : t('Decides {day}', { day: dayLabel(date) });
+  const rot = rotationOf(room);
+  for (const date of eatingDaysAfter(today, rot.cal, members.length)) {
+    if (deciderFor(members, rot, date)?.id === member.id) {
+      return date === addDays(today, 1) ? t('Decides tomorrow') : t('Decides {day}', { day: dayLabel(date) });
     }
   }
   return '';

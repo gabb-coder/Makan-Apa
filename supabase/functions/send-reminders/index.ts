@@ -12,10 +12,16 @@
 //
 // Weekly recap: on Sunday from 8pm (room's time), phones with reminders on that haven't turned
 // the recap off get a summary of the past 7 days: meals, the favourite, vetoes and who paid most.
+//
+// Auto-decide (rooms with it on, decider mode): if nobody has picked by 11:30 (6:30pm for dinner)
+// the decider gets a nudge; at 12:00 (7pm) the wheel picks for them, and everyone can accept or
+// veto as usual. Days the room doesn't eat together (weekends, holidays) get no reminders.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
 import { message, type Lang } from '../_shared/messages.ts';
 import { balances, formatRM, settleUp, type Bill, type Payment } from '../_shared/money.ts';
+import { isEatingDay, turnIndex, type Rotation } from '../_shared/calendar.ts';
+import { autoPhase, pickFood, pickTime, type Meal, type PickFood } from '../_shared/autopick.ts';
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const VAPID_SUBJECT = 'https://github.com/gabb-coder/Makan-Apa';
@@ -39,9 +45,15 @@ interface Room {
   id: string;
   timezone: string;
   rotation_start: string;
+  rotation_offset: number;
+  eat_days: number[];
+  skip_holidays: boolean;
   decision_mode: 'decider' | 'secret';
   fixed_days: Record<string, string> | null;
+  meals: 'lunch' | 'both';
 }
+const ROOM_COLUMNS = 'id, timezone, rotation_start, rotation_offset, eat_days, skip_holidays, decision_mode, fixed_days, meals';
+const rotationOf = (r: Room): Rotation => ({ start: r.rotation_start, offset: r.rotation_offset ?? 0, cal: { days: r.eat_days, holidays: r.skip_holidays } });
 interface Member {
   id: string;
   room_id: string;
@@ -79,7 +91,8 @@ function localNow(timeZone: string, now: Date) {
   }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
   const date = `${get('year')}-${get('month')}-${get('day')}`;
-  return { date, hour: Number(get('hour')), weekday: new Date(`${date}T00:00:00Z`).getUTCDay() };
+  const minute = Number(new Intl.DateTimeFormat('en-GB', { timeZone, minute: '2-digit' }).format(now));
+  return { date, hour: Number(get('hour')), minutes: Number(get('hour')) * 60 + minute, weekday: new Date(`${date}T00:00:00Z`).getUTCDay() };
 }
 
 function addDays(date: string, n: number) {
@@ -92,12 +105,12 @@ function daysBetween(a: string, b: string) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
-/** Same rule as the app (src/lib/rotation.ts): lunch, skipping whoever's out. */
-function deciderFor(members: Member[], rotationStart: string, date: string, away: Set<string>): string | null {
+/** Same rule as the app (src/lib/rotation.ts): one eating day each, skipping whoever's out. */
+function deciderFor(members: Member[], rot: Rotation, date: string, away: Set<string>, meal: Meal = 'lunch'): string | null {
   if (!members.length) return null;
   const sorted = [...members].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
   const n = sorted.length;
-  const i = ((daysBetween(rotationStart, date) % n) + n) % n;
+  const i = (((turnIndex(rot, date) + (meal === 'dinner' ? 1 : 0)) % n) + n) % n;
   for (let k = 0; k < n; k++) if (!away.has(sorted[(i + k) % n].id)) return sorted[(i + k) % n].id;
   return sorted[i].id;
 }
@@ -184,6 +197,101 @@ async function weeklyRecaps(entries: Entry[], members: Member[]) {
   };
 }
 
+/**
+ * Auto-decide for every room that has it on: nudge deciders who haven't picked, then let the wheel
+ * pick for them. Each step happens once per meal (auto_decisions). The wheel's pick goes in as a
+ * proposal, so the room can still accept or veto it; the notify function announces it.
+ */
+async function autoDecide(now: Date, subs: Sub[]): Promise<{ nudged: number; autoPicked: number }> {
+  const done = { nudged: 0, autoPicked: 0 };
+  const { data: roomRows, error } = await db.from('rooms').select(ROOM_COLUMNS).eq('auto_decide', true).eq('decision_mode', 'decider');
+  if (error || !roomRows?.length) return done;
+  // What's due in each room right now, by its own clock.
+  const due: { room: Room; meal: Meal; date: string; phase: 'nudge' | 'pick' }[] = [];
+  for (const room of roomRows as Room[]) {
+    const local = localNow(room.timezone, now);
+    for (const meal of room.meals === 'both' ? (['lunch', 'dinner'] as const) : (['lunch'] as const)) {
+      const phase = autoPhase(meal, local.minutes);
+      // A fixed day decides itself.
+      if (!phase || (meal === 'lunch' && room.fixed_days?.[String(local.weekday)])) continue;
+      due.push({ room, meal, date: local.date, phase });
+    }
+  }
+  if (!due.length) return done;
+
+  const ids = [...new Set(due.map((d) => d.room.id))];
+  const dates = [...new Set(due.map((d) => d.date))];
+  const since = addDays(dates.sort()[0], -14);
+  const [log, people, recent, out, foodRows] = await Promise.all([
+    db.from('auto_decisions').select('room_id, entry_date, meal, nudged_at, decided_at').in('room_id', ids).in('entry_date', dates),
+    db.from('members').select('id, room_id, name, sort_order, created_at, left_at, diet, budget').in('room_id', ids).is('left_at', null),
+    db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, vote_options').in('room_id', ids).gte('entry_date', since),
+    db.from('attendance').select('room_id, entry_date, meal, member_id').in('room_id', ids).in('entry_date', dates).eq('status', 'out'),
+    db.from('food_options').select('id, room_id, name, diet, price').in('room_id', ids).eq('is_active', true),
+  ]);
+  type Row = { id: string; room_id: string; entry_date: string; meal: Meal | null; decider_id: string | null; status: string; food_option_id: string | null; vote_options: string[] | null };
+  const entries = (recent.data ?? []) as Row[];
+  const todayIds = entries.filter((e) => dates.includes(e.entry_date)).map((e) => e.id);
+  const vetoRows = todayIds.length ? ((await db.from('vetoes').select('day_entry_id, rejected_food').in('day_entry_id', todayIds)).data ?? []) : [];
+
+  for (const { room, meal, date, phase } of due) {
+    const mark = ((log.data ?? []) as { room_id: string; entry_date: string; meal: Meal; nudged_at: string | null; decided_at: string | null }[]).find(
+      (l) => l.room_id === room.id && l.entry_date === date && l.meal === meal,
+    );
+    if (phase === 'nudge' ? mark?.nudged_at || mark?.decided_at : mark?.decided_at) continue;
+    const rot = rotationOf(room);
+    const entry = entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === meal);
+    // Already picked, a vote is on, or a day off nobody started: nothing to do.
+    if (entry && (entry.status !== 'pending' || entry.vote_options)) continue;
+    if (!entry && !isEatingDay(date, rot.cal)) continue;
+    const away = new Set(((out.data ?? []) as { room_id: string; entry_date: string; meal: Meal; member_id: string }[]).filter((a) => a.room_id === room.id && a.entry_date === date && a.meal === meal).map((a) => a.member_id));
+    const members = ((people.data ?? []) as (Member & { diet: string[] | null; budget: number | null })[]).filter((m) => m.room_id === room.id);
+    const present = members.filter((m) => !away.has(m.id));
+    if (!present.length) continue;
+    const decider = entry?.decider_id ?? deciderFor(members, rot, date, away, meal);
+    if (!decider) continue;
+
+    if (phase === 'nudge') {
+      for (const sub of subs.filter((s) => s.room_id === room.id && s.member_id === decider)) {
+        const text = message({ type: 'auto-nudge', meal, time: pickTime(meal) }, sub.lang);
+        if ((await send(sub, { ...text, url: `/?room=${room.id}#today`, tag: `makan-auto-${room.id}-${date}-${meal}` })) === 'sent') done.nudged++;
+      }
+      await db.from('auto_decisions').upsert({ room_id: room.id, entry_date: date, meal, nudged_at: now.toISOString() });
+      continue;
+    }
+
+    // The wheel's turn: foods eaten lately are much less likely, like on the app's wheel.
+    const daysSince = new Map<string, number>();
+    for (const e of entries) {
+      if (e.room_id !== room.id || e.status !== 'accepted' || !e.food_option_id || e.entry_date >= date) continue;
+      const d = daysBetween(e.entry_date, date);
+      if (!daysSince.has(e.food_option_id) || d < daysSince.get(e.food_option_id)!) daysSince.set(e.food_option_id, d);
+    }
+    const vetoed = new Set((vetoRows as { day_entry_id: string; rejected_food: string }[]).filter((v) => v.day_entry_id === entry?.id).map((v) => v.rejected_food.toLowerCase()));
+    const foods = ((foodRows.data ?? []) as (PickFood & { room_id: string })[]).filter((f) => f.room_id === room.id);
+    const food = pickFood(foods, present, vetoed, daysSince, Math.random());
+    await db.from('auto_decisions').upsert({ room_id: room.id, entry_date: date, meal, nudged_at: mark?.nudged_at ?? null, decided_at: now.toISOString() });
+    if (!food) continue;
+    let entryId = entry?.id;
+    if (!entryId) {
+      await db.from('day_entries').upsert({ room_id: room.id, entry_date: date, meal, decider_id: decider, status: 'pending' }, { onConflict: 'room_id,entry_date,meal', ignoreDuplicates: true });
+      const { data } = await db.from('day_entries').select('id').eq('room_id', room.id).eq('entry_date', date).eq('meal', meal).maybeSingle();
+      entryId = (data as { id: string } | null)?.id;
+    }
+    if (!entryId) continue;
+    // Only if it's still waiting: someone may have picked a moment ago.
+    const { data: updated } = await db
+      .from('day_entries')
+      .update({ status: 'proposed', food_option_id: food.id, custom_food: null, method: 'wheel', auto_picked: true })
+      .eq('id', entryId)
+      .eq('status', 'pending')
+      .is('vote_options', null)
+      .select('id');
+    if (updated?.length) done.autoPicked++;
+  }
+  return done;
+}
+
 Deno.serve(async (req) => {
   const { data: config, error: configError } = await db.rpc('push_config');
   if (configError) return json({ error: configError.message }, 500);
@@ -195,7 +303,8 @@ Deno.serve(async (req) => {
   const { data: subsData, error: subsError } = await db.from('push_subscriptions').select('*');
   if (subsError) return json({ error: subsError.message }, 500);
   const subs = subsData as Sub[];
-  const summary = { subscriptions: subs.length, due: 0, sent: 0, notNeeded: 0, removed: 0, failed: 0 };
+  const auto = await autoDecide(new Date(), subs);
+  const summary = { subscriptions: subs.length, due: 0, sent: 0, notNeeded: 0, removed: 0, failed: 0, ...auto };
   if (!subs.length) {
     console.log('send-reminders', JSON.stringify(summary));
     return json(summary);
@@ -203,7 +312,7 @@ Deno.serve(async (req) => {
 
   const roomIds = [...new Set(subs.map((s) => s.room_id))];
   const [rooms, members, entries] = await Promise.all([
-    db.from('rooms').select('id, timezone, rotation_start, decision_mode, fixed_days').in('id', roomIds),
+    db.from('rooms').select(ROOM_COLUMNS).in('id', roomIds),
     db.from('members').select('id, room_id, name, sort_order, created_at, left_at').in('room_id', roomIds),
     // A week back for the recap, plus enough for any timezone's "today".
     db
@@ -287,14 +396,16 @@ Deno.serve(async (req) => {
     let reminder: { title: string; body: string } | null = null;
     const away = outOn(room.id, local.date);
 
-    // Nothing for someone who said they're out today, or on a fixed day (it decides itself).
+    // Nothing for someone who said they're out today, on a fixed day (it decides itself), or on a
+    // day the room doesn't eat together (unless someone started one anyway).
     const fixedDay = !!room.fixed_days?.[String(local.weekday)];
-    if (entry?.status !== 'accepted' && !away.has(sub.member_id) && !fixedDay) {
+    const offDay = !entry && !isEatingDay(local.date, rotationOf(room).cal);
+    if (entry?.status !== 'accepted' && !away.has(sub.member_id) && !fixedDay && !offDay) {
       if (room.decision_mode === 'secret') {
         const picked = (picks.data ?? []).some((p) => p.day_entry_id === entry?.id && p.member_id === sub.member_id);
         if (!picked) reminder = message({ type: 'secret-open' }, sub.lang);
       } else {
-        const decider = entry?.decider_id ?? deciderFor(roomMembers, room.rotation_start, local.date, away);
+        const decider = entry?.decider_id ?? deciderFor(roomMembers, rotationOf(room), local.date, away);
         if (decider === sub.member_id && entry?.status !== 'proposed') reminder = message({ type: 'your-turn' }, sub.lang);
       }
     }

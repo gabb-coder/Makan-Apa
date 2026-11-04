@@ -5,10 +5,13 @@ import { InviteQrSheet } from '../components/InviteQr';
 import { shareInvite } from '../lib/invite';
 import { locale, t, tk } from '../lib/i18n';
 import { hostOf, letMemberRejoin, MEMBER_COLORS, ROOM_NAME_MAX, roomPins, roomTitle, setMyPin } from '../lib/session';
-import type { MemberRow, RoomRow } from '../lib/supabase';
+import { supabase, type MemberRow, type RoomRow } from '../lib/supabase';
 import type { MemberPatch, RoomPatch } from '../lib/useRoomData';
 import { useJoinRequests } from '../lib/useJoinRequests';
 import { JoinRequestList } from '../components/JoinRequests';
+import { isEatingDay, offsetKeeping, type EatCalendar } from '../lib/calendar';
+import { calendarOf, rotationOf } from '../lib/rotation';
+import { todayIn } from '../lib/dates';
 
 interface Props {
   room: RoomRow;
@@ -34,6 +37,11 @@ const VETO_MAX = 3;
 function weekdayName(wd: number): string {
   // 2026-11-01 was a Sunday.
   return new Intl.DateTimeFormat(locale(), { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1 + wd)));
+}
+
+/** "Mon" for weekday 1. */
+function weekdayShort(wd: number): string {
+  return new Intl.DateTimeFormat(locale(), { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1 + wd)));
 }
 
 function timeZones(current: string): string[] {
@@ -78,6 +86,25 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   // The kitty switch flips straight away; it goes back if saving fails.
   const [kittyFlip, setKittyFlip] = useState<boolean | null>(null);
   const kittyOn = kittyFlip ?? !!room.kitty_keeper;
+
+  // New eating days keep whoever's next up where they were. If today just became a day off, a
+  // day nobody has touched yet is cleared, so it shows as a day off straight away.
+  const changeCalendar = (cal: EatCalendar) =>
+    attempt(async () => {
+      const today = todayIn(room.timezone);
+      await updateRoom({ eat_days: cal.days, skip_holidays: cal.holidays, rotation_offset: offsetKeeping(rotationOf(room), cal, today) });
+      if (!isEatingDay(today, cal)) {
+        await supabase
+          .from('day_entries')
+          .delete()
+          .eq('room_id', room.id)
+          .eq('entry_date', today)
+          .eq('status', 'pending')
+          .is('food_option_id', null)
+          .is('custom_food', null)
+          .is('vote_options', null);
+      }
+    });
 
   const attempt = async (fn: () => Promise<void>, ok?: string) => {
     try {
@@ -212,7 +239,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="section-label">{t('Members · decider order')}</span>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {t('The top person decides on the rotation start date, then it goes down the list, one day each.')}
+            {t('The top person decides on the rotation start date, then it goes down the list, one eating day each.')}
           </span>
           {members.length > 1 && (
             <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
@@ -547,6 +574,26 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             </span>
           </div>
 
+          {room.decision_mode !== 'secret' && (
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Let the wheel decide if nobody has')}</span>
+                <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+                  {room.meals === 'both'
+                    ? t('The decider gets a nudge at 11:30 (6:30pm for dinner). Nothing picked by 12:00 (7pm)? The wheel picks, and everyone can still accept or veto.')
+                    : t('The decider gets a nudge at 11:30. Nothing picked by 12:00? The wheel picks, and everyone can still accept or veto.')}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="switch"
+                checked={room.auto_decide !== false}
+                onChange={(e) => attempt(() => updateRoom({ auto_decide: e.target.checked }))}
+              />
+            </label>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Vetoes per day')}</span>
@@ -577,6 +624,38 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                 +
               </button>
             </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span id="eat-days-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Days we eat together')}</span>
+            <div className="chip-row" role="group" aria-labelledby="eat-days-label" style={{ flexWrap: 'wrap' }}>
+              {([1, 2, 3, 4, 5, 6, 0] as const).map((wd) => {
+                const cal = calendarOf(room);
+                const on = cal.days.includes(wd);
+                return (
+                  <button
+                    key={wd}
+                    type="button"
+                    className="chip press"
+                    aria-pressed={on}
+                    aria-label={weekdayName(wd)}
+                    // At least one day stays on.
+                    disabled={on && cal.days.length === 1}
+                    onClick={() => changeCalendar({ ...cal, days: on ? cal.days.filter((d) => d !== wd) : [...cal.days, wd].sort() })}
+                  >
+                    {weekdayShort(wd)}
+                  </button>
+                );
+              })}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: 'pointer' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 15, fontWeight: 600 }}>{t('Skip public holidays')}</span>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Selangor’s, national ones included.')}</span>
+              </span>
+              <input type="checkbox" role="switch" className="switch" checked={calendarOf(room).holidays} onChange={(e) => changeCalendar({ ...calendarOf(room), holidays: e.target.checked })} />
+            </label>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{t('Other days have no turns, so nobody’s turn is used up. Anyone can still decide to eat together on one.')}</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -621,7 +700,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
               type="date"
               className="input"
               value={room.rotation_start}
-              onChange={(e) => e.target.value && attempt(() => updateRoom({ rotation_start: e.target.value }))}
+              onChange={(e) => e.target.value && attempt(() => updateRoom({ rotation_start: e.target.value, rotation_offset: 0 }))}
             />
           </div>
 

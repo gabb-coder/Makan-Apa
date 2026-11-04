@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { message } from '../../supabase/functions/_shared/messages';
 import moneySource from './money.ts?raw';
 import sharedMoney from '../../supabase/functions/_shared/money.ts?raw';
+import calendarSource from './calendar.ts?raw';
+import sharedCalendar from '../../supabase/functions/_shared/calendar.ts?raw';
 
 describe('notifications', () => {
   it('says what happened, in the phone’s language', () => {
@@ -35,6 +37,9 @@ describe('notifications', () => {
       { type: 'leaving', time: '12:30', place: 'Lobby' },
       { type: 'your-turn' },
       { type: 'secret-open' },
+      { type: 'auto-nudge', meal: 'lunch', time: '12:00' },
+      { type: 'auto-picked', decider: 'A', food: 'B', meal: 'lunch', time: '12:00' },
+      { type: 'mystery', decider: 'A', meal: 'dinner' },
     ] as const;
     for (const lang of ['en', 'ms', 'zh'] as const) {
       for (const e of events) {
@@ -46,5 +51,9 @@ describe('notifications', () => {
 
   it('keeps the Edge Functions’ money maths identical to the app’s', () => {
     expect(sharedMoney.endsWith(moneySource)).toBe(true);
+  });
+
+  it('keeps the Edge Functions’ turns and holidays identical to the app’s', () => {
+    expect(sharedCalendar.endsWith(calendarSource)).toBe(true);
   });
 });

@@ -23,6 +23,8 @@ function mealLine(st: MealStatus): string {
       return st.mine ? t('secret picks, {n} of {total} in', { n: st.picked, total: st.total }) : t('make your secret pick');
     case 'out':
       return t('you’re out');
+    case 'off':
+      return st.holiday ? t('public holiday') : t('day off');
   }
 }
 
@@ -40,13 +42,13 @@ export function TodayCard({ summaries, onSkip }: { summaries: RoomSummary[]; onS
       </h2>
       {meals.map((meal) => {
         const rows = summaries.flatMap((s) => s.meals.filter((m) => m.meal === meal).map((m) => ({ s, st: m.status })));
-        const going = rows.filter((r) => r.st.kind !== 'out');
+        const going = rows.filter((r) => r.st.kind !== 'out' && r.st.kind !== 'off');
         const clash = going.length > 1;
         return (
           <div key={meal} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 15, fontWeight: 800 }}>{meal === 'dinner' ? t('Dinner') : t('Lunch')}</span>
             {going.length === 0 ? (
-              <span style={{ fontSize: 14, color: 'var(--muted)' }}>{t('You’re out everywhere.')}</span>
+              <span style={{ fontSize: 14, color: 'var(--muted)' }}>{rows.length && rows.every((r) => r.st.kind === 'off') ? t('A day off everywhere.') : t('You’re out everywhere.')}</span>
             ) : (
               going.map(({ s, st }) => (
                 <div key={s.room.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
