@@ -87,7 +87,10 @@ export function ProfileScreen({ onBack, onToast }: { onBack: () => void; onToast
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Budget per meal')}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span id="budget-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Price range for suggestions')}</span>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Pricier foods stay off the wheel and nearby ideas. For tracking what you spend, use the monthly budget below.')}</span>
+            </div>
             <div className="segmented" role="group" aria-labelledby="budget-label" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
               {BUDGETS.map((b) => (
                 <button key={b.label} type="button" aria-pressed={(me?.budget ?? null) === b.value} disabled={!me} onClick={() => me && me.budget !== b.value && save({ budget: b.value })}>

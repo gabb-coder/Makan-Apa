@@ -94,6 +94,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [billStart, setBillStart] = useState<{ paidBy: string; items: BillItem[] } | undefined>(undefined);
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const events = useEvents(room.id, me.id);
   const joinRequests = useJoinRequests(room.id, hostOf(members, room.host_id)?.id === me.id);
@@ -359,17 +360,24 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             onPickList={() => setSheet('list')}
             onType={() => setSheet('type')}
             onVote={others.length > 0 && pickable.length >= 2 ? () => setVoteSheet(true) : undefined}
+            onSuggest={() => setSuggesting((on) => !on)}
           />
-          <SuggestCard
-            list={suggestions({
-              foods: pickable,
-              suits: (f) => suitsEveryone(f, present),
-              wet,
-              covered: (f) => spotsFor(f, 6, SUNWAY_SPOTS).some(spotIsCovered),
-            })}
-            onPick={(food) => pickFromSheet({ food })}
-            onError={onToast}
-          />
+          {suggesting && (
+            <SuggestCard
+              list={suggestions({
+                foods: pickable,
+                suits: (f) => suitsEveryone(f, present),
+                wet,
+                covered: (f) => spotsFor(f, 6, SUNWAY_SPOTS).some(spotIsCovered),
+              })}
+              onPick={async (food) => {
+                await pickFromSheet({ food });
+                setSuggesting(false);
+              }}
+              onClose={() => setSuggesting(false)}
+              onError={onToast}
+            />
+          )}
         </>
       );
     }
@@ -669,7 +677,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
               </p>
             </section>
           ) : (
-            <section style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
               <span className="section-label">{t('Up next')}</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
                 {upNext.map(({ date, member }) => (
@@ -689,7 +697,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             </section>
           )}
 
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, animation: 'fadeUp 0.55s 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, animation: 'fadeUp 0.55s 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="section-label">{t('Recently')}</span>
               <button
@@ -727,7 +735,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           </section>
 
           {showNearby && (
-            <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, animation: 'fadeUp 0.55s 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, animation: 'fadeUp 0.55s 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="section-label">{!here ? t('Ideas near {place}', { place: NEARBY_LABEL }) : nearSunway ? t('Ideas closest to you') : t('Ideas near you')}</span>
                 <button

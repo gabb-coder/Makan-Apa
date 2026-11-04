@@ -2,14 +2,12 @@ import { tk } from './i18n';
 import type { DayEntryRow } from './supabase';
 
 export interface Challenge {
-  key: 'new' | 'norepeat' | 'decided';
+  key: 'new' | 'wheel' | 'decided';
   /** English, shown with t(). */
   title: string;
   progress: number;
   goal: number;
   done: boolean;
-  /** Can't be done this week any more (a repeat happened). */
-  failed: boolean;
 }
 
 const keyOf = (e: DayEntryRow) => e.food_option_id ?? `custom:${(e.custom_food ?? '').toLowerCase()}`;
@@ -33,11 +31,12 @@ export function challengesFor(entries: DayEntryRow[], upTo: string, monday = wee
   const before = new Set(meals.filter((e) => e.entry_date >= addDays(monday, -30) && e.entry_date < monday).map(keyOf));
   const keys = week.map(keyOf);
   const fresh = new Set(keys.filter((k) => !before.has(k))).size;
-  const repeat = new Set(keys).size < keys.length;
+  // "No repeats" already has its own streak and badges, so the weekly ones ask for other things.
+  const spun = week.filter((e) => e.method === 'wheel').length;
   return [
-    { key: 'new', title: tk('Try 2 foods you haven’t had in a month'), progress: Math.min(fresh, 2), goal: 2, done: fresh >= 2, failed: false },
-    { key: 'norepeat', title: tk('4 meals, no repeats'), progress: repeat ? 0 : Math.min(keys.length, 4), goal: 4, done: !repeat && keys.length >= 4, failed: repeat },
-    { key: 'decided', title: tk('Decide 5 meals together'), progress: Math.min(week.length, 5), goal: 5, done: week.length >= 5, failed: false },
+    { key: 'new', title: tk('Try 2 foods you haven’t had in a month'), progress: Math.min(fresh, 2), goal: 2, done: fresh >= 2 },
+    { key: 'wheel', title: tk('Let the wheel pick 2 meals'), progress: Math.min(spun, 2), goal: 2, done: spun >= 2 },
+    { key: 'decided', title: tk('Decide 5 meals together'), progress: Math.min(week.length, 5), goal: 5, done: week.length >= 5 },
   ];
 }
 

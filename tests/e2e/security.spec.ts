@@ -49,6 +49,16 @@ test('rooms are private to their members', async () => {
     expect(drop.data ?? []).toHaveLength(0);
     const guestId = (joined.data as { member: { id: string } }).member.id;
 
+    // The rules, the decider order and the kitty are the host's too.
+    const takeKitty = await outsider.from('rooms').update({ kitty_keeper: guestId }).eq('id', room.id);
+    expect(takeKitty.error?.message).toContain('Only the host');
+    const changeRules = await outsider.from('rooms').update({ veto_limit: 5 }).eq('id', room.id);
+    expect(changeRules.error?.message).toContain('Only the host');
+    const jumpQueue = await outsider.from('members').update({ sort_order: -1 }).eq('id', guestId);
+    expect(jumpQueue.error?.message).toContain('Only the host');
+    const hostRules = await host.from('rooms').update({ veto_limit: 2, kitty_keeper: guestId }).eq('id', room.id).select('veto_limit, kitty_keeper');
+    expect(hostRules.data?.[0]).toEqual({ veto_limit: 2, kitty_keeper: guestId });
+
     // Payment details: only you can set yours, so nobody can redirect your paybacks.
     const ownPay = await outsider.from('members').update({ pay_duitnow: '012-345 6789' }).eq('id', guestId).select('pay_duitnow');
     expect(ownPay.data?.[0]?.pay_duitnow).toBe('012-345 6789');

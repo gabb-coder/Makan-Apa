@@ -274,7 +274,7 @@ export function WheelScreen({ pool, vetoedNames, extraNote = '', timezone, turnL
         <section
           className="card"
           style={{
-            animation: 'popIn 0.6s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+            animation: 'popIn 0.6s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
             borderRadius: 22,
             padding: 16,
             display: 'flex',

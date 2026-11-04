@@ -259,7 +259,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
         </div>
 
         {pinFor && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
             <label htmlFor="join-pin" className="field-label">{t("{name}'s PIN", { name: pinFor })}</label>
             <input
               id="join-pin"
@@ -320,7 +320,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
           </button>
         )}
         {naming && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeUpJoin 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
             <label htmlFor="room-name" className="field-label">
               {t('Room name')} <span style={{ fontWeight: 500, color: 'var(--muted)' }}>{t('(optional)')}</span>
             </label>

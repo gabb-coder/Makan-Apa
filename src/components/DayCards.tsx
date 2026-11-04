@@ -9,7 +9,7 @@ import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { FoodIcon } from './FoodIcon';
 import { FoodTile } from './FoodTile';
 
-const enter = 'fadeUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both';
+const enter = 'fadeUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards';
 const display = { fontFamily: 'var(--font-display)', fontWeight: 800 } as const;
 
 /** Run an async action with a busy flag, reporting failures. */
@@ -114,7 +114,9 @@ interface YourTurnProps {
   onType: () => void;
 }
 
-export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote }: YourTurnProps & { onVote?: () => void }) {
+const stuckLink = { minHeight: 40, border: 'none', background: 'none', color: '#FFFFFF', fontSize: 14, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 } as const;
+
+export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote, onSuggest }: YourTurnProps & { onVote?: () => void; onSuggest?: () => void }) {
   return (
     <DeciderShell decider={me} label={t("Today's decider")}>
       <DeciderHeading decider={me} title={t('Your turn!')} sub={sub} />
@@ -153,15 +155,20 @@ export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote }: Yo
           {t('Type my own')}
         </button>
       </div>
-      {onVote && (
-        <button
-          type="button"
-          className="press"
-          onClick={onVote}
-          style={{ position: 'relative', minHeight: 40, border: 'none', background: 'none', color: '#FFFFFF', fontSize: 14, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}
-        >
-          {t('Can’t decide? Put it to a vote')}
-        </button>
+      {(onVote || onSuggest) && (
+        // Help for when the decider is stuck: an idea from the app, or let everyone vote.
+        <div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', columnGap: 20 }}>
+          {onSuggest && (
+            <button type="button" className="press" onClick={onSuggest} style={stuckLink}>
+              {t('✨ Suggest one')}
+            </button>
+          )}
+          {onVote && (
+            <button type="button" className="press" onClick={onVote} style={stuckLink}>
+              {t('🗳️ Put it to a vote')}
+            </button>
+          )}
+        </div>
       )}
     </DeciderShell>
   );

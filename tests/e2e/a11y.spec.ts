@@ -38,8 +38,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await guest.fill('#chat-input', 'On my way');
       await guest.click('button[aria-label="Send"]');
       await host.goto('/#settings');
-      await host.selectOption('#kitty-keeper', { label: 'Wei (you)' });
+      await host.getByRole('switch', { name: 'Use a group kitty' }).check();
+      await expect(host.locator('#kitty-keeper')).toHaveValue(/.+/);
       await host.evaluate(() => localStorage.setItem('makan.monthlyBudget', '30000'));
+      // Challenges, the passport and badges open on History, so they're scanned too.
+      await host.evaluate(() => localStorage.setItem('makan.historyFun', '1'));
 
       for (const route of ['wheel', 'pool', 'bills', 'history', 'settings', 'chat']) {
         await host.goto(`/#${route}`);

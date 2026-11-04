@@ -18,6 +18,7 @@ import { roomSpot, SUNWAY_SPOTS } from '../lib/nearby';
 const SpotMap = lazy(() => import('../components/SpotMap'));
 import { PhotoGrid, PhotoViewer, Thumb } from '../components/MealSocial';
 import { hostOf } from '../lib/session';
+import { storage } from '../lib/storage';
 
 interface Props {
   room: RoomRow;
@@ -65,10 +66,14 @@ const statNumber = {
   lineHeight: 1.1,
 } as const;
 
+const FUN_KEY = 'makan.historyFun';
+
 export function HistoryScreen({ room, me, members, today, entries, vetoes, foods, onToast, extras }: Props) {
   const months = useMemo(() => availableMonths(entries, today), [entries, today]);
   const [month, setMonth] = useState(() => monthKey(today));
   const [showAllEaten, setShowAllEaten] = useState(false);
+  // Challenges, the passport and badges fold away so the month's meals come first.
+  const [showFun, setShowFun] = useState(() => storage.get(FUN_KEY) === '1');
   const p = useCountUp(month);
 
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
@@ -97,6 +102,8 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
     () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements, today }),
     [me.id, entries, vetoes, extras.bills, extras.settlements],
   );
+
+  const weekly = challengesFor(entries, today);
 
   // Room favourites: foods with more thumbs up than down, all time.
   const favourites = foods.filter((f) => (f.netRating ?? 0) > 0).sort((a, b) => (b.netRating ?? 0) - (a.netRating ?? 0)).slice(0, 5);
@@ -157,7 +164,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         </label>
       </header>
 
-      <div key={`stats-${month}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+      <div key={`stats-${month}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}>
         <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{t('Meals')}</span>
           <span style={statNumber}>{Math.round(mealsN * p)}</span>
@@ -188,7 +195,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
       <section
         key={`who-${month}`}
         className="card"
-        style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}
+        style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Who decided')}</span>
@@ -237,7 +244,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
       <section
         key={`eaten-${month}`}
         className="card"
-        style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}
+        style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, animation: 'fadeUp 0.55s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Most eaten')}</span>
@@ -269,30 +276,6 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         )}
       </section>
 
-      {isCurrent && (
-        <section aria-labelledby="challenges-label" className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
-          <h2 id="challenges-label" className="section-label" style={{ margin: 0 }}>
-            {t('This week’s challenges')}
-          </h2>
-          {challengesFor(entries, today).map((c) => (
-            <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 14 }}>
-                <span style={{ fontWeight: 600 }}>
-                  {c.done ? '✅ ' : c.failed ? '❌ ' : ''}
-                  {t(c.title)}
-                </span>
-                <span style={{ fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{c.failed ? t('Next week!') : `${c.progress}/${c.goal}`}</span>
-              </div>
-              <div role="progressbar" aria-label={t(c.title)} aria-valuemin={0} aria-valuemax={c.goal} aria-valuenow={c.progress} style={{ height: 8, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
-                <div style={{ width: `${(c.progress / c.goal) * 100}%`, height: '100%', borderRadius: 999, background: c.done ? 'var(--success)' : 'var(--accent)' }} />
-              </div>
-            </div>
-          ))}
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('New challenges every Monday. Finish them all 3 weeks for the 🏆 badge.')}</span>
-        </section>
-      )}
-
-      <PassportCard stamps={stamps} />
 
       {monthPhotos.length > 0 && (
         <section aria-labelledby="photos-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
@@ -440,42 +423,101 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         </section>
       )}
 
-      <section aria-labelledby="badges-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-        <h2 id="badges-label" className="section-label" style={{ margin: 0 }}>
-          {t('Your badges · {n} of {total}', { n: badges.filter((b) => b.earned).length, total: badges.length })}
-        </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-          {badges.map((b) => (
-            <div
-              key={b.id}
-              className="card"
-              style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, background: b.earned ? 'var(--streak-bg)' : undefined }}
-            >
-              <span aria-hidden="true" style={{ fontSize: 26, lineHeight: 1, filter: b.earned ? 'none' : 'grayscale(1)', opacity: b.earned ? 1 : 0.45 }}>
-                {b.emoji}
-              </span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: b.earned ? 'var(--streak-ink)' : 'var(--ink)' }}>{t(b.title)}</span>
-              <span style={{ fontSize: 12, lineHeight: 1.35, color: b.earned ? 'var(--streak-ink-2)' : 'var(--muted)' }}>{t(b.description)}</span>
-              {!b.earned && (
-                <span
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={b.target}
-                  aria-valuenow={b.value}
-                  aria-label={t('{value} of {target}', { value: b.value, target: b.target })}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}
-                >
-                  <span aria-hidden="true" style={{ flexGrow: 1, height: 6, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
-                    <span style={{ display: 'block', width: `${(b.value / b.target) * 100}%`, height: '100%', background: 'var(--accent)' }} />
-                  </span>
-                  <span aria-hidden="true" style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    {b.value}/{b.target}
-                  </span>
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+
+      <section aria-labelledby="fun-label" style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+        <button
+          type="button"
+          className="card press"
+          aria-expanded={showFun}
+          aria-controls="fun-stuff"
+          onClick={() => {
+            setShowFun((on) => !on);
+            storage.set(FUN_KEY, showFun ? '0' : '1');
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', textAlign: 'left', color: 'var(--ink)' }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 24 }}>
+            🏆
+          </span>
+          <span style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span id="fun-label" style={{ fontSize: 15, fontWeight: 800 }}>
+              {t('Challenges & badges')}
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+              {t('{done} of {total} challenges this week · {badges} badges · {places} places', {
+                done: weekly.filter((c) => c.done).length,
+                total: weekly.length,
+                badges: badges.filter((b) => b.earned).length,
+                places: stamps.length,
+              })}
+            </span>
+          </span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, transform: showFun ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        {showFun && (
+          <div id="fun-stuff" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <section aria-labelledby="challenges-label" className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+              <h3 id="challenges-label" className="section-label" style={{ margin: 0 }}>
+                {t('This week’s challenges')}
+              </h3>
+              {weekly.map((c) => (
+                <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 14 }}>
+                    <span style={{ fontWeight: 600 }}>
+                      {c.done ? '✅ ' : ''}
+                      {t(c.title)}
+                    </span>
+                    <span style={{ fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{`${c.progress}/${c.goal}`}</span>
+                  </div>
+                  <div role="progressbar" aria-label={t(c.title)} aria-valuemin={0} aria-valuemax={c.goal} aria-valuenow={c.progress} style={{ height: 8, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
+                    <div style={{ width: `${(c.progress / c.goal) * 100}%`, height: '100%', borderRadius: 999, background: c.done ? 'var(--success)' : 'var(--accent)' }} />
+                  </div>
+                </div>
+              ))}
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('New challenges every Monday. Finish them all 3 weeks for the 🏆 badge.')}</span>
+            </section>
+            <PassportCard stamps={stamps} />
+            <section aria-labelledby="badges-label" style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+              <h3 id="badges-label" className="section-label" style={{ margin: 0 }}>
+                {t('Your badges · {n} of {total}', { n: badges.filter((b) => b.earned).length, total: badges.length })}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                {badges.map((b) => (
+                  <div
+                    key={b.id}
+                    className="card"
+                    style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, background: b.earned ? 'var(--streak-bg)' : undefined }}
+                  >
+                    <span aria-hidden="true" style={{ fontSize: 26, lineHeight: 1, filter: b.earned ? 'none' : 'grayscale(1)', opacity: b.earned ? 1 : 0.45 }}>
+                      {b.emoji}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: b.earned ? 'var(--streak-ink)' : 'var(--ink)' }}>{t(b.title)}</span>
+                    <span style={{ fontSize: 12, lineHeight: 1.35, color: b.earned ? 'var(--streak-ink-2)' : 'var(--muted)' }}>{t(b.description)}</span>
+                    {!b.earned && (
+                      <span
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={b.target}
+                        aria-valuenow={b.value}
+                        aria-label={t('{value} of {target}', { value: b.value, target: b.target })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}
+                      >
+                        <span aria-hidden="true" style={{ flexGrow: 1, height: 6, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
+                          <span style={{ display: 'block', width: `${(b.value / b.target) * 100}%`, height: '100%', background: 'var(--accent)' }} />
+                        </span>
+                        <span aria-hidden="true" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                          {b.value}/{b.target}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
       </section>
 
       {entries.some((e) => e.status === 'accepted') && (

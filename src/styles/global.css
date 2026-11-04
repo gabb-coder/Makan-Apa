@@ -1035,6 +1035,15 @@ input[type='date'].input::-webkit-date-and-time-value {
   transform: translateX(20px);
 }
 
+/* Settings only the host can change: shown, but plainly not for tapping. */
+.switch:disabled,
+.input:disabled,
+fieldset:disabled .segmented,
+fieldset:disabled .icon-btn {
+  opacity: 0.55;
+  cursor: default;
+}
+
 /* ---------- History ---------- */
 
 @keyframes growX {

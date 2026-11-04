@@ -75,6 +75,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   };
   const zones = useMemo(() => timeZones(room.timezone), [room.timezone]);
 
+  // The kitty switch flips straight away; it goes back if saving fails.
+  const [kittyFlip, setKittyFlip] = useState<boolean | null>(null);
+  const kittyOn = kittyFlip ?? !!room.kitty_keeper;
+
   const attempt = async (fn: () => Promise<void>, ok?: string) => {
     try {
       await fn();
@@ -214,7 +218,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
             <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
               {iAmHost
                 ? t('You’re the host: tap someone’s name to rename them, change their colour, make them host or remove them from the room.')
-                : t('{name} is the host and can remove people from the room.', { name: host?.name ?? t('The host') })}
+                : t('{name} is the host: they set the order and the rules, and can remove people from the room.', { name: host?.name ?? t('The host') })}
             </span>
           )}
         </div>
@@ -277,6 +281,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                       {m.id === host?.id && <HostBadge you={m.id === me.id} />}
                     </button>
                   )}
+                  {iAmHost && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     {(
                       [
@@ -302,6 +307,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                       );
                     })}
                   </div>
+                  )}
                 </div>
                 {editing && iAmHost && m.id !== me.id && (
                   <button
@@ -443,177 +449,201 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
         <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
           {t('Everyone tops up a shared pot, say RM50 each, and meals are paid out of it instead of settling up after every lunch. The keeper holds the money.')}
         </span>
-        <label htmlFor="kitty-keeper" className="field-label">
-          {t('Kitty keeper')}
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, cursor: iAmHost ? 'pointer' : 'default' }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Use a group kitty')}</span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={kittyOn}
+            disabled={!iAmHost || kittyFlip !== null}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setKittyFlip(on);
+              // Whoever turns it on keeps it to start with; they can hand it to someone below.
+              void attempt(
+                () => updateRoom({ kitty_keeper: on ? me.id : null }),
+                on ? t('Kitty on. It shows in Bills.') : t('Kitty off. Its history stays in Bills.'),
+              ).finally(() => setKittyFlip(null));
+            }}
+          />
         </label>
-        <select
-          id="kitty-keeper"
-          className="input"
-          value={room.kitty_keeper ?? ''}
-          onChange={(e) =>
-            attempt(
-              () => updateRoom({ kitty_keeper: e.target.value || null }),
-              e.target.value ? t('Kitty on. It shows in Bills.') : t('Kitty off. Its history stays in Bills.'),
-            )
-          }
-        >
-          <option value="">{t('No kitty')}</option>
-          {members
-            .filter((m) => !m.left_at)
-            .map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.id === me.id ? t('{name} (you)', { name: m.name }) : m.name}
-              </option>
-            ))}
-        </select>
+        {room.kitty_keeper && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="kitty-keeper" className="field-label">
+              {t('Kitty keeper')}
+            </label>
+            <select
+              id="kitty-keeper"
+              className="input"
+              value={room.kitty_keeper}
+              disabled={!iAmHost}
+              onChange={(e) => {
+                const keeper = members.find((m) => m.id === e.target.value);
+                if (keeper) attempt(() => updateRoom({ kitty_keeper: keeper.id }), t('{name} keeps the kitty now.', { name: keeper.id === me.id ? t('You') : keeper.name }));
+              }}
+            >
+              {members
+                .filter((m) => !m.left_at || m.id === room.kitty_keeper)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id === me.id ? t('{name} (you)', { name: m.name }) : m.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
+        {!iAmHost && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Only {name}, the host, can change this.', { name: host?.name ?? t('the host') })}</span>}
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.16s' }}>
         <span className="section-label">{t('Rules')}</span>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="meals-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Meals to decide')}</span>
-          <div className="segmented" role="group" aria-labelledby="meals-label">
-            {(
-              [
-                ['lunch', tk('Lunch only')],
-                ['both', tk('Lunch and dinner')],
-              ] as const
-            ).map(([value, label]) => (
-              <button key={value} type="button" aria-pressed={room.meals === value} onClick={() => room.meals !== value && attempt(() => updateRoom({ meals: value }))}>
-                {t(label)}
-              </button>
-            ))}
-          </div>
-          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {room.meals === 'both'
-              ? t('Each day has a lunch and a dinner decision. Dinner goes to the next person in the order, so nobody decides both.')
-              : t('One decision a day. Turn on dinner to decide both meals.')}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span id="mode-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('How we decide')}</span>
-          <div className="segmented" role="group" aria-labelledby="mode-label">
-            {(
-              [
-                ['decider', tk('Decider picks')],
-                ['secret', tk('Secret picks')],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={room.decision_mode === value}
-                onClick={() => room.decision_mode !== value && attempt(() => updateRoom({ decision_mode: value }))}
-              >
-                {t(label)}
-              </button>
-            ))}
-          </div>
-          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {room.decision_mode === 'secret'
-              ? t('Everyone picks in secret. Once everyone’s in, the picks are revealed and the wheel spins among them. No vetoes.')
-              : t('Today’s decider picks or spins, and everyone else can accept or veto.')}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Vetoes per day')}</span>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t("For each person who isn't deciding")}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              type="button"
-              className="icon-btn press"
-              aria-label={t('Fewer vetoes')}
-              disabled={room.veto_limit <= 0}
-              style={{ opacity: room.veto_limit <= 0 ? 0.35 : 1, fontSize: 20, fontWeight: 700 }}
-              onClick={() => attempt(() => updateRoom({ veto_limit: room.veto_limit - 1 }))}
-            >
-              −
-            </button>
-            <span aria-live="polite" style={{ minWidth: 24, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800 }}>
-              {room.veto_limit}
+        {!iAmHost && <span style={{ fontSize: 13, color: 'var(--muted)', marginTop: -6 }}>{t('Only {name}, the host, can change these.', { name: host?.name ?? t('the host') })}</span>}
+        <fieldset disabled={!iAmHost} style={{ border: 'none', margin: 0, padding: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span id="meals-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('Meals to decide')}</span>
+            <div className="segmented" role="group" aria-labelledby="meals-label">
+              {(
+                [
+                  ['lunch', tk('Lunch only')],
+                  ['both', tk('Lunch and dinner')],
+                ] as const
+              ).map(([value, label]) => (
+                <button key={value} type="button" aria-pressed={room.meals === value} onClick={() => room.meals !== value && attempt(() => updateRoom({ meals: value }))}>
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+              {room.meals === 'both'
+                ? t('Each day has a lunch and a dinner decision. Dinner goes to the next person in the order, so nobody decides both.')
+                : t('One decision a day. Turn on dinner to decide both meals.')}
             </span>
-            <button
-              type="button"
-              className="icon-btn press"
-              aria-label={t('More vetoes')}
-              disabled={room.veto_limit >= VETO_MAX}
-              style={{ opacity: room.veto_limit >= VETO_MAX ? 0.35 : 1, fontSize: 20, fontWeight: 700 }}
-              onClick={() => attempt(() => updateRoom({ veto_limit: room.veto_limit + 1 }))}
-            >
-              +
-            </button>
           </div>
-        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Fixed days')}</span>
-          <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{t('A food you always have on a weekday, like mamak on Fridays. That lunch decides itself; nobody has to choose.')}</span>
-          {([1, 2, 3, 4, 5, 6, 0] as const).map((wd) => {
-            const fixed = room.fixed_days ?? {};
-            const value = fixed[String(wd)] ?? '';
-            return (
-              <label key={wd} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
-                <span style={{ width: 96, fontSize: 14, fontWeight: 600 }}>{weekdayName(wd)}</span>
-                <select
-                  className="input"
-                  value={value}
-                  onChange={(e) => {
-                    const next = { ...fixed };
-                    if (e.target.value) next[String(wd)] = e.target.value;
-                    else delete next[String(wd)];
-                    attempt(() => updateRoom({ fixed_days: next }), e.target.value ? t('{day}: {food}, every week.', { day: weekdayName(wd), food: e.target.value }) : undefined);
-                  }}
-                  style={{ flexGrow: 1, height: 40 }}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span id="mode-label" style={{ fontSize: 15, fontWeight: 700 }}>{t('How we decide')}</span>
+            <div className="segmented" role="group" aria-labelledby="mode-label">
+              {(
+                [
+                  ['decider', tk('Decider picks')],
+                  ['secret', tk('Secret picks')],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={room.decision_mode === value}
+                  onClick={() => room.decision_mode !== value && attempt(() => updateRoom({ decision_mode: value }))}
                 >
-                  <option value="">{t('Decide as usual')}</option>
-                  {[...new Set([...(value ? [value] : []), ...foodNames])].map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            );
-          })}
-        </div>
-
-        <details className="advanced">
-          <summary style={{ minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>{t('Advanced')}</summary>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 6 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="rotation-start" className="field-label">{t('Rotation start date')}</label>
-          <input
-            id="rotation-start"
-            type="date"
-            className="input"
-            value={room.rotation_start}
-            onChange={(e) => e.target.value && attempt(() => updateRoom({ rotation_start: e.target.value }))}
-          />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="timezone" className="field-label">{t('Timezone')}</label>
-          <select
-            id="timezone"
-            className="input"
-            value={room.timezone}
-            onChange={(e) => attempt(() => updateRoom({ timezone: e.target.value }))}
-          >
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z.replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Decides when “today” starts for the rotation.')}</span>
-        </div>
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
+              {room.decision_mode === 'secret'
+                ? t('Everyone picks in secret. Once everyone’s in, the picks are revealed and the wheel spins among them. No vetoes.')
+                : t('Today’s decider picks or spins, and everyone else can accept or veto.')}
+            </span>
           </div>
-        </details>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Vetoes per day')}</span>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t("For each person who isn't deciding")}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                type="button"
+                className="icon-btn press"
+                aria-label={t('Fewer vetoes')}
+                disabled={room.veto_limit <= 0}
+                style={{ opacity: room.veto_limit <= 0 ? 0.35 : 1, fontSize: 20, fontWeight: 700 }}
+                onClick={() => attempt(() => updateRoom({ veto_limit: room.veto_limit - 1 }))}
+              >
+                −
+              </button>
+              <span aria-live="polite" style={{ minWidth: 24, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800 }}>
+                {room.veto_limit}
+              </span>
+              <button
+                type="button"
+                className="icon-btn press"
+                aria-label={t('More vetoes')}
+                disabled={room.veto_limit >= VETO_MAX}
+                style={{ opacity: room.veto_limit >= VETO_MAX ? 0.35 : 1, fontSize: 20, fontWeight: 700 }}
+                onClick={() => attempt(() => updateRoom({ veto_limit: room.veto_limit + 1 }))}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('Fixed days')}</span>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>{t('A food you always have on a weekday, like mamak on Fridays. That lunch decides itself; nobody has to choose.')}</span>
+            {([1, 2, 3, 4, 5, 6, 0] as const).map((wd) => {
+              const fixed = room.fixed_days ?? {};
+              const value = fixed[String(wd)] ?? '';
+              return (
+                <label key={wd} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
+                  <span style={{ width: 96, fontSize: 14, fontWeight: 600 }}>{weekdayName(wd)}</span>
+                  <select
+                    className="input"
+                    value={value}
+                    onChange={(e) => {
+                      const next = { ...fixed };
+                      if (e.target.value) next[String(wd)] = e.target.value;
+                      else delete next[String(wd)];
+                      attempt(() => updateRoom({ fixed_days: next }), e.target.value ? t('{day}: {food}, every week.', { day: weekdayName(wd), food: e.target.value }) : undefined);
+                    }}
+                    style={{ flexGrow: 1, height: 40 }}
+                  >
+                    <option value="">{t('Decide as usual')}</option>
+                    {[...new Set([...(value ? [value] : []), ...foodNames])].map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+
+          <details className="advanced">
+            <summary style={{ minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>{t('Advanced')}</summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="rotation-start" className="field-label">{t('Rotation start date')}</label>
+            <input
+              id="rotation-start"
+              type="date"
+              className="input"
+              value={room.rotation_start}
+              onChange={(e) => e.target.value && attempt(() => updateRoom({ rotation_start: e.target.value }))}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="timezone" className="field-label">{t('Timezone')}</label>
+            <select
+              id="timezone"
+              className="input"
+              value={room.timezone}
+              onChange={(e) => attempt(() => updateRoom({ timezone: e.target.value }))}
+            >
+              {zones.map((z) => (
+                <option key={z} value={z}>
+                  {z.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('Decides when “today” starts for the rotation.')}</span>
+          </div>
+            </div>
+          </details>
+        </fieldset>
       </section>
 
       <section className="card fade-up" style={{ ...cardStyle, animationDelay: '0.24s' }}>
