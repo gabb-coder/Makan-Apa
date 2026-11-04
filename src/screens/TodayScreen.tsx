@@ -575,6 +575,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           meal={meal}
           statusOf={(id) => attendance.statusOf(id, today, meal)}
           onSet={(status) => run(() => attendance.setStatus(me.id, today, meal, status))}
+          guests={attendance.guestsOn(today, meal)}
+          onGuests={(n) => run(() => attendance.setGuests(me.id, today, meal, n))}
         />
       )}
 
@@ -719,6 +721,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           away={away}
           start={billStart}
           kittyKeeper={room.kitty_keeper}
+          guests={attendance.guestsOn(today, meal)}
           onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved. See who owes what in Bills.'))}
           onClose={() => {
             setBillOpen(false);

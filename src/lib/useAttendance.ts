@@ -42,6 +42,27 @@ export function useAttendance(roomId: string, today: string) {
 
   const setStatus = async (memberId: string, date: string, meal: Meal, status: Attendance) => {
     const row = { room_id: roomId, entry_date: date, meal, member_id: memberId, status, updated_at: new Date().toISOString() };
+    const before = rows.find((r) => r.member_id === memberId && r.entry_date === date && r.meal === meal);
+    // Keep any guests in the local copy (the upsert leaves the column alone); out means none.
+    setRows((cur) => [...cur.filter((r) => !(r.member_id === memberId && r.entry_date === date && r.meal === meal)), { ...row, guests: status === 'out' ? 0 : (before?.guests ?? 0) }]);
+    const payload: Record<string, unknown> = status === 'out' ? { ...row, guests: 0 } : row;
+    const { error } = await supabase.from('attendance').upsert(payload);
+    if (error) {
+      await load();
+      throw new Error(error.message);
+    }
+  };
+
+  /** Friends people are bringing to a meal (not on the app). */
+  const guestsOn = (date: string, meal: Meal): { hostId: string; count: number }[] =>
+    rows.filter((r) => r.entry_date === date && (r.meal ?? 'lunch') === meal && r.status !== 'out' && (r.guests ?? 0) > 0).map((r) => ({ hostId: r.member_id, count: r.guests ?? 0 }));
+
+  /** Bringing n guests (0–5); bringing anyone means you're in. */
+  const setGuests = async (memberId: string, date: string, meal: Meal, n: number) => {
+    const current = statusOf(memberId, date, meal);
+    const status: Attendance = current === 'out' && n > 0 ? 'in' : current;
+    const guests = Math.max(0, Math.min(5, n));
+    const row = { room_id: roomId, entry_date: date, meal, member_id: memberId, status, guests, updated_at: new Date().toISOString() };
     setRows((cur) => [...cur.filter((r) => !(r.member_id === memberId && r.entry_date === date && r.meal === meal)), row]);
     const { error } = await supabase.from('attendance').upsert(row);
     if (error) {
@@ -50,7 +71,7 @@ export function useAttendance(roomId: string, today: string) {
     }
   };
 
-  return { rows, statusOf, awayOn, setStatus };
+  return { rows, statusOf, awayOn, setStatus, guestsOn, setGuests };
 }
 
 export type AttendanceApi = ReturnType<typeof useAttendance>;

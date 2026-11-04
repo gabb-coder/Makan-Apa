@@ -80,3 +80,31 @@ describe('kitty', () => {
     expect(Object.fromEntries(k.each)).toEqual({ a: 1000, b: 1000, c: -1000 });
   });
 });
+
+describe('treats, birthdays and guests', () => {
+  it('charges a guest to whoever brought them', async () => {
+    const { shares, guestKey } = await import('./money');
+    const bill = { paid_by: 'a', amount_cents: 3000, split_between: ['a', 'b'], items: [
+      { name: '', cents: 1000, people: ['a'] },
+      { name: '', cents: 1000, people: ['b'] },
+      { name: '', cents: 1000, people: [guestKey('b', 1)] },
+    ] };
+    expect(Object.fromEntries(shares(bill))).toEqual({ a: 1000, b: 2000 });
+  });
+  it('spreads the birthday person’s share over everyone else', async () => {
+    const { shares } = await import('./money');
+    const bill = { paid_by: 'a', amount_cents: 3000, split_between: ['a', 'b', 'c'], birthday: 'c' };
+    expect(Object.fromEntries(shares(bill))).toEqual({ a: 1500, b: 1500, c: 0 });
+    const items = { paid_by: 'a', amount_cents: 4000, split_between: [], birthday: 'c', items: [
+      { name: '', cents: 1000, people: ['a'] },
+      { name: '', cents: 3000, people: ['b'] },
+      { name: '', cents: 1000, people: ['c'] },
+    ] };
+    // 4000 total: a had 1/5, b 3/5, c 1/5 (800); c's 800 splits 1:3 between a and b
+    expect(Object.fromEntries(shares(items))).toEqual({ a: 1000, b: 3000, c: 0 });
+  });
+  it('a treat leaves nobody owing', async () => {
+    const { balances } = await import('./money');
+    expect([...balances([{ paid_by: 'a', amount_cents: 3000, split_between: ['a', 'b'], treat: true }], []).values()].every((v) => v === 0)).toBe(true);
+  });
+});

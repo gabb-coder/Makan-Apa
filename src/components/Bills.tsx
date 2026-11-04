@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, tNodes } from '../lib/i18n';
-import { balances, billTotals, formatRM, parsePct, parseRM, settleUp, shares, type BillItem } from '../lib/money';
+import { balances, billTotals, formatRM, guestHost, guestKey, isGuest, parsePct, parseRM, settleUp, shares, type BillItem } from '../lib/money';
 import type { MealBillRow, MemberRow, SettlementRow } from '../lib/supabase';
 import type { RoomExtras } from '../lib/useRoomExtras';
 import { qrUrl, removeQrEverywhere, saveQrEverywhere } from '../lib/payQr';
@@ -38,10 +38,16 @@ export function BillSheet({
   away,
   start,
   kittyKeeper,
+  guests = [],
+  forEvent = false,
   onSaved,
   onClose,
 }: {
   dayEntryId: string;
+  /** Friends people brought who aren't on the app (from Who's in): a new bill gets a line each. */
+  guests?: { hostId: string; count: number }[];
+  /** An event's bill rather than a meal's (dayEntryId is then the event's id). */
+  forEvent?: boolean;
   /** The room's kitty keeper, when it has a kitty: bills can then be paid from the kitty. */
   kittyKeeper?: string | null;
   foodName: string;
@@ -64,12 +70,18 @@ export function BillSheet({
   const [paidBy, setPaidBy] = useState(bill?.paid_by ?? start?.paidBy ?? meId);
   // Paid from the kitty: its keeper hands over the cash, and nobody owes anybody.
   const [fromKitty, setFromKitty] = useState(!!bill?.from_kitty && !!kittyKeeper);
+  const broughtGuests = guests.flatMap((g) => Array.from({ length: g.count }, (_, n) => guestKey(g.hostId, n + 1)));
   const [rows, setRows] = useState<Row[]>(() => {
     if (bill?.items?.length) return bill.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: i.people }));
     if (bill) return [row({ name: '', price: (bill.amount_cents / 100).toFixed(2), people: bill.split_between })];
     if (start?.items.length) return start.items.map((i) => row({ name: i.name, price: i.cents ? (i.cents / 100).toFixed(2) : '', people: i.people }));
-    return eaters.map((m) => row({ name: '', price: '', people: [m.id] }));
+    return [...eaters.map((m) => m.id), ...broughtGuests].map((id) => row({ name: '', price: '', people: [id] }));
   });
+  // Guests on this bill: the ones brought today plus any already on its lines, or added here.
+  const [addedGuests, setAddedGuests] = useState<string[]>([]);
+  const guestIds = [...new Set([...broughtGuests, ...rows.flatMap((r) => r.people.filter(isGuest)), ...addedGuests])];
+  const [treat, setTreat] = useState(!!bill?.treat);
+  const [birthday, setBirthday] = useState<string>(bill?.birthday ?? '');
   const [serviceOn, setServiceOn] = useState(Number(bill?.service_pct ?? 0) > 0);
   const [servicePct, setServicePct] = useState(pctText(bill?.service_pct, '10'));
   const [sstOn, setSstOn] = useState(Number(bill?.sst_pct ?? 0) > 0);
@@ -91,7 +103,13 @@ export function BillSheet({
   }, [bill?.receipt_path]);
   useEffect(() => () => void (photo && URL.revokeObjectURL(photo.url)), [photo]);
 
-  const nameOf = (id: string) => (id === meId ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
+  const memberName = (id: string) => (id === meId ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
+  const nameOf = (id: string) => {
+    if (!isGuest(id)) return memberName(id);
+    const n = Number(id.split('+')[1]);
+    const host = guestHost(id);
+    return host === meId ? (n > 1 ? t('Your guest {n}', { n }) : t('Your guest')) : n > 1 ? t("{name}'s guest {n}", { name: memberName(host), n }) : t("{name}'s guest", { name: memberName(host) });
+  };
   const svc = serviceOn ? parsePct(servicePct) : 0;
   const sst = sstOn ? parsePct(sstPct) : 0;
 
@@ -108,14 +126,14 @@ export function BillSheet({
   if (svc === null) problems.push(t('Service charge should be a percentage from 0 to 30.'));
   if (sst === null) problems.push(t('SST should be a percentage from 0 to 30.'));
   const totals = billTotals(items, svc ?? 0, sst ?? 0);
-  const each = items.length ? shares({ paid_by: paidBy, amount_cents: totals.total, split_between: [], items }) : new Map<string, number>();
+  const each = items.length ? shares({ paid_by: paidBy, amount_cents: totals.total, split_between: [], items, birthday: birthday || null }) : new Map<string, number>();
   const ready = items.length > 0 && problems.length === 0 && totals.total <= 10_000_000;
 
   const update = (key: number, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const togglePerson = (r: Row, id: string) => update(r.key, { people: r.people.includes(id) ? r.people.filter((p) => p !== id) : [...r.people, id] });
   // Chips for people still in the room, plus anyone who left but is already on this bill.
   const chipMembers = members.filter((m) => !m.left_at || m.id === paidBy || rows.some((r) => r.people.includes(m.id)));
-  const everyone = eaters.map((m) => m.id);
+  const everyone = [...eaters.map((m) => m.id), ...guestIds];
 
   const placeholder = (r: Row) =>
     r.people.length === 1 ? (r.people[0] === meId ? t('Your food') : t("{name}'s food", { name: nameOf(r.people[0]) })) : t('Shared item');
@@ -134,12 +152,14 @@ export function BillSheet({
         paid_by: fromKitty && kittyKeeper ? kittyKeeper : paidBy,
         from_kitty: fromKitty && !!kittyKeeper,
         amount_cents: totals.total,
-        split_between: [...new Set(items.flatMap((i) => i.people))],
+        split_between: [...new Set(items.flatMap((i) => i.people).map(guestHost))],
+        treat: treat && !fromKitty,
+        birthday: birthday || null,
         items: items.map((i) => ({ ...i, name: i.name || placeholder({ key: 0, name: '', price: '', people: i.people }) })),
         service_pct: svc ?? 0,
         sst_pct: sst ?? 0,
         receipt_path,
-      });
+      }, forEvent);
       if (oldPath && oldPath !== receipt_path) void extras.deleteReceipt(oldPath);
       onSaved(false);
       onClose();
@@ -275,6 +295,18 @@ export function BillSheet({
                     {nameOf(m.id)}
                   </button>
                 ))}
+                {guestIds.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="chip press"
+                    aria-pressed={r.people.includes(id)}
+                    onClick={() => togglePerson(r, id)}
+                    style={{ height: 36, padding: '0 12px', fontSize: 13 }}
+                  >
+                    {nameOf(id)}
+                  </button>
+                ))}
               </div>
             </div>
           ))}
@@ -286,6 +318,40 @@ export function BillSheet({
           >
             {t('Add an item')}
           </button>
+          <button
+            type="button"
+            className="press"
+            onClick={() => {
+              const mine = guestIds.filter((g) => guestHost(g) === meId).length;
+              const id = guestKey(meId, mine + 1);
+              setAddedGuests((cur) => [...cur, id]);
+              setRows((cur) => [...cur, row({ name: '', price: '', people: [id] })]);
+            }}
+            style={{ alignSelf: 'flex-start', minHeight: 40, padding: 0, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}
+          >
+            {t('+ Add a guest of yours (charged to you)')}
+          </button>
+        </fieldset>
+
+        <fieldset style={sectionStyle}>
+          <legend className="field-label" style={{ padding: 0, marginBottom: 4 }}>{t('Special occasion')}</legend>
+          {!fromKitty && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 15, minHeight: 44 }}>
+              <input type="checkbox" checked={treat} onChange={(e) => setTreat(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--accent)' }} />
+              {paidBy === meId ? t('🎉 I’m treating: nobody owes me') : t('🎉 {name} is treating: nobody owes them', { name: nameOf(paidBy) })}
+            </label>
+          )}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>{t('🎂 Birthday: their share is split among everyone else')}</span>
+            <select className="input" value={birthday} onChange={(e) => setBirthday(e.target.value)} style={{ height: 44 }}>
+              <option value="">{t('No birthday')}</option>
+              {chipMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {nameOf(m.id)}
+                </option>
+              ))}
+            </select>
+          </label>
         </fieldset>
 
         <fieldset style={sectionStyle}>
@@ -328,6 +394,9 @@ export function BillSheet({
             <span>{t('Total')}</span>
             <span data-testid="bill-total">{formatRM(totals.total)}</span>
           </div>
+          {treat && !fromKitty && (
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-text)' }}>{t('A treat: shares are shown for the record, but nobody owes anything.')}</span>
+          )}
           {each.size > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8, borderTop: '1px solid var(--divider)' }}>
               {members
