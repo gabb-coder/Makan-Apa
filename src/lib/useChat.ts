@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { storage } from './storage';
-import { supabase, type MessageRow, type ReactionEmoji, type ReactionRow } from './supabase';
+import { supabase, type MessageRow, type PollRow, type PollVoteRow, type ReactionEmoji, type ReactionRow } from './supabase';
 
 const SEEN_KEY = 'makan.chatSeen';
 
@@ -126,4 +126,60 @@ export function useReactions(dayEntryId: string | null, meId: string) {
   };
 
   return { rows, toggle };
+}
+
+/** The room's polls and their votes, kept live (polls show in the chat). */
+export function usePolls(roomId: string, meId: string) {
+  const [polls, setPolls] = useState<PollRow[]>([]);
+  const [votes, setVotes] = useState<PollVoteRow[]>([]);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('polls').select('*').eq('room_id', roomId).order('created_at', { ascending: false }).limit(50);
+    const list = (data ?? []) as PollRow[];
+    setPolls(list);
+    if (!list.length) return setVotes([]);
+    const v = await supabase.from('poll_votes').select('*').in('poll_id', list.map((p) => p.id));
+    setVotes((v.data ?? []) as PollVoteRow[]);
+  }, [roomId]);
+
+  useEffect(() => {
+    void load();
+    const channel = supabase
+      .channel(`polls:${roomId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'polls', filter: `room_id=eq.${roomId}` }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes' }, () => void load())
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [roomId, load]);
+
+  /** A poll, posted to the chat as a message. */
+  const ask = async (question: string, options: string[]) => {
+    const q = question.trim().slice(0, 120);
+    const opts = options.map((o) => o.trim().slice(0, 40)).filter(Boolean).slice(0, 4);
+    if (!q || opts.length < 2) throw new Error('A poll needs a question and at least 2 options.');
+    const { data, error } = await supabase.from('polls').insert({ room_id: roomId, member_id: meId, question: q, options: opts }).select().single();
+    if (error) throw new Error(error.message);
+    const poll = data as PollRow;
+    const { error: msgError } = await supabase.from('messages').insert({ room_id: roomId, member_id: meId, body: `📊 ${q}`, poll_id: poll.id });
+    if (msgError) throw new Error(msgError.message);
+    await load();
+  };
+
+  /** Your vote; tapping your current choice takes it back. */
+  const vote = async (pollId: string, choice: number) => {
+    const mine = votes.find((v) => v.poll_id === pollId && v.member_id === meId);
+    setVotes((cur) => [...cur.filter((v) => !(v.poll_id === pollId && v.member_id === meId)), ...(mine?.choice === choice ? [] : [{ poll_id: pollId, member_id: meId, choice, created_at: new Date().toISOString() }])]);
+    const { error } =
+      mine?.choice === choice
+        ? await supabase.from('poll_votes').delete().eq('poll_id', pollId).eq('member_id', meId)
+        : await supabase.from('poll_votes').upsert({ poll_id: pollId, member_id: meId, choice });
+    if (error) {
+      void load();
+      throw new Error(error.message);
+    }
+  };
+
+  return { polls, votes, ask, vote };
 }

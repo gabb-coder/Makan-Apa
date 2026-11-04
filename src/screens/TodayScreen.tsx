@@ -23,6 +23,8 @@ import { shareCard } from '../lib/shareCard';
 import { MealPhotos, photoUrl, ReactionBar } from '../components/MealSocial';
 import { JoinRequestList } from '../components/JoinRequests';
 import { PlaceNotes } from '../components/PlaceNotes';
+import { EventsCard } from '../components/Events';
+import { useEvents } from '../lib/useEvents';
 import { useJoinRequests } from '../lib/useJoinRequests';
 import { clockTime } from '../lib/vote';
 import { PickSheet } from '../components/PickSheet';
@@ -93,6 +95,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const events = useEvents(room.id, me.id);
   const joinRequests = useJoinRequests(room.id, hostOf(members, room.host_id)?.id === me.id);
   // Whoever's in for this meal: they decide, answer, pick and pay.
   const present = members.filter((m) => !away.has(m.id));
@@ -618,6 +621,8 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         />
       )}
 
+      {!proposalView && <EventsCard room={room} me={me} members={members} api={events} extras={extras} onToast={onToast} />}
+
       {vetoedNames.length > 0 && isDecider && todayEntry?.status === 'pending' && (
         <p style={{ margin: '-6px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
           {t('Off the wheel today: {names}', { names: joinNames(vetoedNames) })}
@@ -808,6 +813,10 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           todayDeciderId={todayEntry?.decider_id ?? decider.id}
           today={today}
           onClose={() => setPeopleOpen(false)}
+          onPlan={() => {
+            setPeopleOpen(false);
+            setPlanOpen(true);
+          }}
           onInvite={() => run(async () => {
             const message = await shareInvite(room.code, room.name);
             if (message) onToast(message);

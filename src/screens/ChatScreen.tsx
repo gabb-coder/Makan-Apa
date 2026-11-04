@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { locale, t } from '../lib/i18n';
 import { roomTitle } from '../lib/session';
-import type { Chat } from '../lib/useChat';
-import type { MemberRow, MessageRow, RoomRow } from '../lib/supabase';
+import { usePolls, type Chat } from '../lib/useChat';
+import type { MemberRow, MessageRow, PollRow, PollVoteRow, RoomRow } from '../lib/supabase';
 
 interface Props {
   room: RoomRow;
@@ -34,6 +34,8 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
   const [selected, setSelected] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const memberById = new Map(members.map((m) => [m.id, m]));
+  const polls = usePolls(room.id, me.id);
+  const [asking, setAsking] = useState(false);
   const messages = chat.messages;
 
   // Reading the chat marks it read, including messages that arrive while it's open.
@@ -83,6 +85,24 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
       );
       lastDate = date;
       lastAuthor = '';
+    }
+    const poll = m.poll_id ? polls.polls.find((p) => p.id === m.poll_id) : undefined;
+    if (poll) {
+      rows.push(
+        <PollBubble
+          key={m.id}
+          poll={poll}
+          votes={polls.votes.filter((v) => v.poll_id === poll.id)}
+          author={memberById.get(m.member_id)}
+          mine={m.member_id === me.id}
+          meId={me.id}
+          members={members}
+          time={clock(m.created_at)}
+          onVote={(choice) => polls.vote(poll.id, choice).catch((e: unknown) => onToast(e instanceof Error ? e.message : t('Something went wrong. Try again.')))}
+        />,
+      );
+      lastAuthor = '';
+      continue;
     }
     rows.push(
       <Bubble
@@ -148,6 +168,9 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
         }}
         style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}
       >
+        <button type="button" className="icon-btn press" aria-label={t('Start a poll')} onClick={() => setAsking(true)} style={{ width: 48, height: 48, flexShrink: 0, fontSize: 20 }}>
+          📊
+        </button>
         <label htmlFor="chat-input" className="sr-only">
           {t('Message')}
         </label>
@@ -180,7 +203,162 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
           </svg>
         </button>
       </form>
+      {asking && (
+        <PollSheet
+          onClose={() => setAsking(false)}
+          onAsk={async (q, opts) => {
+            await polls.ask(q, opts);
+            setAsking(false);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+/** A poll in the chat: tap an option to vote (tap it again to take your vote back). */
+function PollBubble({
+  poll,
+  votes,
+  author,
+  mine,
+  meId,
+  members,
+  time,
+  onVote,
+}: {
+  poll: PollRow;
+  votes: PollVoteRow[];
+  author: MemberRow | undefined;
+  mine: boolean;
+  meId: string;
+  members: MemberRow[];
+  time: string;
+  onVote: (choice: number) => void;
+}) {
+  const myChoice = votes.find((v) => v.member_id === meId)?.choice;
+  const total = votes.length;
+  const nameOf = (id: string) => (id === meId ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
+  return (
+    <div style={{ alignSelf: mine ? 'flex-end' : 'flex-start', width: 'min(86%, 340px)', marginTop: 8 }}>
+      <div role="group" aria-label={t('Poll by {name}: {question}', { name: author?.name ?? t('Someone'), question: poll.question })} className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: 'none' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+          📊 {mine ? t('Your poll') : t('Poll by {name}', { name: author?.name ?? t('Someone') })} · {time}
+        </span>
+        <span style={{ fontSize: 16, fontWeight: 800, overflowWrap: 'anywhere' }}>{poll.question}</span>
+        {poll.options.map((opt, i) => {
+          const who = votes.filter((v) => v.choice === i);
+          const pct = total ? Math.round((who.length / total) * 100) : 0;
+          return (
+            <button
+              key={i}
+              type="button"
+              className="press"
+              aria-pressed={myChoice === i}
+              onClick={() => onVote(i)}
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                textAlign: 'left',
+                minHeight: 44,
+                padding: '8px 12px',
+                borderRadius: 12,
+                border: `1.5px solid ${myChoice === i ? 'var(--accent)' : 'var(--border)'}`,
+                background: 'var(--surface)',
+                color: 'var(--ink)',
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              <span aria-hidden="true" style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: 'var(--accent-tint)', transition: 'width 0.4s var(--ease-out)' }} />
+              <span style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ overflowWrap: 'anywhere' }}>
+                  {myChoice === i ? '✓ ' : ''}
+                  {opt}
+                </span>
+                <span style={{ flexShrink: 0, color: 'var(--ink-2)' }}>{who.length}</span>
+              </span>
+              {who.length > 0 && <span style={{ position: 'relative', display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>{who.map((v) => nameOf(v.member_id)).join(', ')}</span>}
+            </button>
+          );
+        })}
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{total === 1 ? t('1 vote') : t('{n} votes', { n: total })}</span>
+      </div>
+    </div>
+  );
+}
+
+function PollSheet({ onClose, onAsk }: { onClose: () => void; onAsk: (question: string, options: string[]) => Promise<void> }) {
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ready = question.trim() && options.filter((o) => o.trim()).length >= 2;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <form
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="poll-title"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!ready) return;
+          setBusy(true);
+          setError(null);
+          try {
+            await onAsk(question, options);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : t('Something went wrong. Try again.'));
+            setBusy(false);
+          }
+        }}
+      >
+        <h2 id="poll-title" className="title title--sm" style={{ fontSize: 22 }}>
+          {t('Start a poll')}
+        </h2>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="field-label">{t('Question')}</span>
+          <input id="poll-question" className="input" maxLength={120} placeholder={t('e.g. Mamak after dinner?')} value={question} onChange={(e) => setQuestion(e.target.value)} autoFocus />
+        </label>
+        {options.map((o, i) => (
+          <label key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="field-label">{t('Option {n}', { n: i + 1 })}</span>
+            <input
+              className="input"
+              maxLength={40}
+              placeholder={i === 0 ? t('Yes') : i === 1 ? t('No') : ''}
+              value={o}
+              onChange={(e) => setOptions((cur) => cur.map((x, j) => (j === i ? e.target.value : x)))}
+            />
+          </label>
+        ))}
+        {options.length < 4 && (
+          <button type="button" className="press" onClick={() => setOptions((cur) => [...cur, ''])} style={{ alignSelf: 'flex-start', minHeight: 40, padding: 0, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
+            {t('+ Add an option')}
+          </button>
+        )}
+        {error && (
+          <p role="alert" style={{ margin: 0, color: 'var(--danger)', fontSize: 14 }}>
+            {error}
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn--secondary press" onClick={onClose} style={{ flex: 1 }}>
+            {t('Cancel')}
+          </button>
+          <button type="submit" className="btn btn--primary press" disabled={busy || !ready} style={{ flex: 2 }}>
+            {t('Post poll')}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
