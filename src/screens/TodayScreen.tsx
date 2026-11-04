@@ -875,6 +875,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           online={online}
           todayDeciderId={todayEntry?.decider_id ?? decider.id}
           today={today}
+          meal={meal}
           onClose={() => setPeopleOpen(false)}
           onPlan={() => {
             setPeopleOpen(false);

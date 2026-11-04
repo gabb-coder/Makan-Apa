@@ -102,9 +102,9 @@ export function MeetupCard({
           {t('Heading out together?')}
         </h2>
         <div style={{ display: 'flex', gap: 8 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 120, flexShrink: 0 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 148, flexShrink: 0 }}>
             <span className="field-label">{t('Leaving at')}</span>
-            <input type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} style={{ height: 44 }} />
+            <input type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} style={{ height: 44, padding: '0 10px' }} />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flexGrow: 1, minWidth: 0 }}>
             <span className="field-label">{t('Meet at')}</span>
