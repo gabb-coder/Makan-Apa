@@ -424,11 +424,11 @@ input[type='date'].input::-webkit-date-and-time-value {
 }
 
 .tab-in-right {
-  animation: tabInRight 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: tabInRight 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 .tab-in-left {
-  animation: tabInLeft 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: tabInLeft 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 @keyframes tabInRight {
@@ -483,8 +483,11 @@ input[type='date'].input::-webkit-date-and-time-value {
   transform: scale(0.95);
 }
 
+/* Entrance animations fill "backwards", never "both": a transform animation left in effect
+   makes its element the containing block for absolute children, so a sheet opened from inside
+   a card would be squeezed into that card instead of covering the screen. */
 .fade-up {
-  animation: fadeUp 0.55s var(--ease-out) both;
+  animation: fadeUp 0.55s var(--ease-out) backwards;
 }
 
 @keyframes fadeUp {
@@ -678,7 +681,7 @@ input[type='date'].input::-webkit-date-and-time-value {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  animation: sheetUp 0.35s var(--ease-out) both;
+  animation: sheetUp 0.35s var(--ease-out) backwards;
 }
 
 .add-menu {
@@ -693,7 +696,7 @@ input[type='date'].input::-webkit-date-and-time-value {
   box-shadow: 0 14px 34px rgba(24, 24, 27, 0.18);
   overflow: hidden;
   transform-origin: top right;
-  animation: menuIn 0.18s var(--ease-out) both;
+  animation: menuIn 0.18s var(--ease-out) backwards;
 }
 
 @keyframes menuIn {

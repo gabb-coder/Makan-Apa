@@ -81,6 +81,8 @@ test('polls in chat, events, allergy flags and plan ahead from people', async ({
 
     // Wei plans an event; Alex says they're going
     await wei.click('text=🎉 Plan an event');
+    // The sheet covers the screen, not just the Events card it was opened from
+    expect((await wei.locator('.sheet-backdrop').boundingBox())!.height).toBeGreaterThan(600);
     await wei.fill('#event-title', 'Birthday dinner');
     await wei.click('.sheet button:text-is("Plan it")');
     await expect(wei.locator('#event-sheet-title')).toContainText('Birthday dinner');

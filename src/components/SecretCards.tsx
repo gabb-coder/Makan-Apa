@@ -57,7 +57,7 @@ export function SecretCollectCard({ decider, members, me, pickedIds, myPick, onP
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      animation: 'popInScale 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+                      animation: 'popInScale 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
                     }}
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
@@ -177,7 +177,7 @@ export function SecretRevealCard({ picks, me, result, onSpin, onDone, onError }:
         flexDirection: 'column',
         gap: 14,
         flexShrink: 0,
-        animation: 'popInScale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+        animation: 'popInScale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

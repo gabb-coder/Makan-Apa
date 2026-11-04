@@ -154,7 +154,7 @@ export function ChatScreen({ room, me, members, today, chat, onBack, onToast }: 
           <p style={{ margin: 'auto', color: 'var(--muted)' }}>{t('Loading…')}</p>
         ) : messages.length === 0 ? (
           <p style={{ margin: 'auto', maxWidth: 260, textAlign: 'center', fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
-            {t('No messages yet. Say who’s running late, or suggest something else to eat.')}
+            {t('No messages yet. Say who’s running late, or tap 📊 to start a poll.')}
           </p>
         ) : (
           rows
