@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, tNodes } from '../lib/i18n';
+import { mealBillMessage, settleUpMessage, whatsAppLink } from '../lib/billMessage';
 import { balances, billTotals, formatRM, guestHost, guestKey, isGuest, parsePct, parseRM, settleUp, shares, type BillItem } from '../lib/money';
 import type { MealBillRow, MemberRow, SettlementRow } from '../lib/supabase';
 import type { RoomExtras } from '../lib/useRoomExtras';
@@ -42,10 +43,13 @@ export function BillSheet({
   guests = [],
   forEvent = false,
   usuals,
+  when,
   onSaved,
   onClose,
 }: {
   dayEntryId: string;
+  /** The meal's date ("Thu 5 Nov"), for the message to the group. */
+  when?: string;
   /** What each person had last time here: fills their empty line in one tap. */
   usuals?: Map<string, Usual>;
   /** Friends people brought who aren't on the app (from Who's in): a new bill gets a line each. */
@@ -491,6 +495,18 @@ export function BillSheet({
           {busy ? t('Saving…') : t('Save bill')}
         </button>
         {bill && (
+          <a
+            className="btn btn--secondary press"
+            href={whatsAppLink(mealBillMessage(bill, members, when ? `${when} · ${foodName}` : foodName))}
+            target="_blank"
+            rel="noreferrer"
+            style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}
+          >
+            {WHATSAPP_ICON}
+            {t('Share to WhatsApp')}
+          </a>
+        )}
+        {bill && (
           <button type="button" className="btn btn--danger press" disabled={busy} onClick={() => void remove()} style={{ flexShrink: 0 }}>
             {t('Remove bill')}
           </button>
@@ -499,6 +515,12 @@ export function BillSheet({
     </div>
   );
 }
+
+const WHATSAPP_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z" />
+  </svg>
+);
 
 async function copy(text: string, onToast: (m: string) => void) {
   try {
@@ -579,28 +601,9 @@ function PayLines({ member, onToast }: { member: MemberRow | undefined; onToast:
   );
 }
 
-/** The text sent to the group chat: who owes whom, and where to pay them. */
-export function settleUpMessage(roomName: string, bills: MealBillRow[], settlements: SettlementRow[], members: MemberRow[]): string {
-  const byId = new Map(members.map((m) => [m.id, m]));
-  const name = (id: string) => byId.get(id)?.name ?? t('Someone');
-  const plan = settleUp(balances(bills, settlements));
-  if (!plan.length) return `${roomName}: ${t("Everyone's settled up.")}`;
-  const lines = [`${roomName} · ${t('Who owes whom')}`, ''];
-  for (const p of plan) lines.push(`• ${t('{from} owes {to} {amount}', { from: name(p.from_member), to: name(p.to_member), amount: formatRM(p.amount_cents) })}`);
-  const payees = [...new Set(plan.map((p) => p.to_member))].map((id) => byId.get(id)).filter((m): m is MemberRow => !!m && !!(m.pay_duitnow || m.pay_bank));
-  if (payees.length) {
-    lines.push('');
-    for (const m of payees) {
-      const how = [m.pay_duitnow && `${t('DuitNow')} ${m.pay_duitnow}`, m.pay_bank].filter(Boolean).join(' · ');
-      lines.push(t('Pay {name}: {how}', { name: m.name, how }));
-    }
-  }
-  return lines.join('\n');
-}
-
 /** Bills tab: what everyone's owed, the payments that settle it, and recent paybacks. */
 export function SettleUpCard({
-  roomName,
+  labelOf,
   bills,
   settlements,
   members,
@@ -609,7 +612,8 @@ export function SettleUpCard({
   onUndo,
   onToast,
 }: {
-  roomName: string;
+  /** "Thu 5 Nov · Mamak" for a bill, for the message to the group. */
+  labelOf: (bill: MealBillRow) => string | null;
   bills: MealBillRow[];
   settlements: SettlementRow[];
   members: MemberRow[];
@@ -686,14 +690,12 @@ export function SettleUpCard({
           })}
           <a
             className="btn btn--secondary press"
-            href={`https://wa.me/?text=${encodeURIComponent(settleUpMessage(roomName, bills, settlements, members))}`}
+            href={whatsAppLink(settleUpMessage(bills, settlements, members, labelOf))}
             target="_blank"
             rel="noreferrer"
             style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, textDecoration: 'none' }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-              <path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z" />
-            </svg>
+            {WHATSAPP_ICON}
             {t('Share to WhatsApp')}
           </a>
         </div>

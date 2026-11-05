@@ -1,3 +1,4 @@
+import { shortDate } from '../lib/dates';
 import { useEffect, useState } from 'react';
 import { locale, t } from '../lib/i18n';
 import { meetupIcs, openIcs } from '../lib/ics';
@@ -269,6 +270,7 @@ function EventSheet({
         <BillSheet
           dayEntryId={event.id}
           foodName={event.title}
+          when={shortDate(new Date(event.starts_at))}
           forEvent
           members={members}
           meId={me.id}

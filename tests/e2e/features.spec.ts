@@ -61,7 +61,19 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
     await alex.goto('/#bills');
     await expect(bills(alex)).toContainText('You owe RM19.80');
     await expect(bills(alex)).toContainText('DuitNow: 012-345 6789');
-    await expect(alex.locator('a:has-text("Share to WhatsApp")')).toHaveAttribute('href', /wa\.me.*RM19\.80/);
+    // The message to the group: the meal and who to transfer to, not the room or who owes whom
+    const shared = decodeURIComponent((await alex.locator('a:has-text("Share to WhatsApp")').getAttribute('href'))!);
+    expect(shared).toMatch(/🧾 .+ · Nasi Lemak/);
+    expect(shared).toContain('Transfer to Wei\nDuitNow 012-345 6789\n• Alex RM19.80');
+    expect(shared).not.toContain('Feature check');
+    expect(shared).not.toContain('owes');
+    // One meal's bill shares the same way, from its sheet
+    await alex.locator('main button', { hasText: 'Nasi Lemak' }).first().click();
+    const meal = decodeURIComponent((await alex.locator('.sheet a:has-text("Share to WhatsApp")').getAttribute('href'))!);
+    expect(meal).toContain('Total RM33.00');
+    expect(meal).toContain('Transfer to Wei');
+    await alex.keyboard.press('Escape');
+    await alex.locator('.sheet').waitFor({ state: 'detached' });
     await alex.click('button:text-is("Mark paid")');
     await expect(bills(alex)).toContainText("Everyone's settled up.");
     await wei.click('nav >> text=History');
