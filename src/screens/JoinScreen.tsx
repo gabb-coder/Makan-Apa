@@ -354,13 +354,20 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
               type="button"
               className="btn btn--secondary press"
               disabled={busy !== null}
-              onClick={() => setNaming(true)}
+              // Its own key, and no default action: otherwise this same button becomes the
+              // submit button mid-tap and the room is created before it can be named.
+              key="start-create"
+              onClick={(e) => {
+                e.preventDefault();
+                setNaming(true);
+              }}
               style={{ height: 50, borderRadius: 16 }}
             >
               {busy === 'create' ? t('Creating…') : t('Create a new room')}
             </button>
           ) : (
             <button
+              key="create"
               type="submit"
               className="btn btn--primary press"
               disabled={busy !== null}
