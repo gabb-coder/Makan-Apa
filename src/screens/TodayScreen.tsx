@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import {
   ChoosingCard,
@@ -111,6 +111,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
   const [swipeSheet, setSwipeSheet] = useState(false);
+  // The pick this phone just said yes to: its Undo lasts 10 minutes.
+  const [acceptedHere, setAcceptedHere] = useState<string | null>(null);
+  useEffect(() => {
+    if (!acceptedHere) return;
+    const timer = window.setTimeout(() => setAcceptedHere(null), 10 * 60_000);
+    return () => window.clearTimeout(timer);
+  }, [acceptedHere]);
   const [suggesting, setSuggesting] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const events = useEvents(room.id, me.id);
@@ -218,6 +225,16 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       : tomorrow.id === me.id
         ? t('Next turn, {day}: yours.', { day: both ? `${dayLabel(nextDay)} ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayLabel(nextDay) })
         : t('Next turn, {day}: {name}.', { day: both ? `${dayLabel(nextDay)} ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayLabel(nextDay), name: tomorrow.name });
+
+  // A new deal while you were swiping: say so, rather than the deck just vanishing.
+  const lastRound = useRef<number | null>(null);
+  useEffect(() => {
+    const round = todayEntry?.swipe_options ? (todayEntry.swipe_round ?? 0) : null;
+    if (round !== null && lastRound.current !== null && round > lastRound.current && todayEntry?.decider_id !== me.id) {
+      onToast(t('{name} dealt new foods. Swipe again!', { name: nameFor(todayEntry?.decider_id ?? null) }));
+    }
+    lastRound.current = round;
+  }, [todayEntry?.swipe_round, todayEntry?.swipe_options]);
 
   // A mystery pick: agreed at once and hidden from the others till the meet-up.
   const [mysteryOn, setMysteryOn] = useState(false);
@@ -373,7 +390,9 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         }
         busy={busy}
         // A secret-picks result is everyone's, so it's final.
-        onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
+        // Only whoever said yes, on this phone, for a few minutes: a mistap, not a change of heart
+        // hours later (and never on a vote, swipe, mystery or fixed day, which nobody "accepted").
+        onUndo={acceptedHere === todayEntry.id ? () => run(async () => { await days.undoAccept(); setAcceptedHere(null); }) : undefined}
       />
     );
   } else if (secret && todayEntry.status === 'pending') {
@@ -406,7 +425,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       );
     } else {
       let sub: string;
-      if (others.length === 0) sub = t('Nobody else here yet, so your pick is final.');
+      if (others.length === 0) sub = members.length > 1 ? t('Everyone else is out today, so your pick is final.') : t('Nobody else here yet, so your pick is final.');
       else if (latestVeto) sub = t('{name} vetoed {food}. Pick again.', { name: nameFor(latestVeto.member_id), food: latestVeto.rejected_food });
       else if (room.veto_limit === 0) sub = t('No vetoes today, so your pick stands.');
       else if (others.length === 1) {
@@ -470,7 +489,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         lastEatenText={lastEatenText(past ? daysBetween(past.entry_date, today) : null, past ? nameFor(past.decider_id, t('you')) : null)}
         vetoesLeft={myVetoesLeft}
         busy={busy}
-        onAccept={() => run(days.accept)}
+        onAccept={() =>
+          run(async () => {
+            await days.accept();
+            setAcceptedHere(todayEntry.id);
+          })
+        }
         onVeto={() =>
           run(async () => {
             const done = await days.veto(todayFood.name);
@@ -678,6 +702,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           place={todayEntry.meet_place ?? null}
           today={today}
           timeZone={room.timezone}
+          waitingOn={todayEntry.mystery_hidden ? decider.name : undefined}
           places={todayEntry.mystery_hidden ? [t('Lobby')] : [t('Lobby'), ...suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).map((sp) => sp.name)]}
           late={members.filter((m) => m.id !== me.id && attendance.statusOf(m.id, today, meal) === 'late')}
           myStatus={attendance.statusOf(me.id, today, meal)}
@@ -1077,7 +1102,7 @@ function MysteryCard({ decider, meal, meetAt, timeZone }: { decider: string; mea
       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>
         {time
           ? t('{name} picked, and it suits everyone. Meet at {time}: you’ll find out what it is then.', { name: decider, time })
-          : t('{name} picked, and it suits everyone. You’ll find out once they say where to meet.', { name: decider })}
+          : t('{name} picked, and it suits everyone. You’ll find out at the meet-up time, once they set one.', { name: decider })}
       </p>
     </section>
   );

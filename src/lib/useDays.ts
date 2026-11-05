@@ -206,6 +206,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   // Quick vote: everyone's votes for today, live.
   const [votes, setVotes] = useState<VoteRow[]>([]);
   const votingId = todayEntry?.vote_options ? todayEntry.id : null;
+  const voteRound = todayEntry?.vote_round ?? 0;
   useEffect(() => {
     setVotes([]);
     if (!votingId) return;
@@ -214,10 +215,11 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         .from('votes')
         .select('*')
         .eq('day_entry_id', votingId)
+        .eq('round', voteRound)
         .then(({ data }) => data && setVotes(data as VoteRow[]));
     void loadVotes();
     const channel = supabase
-      .channel(`votes:${votingId}`)
+      .channel(`votes:${votingId}:${voteRound}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'votes', filter: `day_entry_id=eq.${votingId}` }, () => void loadVotes())
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') void loadVotes();
@@ -225,7 +227,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [votingId]);
+  }, [votingId, voteRound]);
 
   // Swipe to match: everyone's swipes on today's deal, live.
   const [swipes, setSwipes] = useState<SwipeRow[]>([]);
@@ -379,7 +381,18 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** The decider puts 2–3 options to a vote that closes in `minutes`. */
   const startVote = async (options: string[], minutes: number) => {
     const ok = await updateToday(
-      { vote_options: options, vote_ends_at: new Date(Date.now() + minutes * 60_000).toISOString(), food_option_id: null, custom_food: null, method: null, status: 'pending' },
+      {
+        vote_options: options,
+        vote_ends_at: new Date(Date.now() + minutes * 60_000).toISOString(),
+        // A new round, so nobody's choice from a called-off vote counts.
+        vote_round: (todayEntry?.vote_round ?? 0) + 1,
+        swipe_options: null,
+        food_option_id: null,
+        custom_food: null,
+        method: null,
+        status: 'pending',
+        auto_picked: false,
+      },
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
     );
     if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
@@ -387,23 +400,25 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** The decider calls the vote off. */
   const cancelVote = async () => {
     await updateToday({ vote_options: null, vote_ends_at: null }, (q) => q.neq('status', 'accepted'));
-    await supabase.from('votes').delete().eq('day_entry_id', todayEntry?.id ?? '');
   };
   const castVote = async (choice: number) => {
     if (!todayEntry) return;
-    const row = { day_entry_id: todayEntry.id, member_id: meId, choice };
+    const row = { day_entry_id: todayEntry.id, member_id: meId, round: todayEntry.vote_round ?? 0, choice };
     setVotes((cur) => [...cur.filter((v) => v.member_id !== meId), { ...row, created_at: new Date().toISOString() }]);
     const { error: err } = await supabase.from('votes').upsert(row);
     if (err) throw new Error(err.message);
   };
   /** The vote is over: lock in the winner. Only the first phone to get here counts. */
   const settleVote = (pick: Pick) =>
-    updateToday({ food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted' }, (q) => q.neq('status', 'accepted'));
+    updateToday(
+      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', vote_options: null, vote_ends_at: null, auto_picked: false },
+      (q) => q.neq('status', 'accepted').not('vote_options', 'is', null),
+    );
 
   /** The decider deals out foods for everyone to swipe on; dealing again starts a new round. */
   const startSwipe = async (options: string[]) => {
     const ok = await updateToday(
-      { swipe_options: options, swipe_round: (todayEntry?.swipe_round ?? 0) + 1, vote_options: null, vote_ends_at: null, food_option_id: null, custom_food: null, method: null, status: 'pending' },
+      { swipe_options: options, swipe_round: (todayEntry?.swipe_round ?? 0) + 1, vote_options: null, vote_ends_at: null, food_option_id: null, custom_food: null, method: null, status: 'pending', auto_picked: false },
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
     );
     if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
@@ -423,7 +438,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** The decider goes with one of the matches: everyone's had their say, so it's agreed. */
   const settleSwipe = (pick: Pick) =>
     updateToday(
-      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', swipe_options: null },
+      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', swipe_options: null, auto_picked: false },
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
     );
 
@@ -436,7 +451,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** The decider picks a mystery: agreed at once (no vetoes), hidden from the others for now. */
   const proposeMystery = async (pick: Pick) => {
     const ok = await updateToday(
-      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', mystery: true, mystery_revealed: false },
+      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', mystery: true, mystery_revealed: false, vote_options: null, vote_ends_at: null, swipe_options: null, auto_picked: false },
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
     );
     if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));

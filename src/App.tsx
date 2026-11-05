@@ -460,7 +460,10 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
   let wheelSend: WheelSend;
   if (room.decision_mode === 'secret' && !decidedFood) wheelSend = { kind: 'note', text: t('Secret picks are on today. Make your pick on Today.') };
   else if (decidedFood) wheelSend = { kind: 'note', text: t("Today's already decided: {food}. Spin for fun.", { food: decidedFood.name }) };
-  else if (!isDecider) wheelSend = { kind: 'note', text: t("It's {name}'s turn, so only they can send today's pick.", { name: decider?.name ?? t('someone else') }) };
+  else if (!decider) wheelSend = { kind: 'note', text: t('No turns today: it’s a day off. To eat together anyway, tap “Eating together anyway?” on Today. Spin for fun.') };
+  else if (!isDecider) wheelSend = { kind: 'note', text: t("It's {name}'s turn, so only they can send today's pick.", { name: decider.name }) };
+  // While a swipe or a vote is on, the pick comes out of that.
+  else if (entry?.swipe_options || entry?.vote_options) wheelSend = { kind: 'note', text: t('A swipe or a vote is on, so today’s pick comes from that. Spin for fun.') };
   else if (!sendTo) wheelSend = { kind: 'send', label: t('Lock it in') };
   else wheelSend = { kind: 'send', label: entry?.status === 'proposed' ? t('Send instead') : t('Send to {name}', { name: sendTo }) };
 
@@ -574,9 +577,10 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
             vetoedNames={vetoedNames}
             extraNote={dietNote + (wet ? ' ' + t('🌧 Rainy, so foods you can get under cover come up more.') : '')}
             boost={wheelBoost}
-            onSpin={liveSpin.send}
+            // Only the decider's spin, before anything's decided, shows on everyone's phone.
+            onSpin={wheelSend.kind === 'send' ? liveSpin.send : undefined}
             timezone={room.timezone}
-            turnLabel={isDecider ? t('Your turn') : t("{name}'s turn", { name: decider?.name ?? t('Someone') })}
+            turnLabel={!decider ? t('Day off') : isDecider ? t('Your turn') : t("{name}'s turn", { name: decider.name })}
             send={wheelSend}
             onBack={() => go('today')}
             onSend={sendFromWheel}

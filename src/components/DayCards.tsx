@@ -386,7 +386,7 @@ export function ProposalCard({ food, method, autoAt, deciderName, lastEatenText,
               {t('Veto · {n} left today', { n: vetoesLeft })}
             </button>
             <p style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-              {t('A veto sends it back to {name} and takes {food} off the wheel for today.', { name: deciderName, food: food.name })}
+              {t('A veto sends it back to {name} and takes {food} off the wheel for today. A yes from anyone locks it in for everyone.', { name: deciderName, food: food.name })}
             </p>
           </>
         ) : (
@@ -539,7 +539,7 @@ export function DecidedCard({ food, tomorrowText, here, nearby, extras, busy, on
             onClick={onUndo}
             style={{ height: 44, border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 600 }}
           >
-            {t('Undo')}
+            {t('Undo my yes')}
           </button>
         )}
       </div>
