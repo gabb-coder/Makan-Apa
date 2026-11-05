@@ -61,7 +61,7 @@ export async function setWeeklyRecap(on: boolean): Promise<void> {
 }
 
 /** Ask for permission (needs a tap), subscribe this browser and save it for `memberId`. */
-export async function enableReminders(memberId: string, hour: number): Promise<void> {
+export async function enableReminders(memberId: string, hour: number, allRooms = true): Promise<void> {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
     throw new Error(t('Notifications are blocked for this site. Allow them in your browser settings, then try again.'));
@@ -87,7 +87,8 @@ export async function enableReminders(memberId: string, hour: number): Promise<v
   if (error) throw new Error(error.message);
   // Notifications come in the app's language, and cover every room on this phone.
   await setPushPrefs(null).catch(() => {});
-  await followAllRooms(hour).catch(() => {});
+  // Unmuting one room signs up just that one, not the others you muted too.
+  if (allRooms) await followAllRooms(hour).catch(() => {});
 }
 
 async function subscribedMembers(endpoint: string): Promise<Set<string>> {
@@ -145,7 +146,7 @@ export async function notifiedMembers(): Promise<Set<string> | null> {
 export async function notifyRoom(memberId: string): Promise<void> {
   const reg = pushSupport() === 'ok' && Notification.permission === 'granted' ? await navigator.serviceWorker.getRegistration() : undefined;
   const sub = await reg?.pushManager.getSubscription();
-  if (!sub) return enableReminders(memberId, 11);
+  if (!sub) return enableReminders(memberId, 11, false);
   const { data } = await supabase.rpc('push_status', { p_endpoint: sub.endpoint });
   const hour = ((data as { remind_hour: number }[] | null) ?? [])[0]?.remind_hour ?? 11;
   const { keys } = sub.toJSON() as { keys: { p256dh: string; auth: string } };

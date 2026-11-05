@@ -50,6 +50,9 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
   const [waiting, setWaiting] = useState<{ requestId: string; room: string } | null>(null);
 
   const trimmed = name.trim();
+  // After "Create a new room", the form is just for creating: no code, no Join button.
+  const creating = naming && canCreate;
+  const showJoin = canJoin && !creating;
 
   useEffect(() => {
     if (!waiting) return;
@@ -83,6 +86,9 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
       document.getElementById('join-code')?.focus();
       return;
     }
+    // Already in that room on this phone: open it, rather than joining again as someone new.
+    const known = kind === 'join' ? rooms.find((r) => r.code === code) : undefined;
+    if (known && onOpenRoom) return onOpenRoom(known.roomId);
     setBusy(kind);
     setError(null);
     try {
@@ -102,7 +108,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
           s,
           s.room.name
             ? t('“{name}” created. Share code {code} with your kakis.', { name: roomTitle(s.room), code: s.room.code })
-            : t('Room {code} created. Share code {code} with your kakis.', { code: s.room.code }),
+            : t('Room created. Share code {code} with your kakis.', { code: s.room.code }),
         );
       }
     } catch (e) {
@@ -201,7 +207,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          run(canJoin ? 'join' : 'create');
+          run(showJoin ? 'join' : 'create');
         }}
         style={{
           position: 'relative',
@@ -222,7 +228,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
             {mode === 'create' ? t('Create a new room') : t('Join a room')}
           </h2>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: canJoin ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: showJoin ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label htmlFor="join-name" className="field-label">{t('Your name')}</label>
             <input
@@ -239,7 +245,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
               style={{ height: 52 }}
             />
           </div>
-          {canJoin && (
+          {showJoin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <label htmlFor="join-code" className="field-label">{t('Room code')}</label>
               <input
@@ -303,7 +309,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
           </p>
         )}
 
-        {canJoin && (
+        {showJoin && (
           <button
             type="submit"
             className="btn btn--primary press"
@@ -343,18 +349,25 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
           </div>
         )}
         {canCreate &&
-          (canJoin ? (
+          (showJoin ? (
             <button
               type="button"
               className="btn btn--secondary press"
               disabled={busy !== null}
-              onClick={() => (naming ? run('create') : setNaming(true))}
+              // Its own key, and no default action: otherwise this same button becomes the
+              // submit button mid-tap and the room is created before it can be named.
+              key="start-create"
+              onClick={(e) => {
+                e.preventDefault();
+                setNaming(true);
+              }}
               style={{ height: 50, borderRadius: 16 }}
             >
-              {busy === 'create' ? t('Creating…') : naming ? t('Create room') : t('Create a new room')}
+              {busy === 'create' ? t('Creating…') : t('Create a new room')}
             </button>
           ) : (
             <button
+              key="create"
               type="submit"
               className="btn btn--primary press"
               disabled={busy !== null}
@@ -363,6 +376,11 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
               {busy === 'create' ? t('Creating…') : t('Create room')}
             </button>
           ))}
+        {creating && canJoin && (
+          <button type="button" onClick={() => setNaming(false)} style={{ alignSelf: 'center', minHeight: 40, border: 'none', background: 'none', color: 'var(--accent-text)', fontWeight: 700, fontSize: 14 }}>
+            {t('I have a room code to join')}
+          </button>
+        )}
       </form>
 
       {rooms.length > 0 && onOpenRoom && !onBack && (

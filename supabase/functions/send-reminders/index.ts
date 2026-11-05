@@ -55,7 +55,11 @@ interface Room {
   meals: 'lunch' | 'both';
 }
 const ROOM_COLUMNS = 'id, timezone, rotation_start, rotation_offset, eat_days, skip_holidays, decision_mode, fixed_days, meals';
-const rotationOf = (r: Room): Rotation => ({ start: r.rotation_start, offset: r.rotation_offset ?? 0, cal: { days: r.eat_days, holidays: r.skip_holidays } });
+// Fixed days ("Friday is mamak") use nobody's turn, like in the app (src/lib/rotation.ts).
+const rotationOf = (r: Room): Rotation => {
+  const fixed = Object.keys(r.fixed_days ?? {}).map(Number);
+  return { start: r.rotation_start, offset: r.rotation_offset ?? 0, cal: { days: r.eat_days, holidays: r.skip_holidays, ...(fixed.length ? { fixed } : {}) } };
+};
 interface Member {
   id: string;
   room_id: string;
@@ -456,7 +460,8 @@ Deno.serve(async (req) => {
         continue;
       }
       summary[result]++;
-      await db.from('push_subscriptions').update({ last_nudge_on: local.date }).eq('id', sub.id);
+      // A nudge that didn't go out is tried again next run, not in 3 days.
+      if (result === 'sent') await db.from('push_subscriptions').update({ last_nudge_on: local.date }).eq('id', sub.id);
     }
 
     if (reminder) {

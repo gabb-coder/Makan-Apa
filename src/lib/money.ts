@@ -116,17 +116,20 @@ export function shares(bill: Bill): Map<string, number> {
     if (subs.size) raw = allocate(bill.amount_cents, subs);
   }
   raw ??= evenly(bill.amount_cents, bill.split_between);
+  // Birthday: what they had themselves is spread over everyone else, in proportion to what each
+  // had. A guest they brought is still charged to them.
+  const bday = bill.birthday;
+  const theirs = bday ? (raw.get(bday) ?? 0) : 0;
+  if (bday && raw.has(bday)) raw.set(bday, 0);
   // Guests' shares go to whoever brought them.
   const out = new Map<string, number>();
   for (const [id, cents] of raw) out.set(guestHost(id), (out.get(guestHost(id)) ?? 0) + cents);
-  // Birthday: their share is spread over everyone else, in proportion to what they had.
-  const bday = bill.birthday;
-  if (bday && out.has(bday) && out.size > 1) {
-    const theirs = out.get(bday)!;
-    out.delete(bday);
-    const others = [...out.values()].some((c) => c > 0) ? new Map(out) : new Map([...out.keys()].map((id) => [id, 1]));
-    for (const [id, cents] of allocate(theirs, others)) out.set(id, (out.get(id) ?? 0) + cents);
-    out.set(bday, 0);
+  if (bday && theirs > 0) {
+    const others = new Map([...out].filter(([id, c]) => id !== bday && c > 0));
+    // Nobody else had anything: whoever paid covers it (unless that's the birthday person too).
+    if (!others.size && bill.paid_by !== bday) others.set(bill.paid_by, 1);
+    if (others.size) for (const [id, cents] of allocate(theirs, others)) out.set(id, (out.get(id) ?? 0) + cents);
+    else out.set(bday, (out.get(bday) ?? 0) + theirs);
   }
   return out;
 }
@@ -195,6 +198,29 @@ export function unsettled<B extends Bill, P extends Payment>(bills: B[], payment
     if (settleUp(balances(seenBills, seenPays)).length === 0) since = i + 1;
   });
   return events.slice(since).flatMap((e) => (e.bill ? [e.bill] : []));
+}
+
+/**
+ * The bills one person is still settling: the ones after the last moment *their own* balance was
+ * square, that they paid or had a share of. In a busy room everyone is rarely square at once, so
+ * this is what to name when telling someone what they still owe for.
+ */
+export function unsettledFor<B extends Bill, P extends Payment>(member: string, bills: B[], payments: P[], billAt: (b: B) => number, payAt: (p: P) => number): B[] {
+  const events = [
+    ...bills.filter((b) => !b.treat && !b.from_kitty).map((b) => ({ when: billAt(b), bill: b as B | null, pay: null as P | null })),
+    ...payments.map((p) => ({ when: payAt(p), bill: null as B | null, pay: p as P | null })),
+  ].sort((a, b) => a.when - b.when);
+  let balance = 0;
+  let since = 0;
+  events.forEach((e, i) => {
+    if (e.bill) balance += (e.bill.paid_by === member ? e.bill.amount_cents : 0) - (shares(e.bill).get(member) ?? 0);
+    if (e.pay) balance += (e.pay.from_member === member ? e.pay.amount_cents : 0) - (e.pay.to_member === member ? e.pay.amount_cents : 0);
+    if (balance === 0) since = i + 1;
+  });
+  return events
+    .slice(since)
+    .flatMap((e) => (e.bill ? [e.bill] : []))
+    .filter((b) => b.paid_by === member || (shares(b).get(member) ?? 0) > 0);
 }
 
 export interface TopUp {

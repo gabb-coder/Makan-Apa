@@ -56,7 +56,10 @@ export function MeetupCard({
   calendar,
   warning,
   extra,
+  waitingOn,
 }: {
+  /** Only someone else can set it (a mystery's decider): their name, and no editing here. */
+  waitingOn?: string;
   /** Shown under a set meet-up, e.g. lifts. */
   extra?: React.ReactNode;
   /** E.g. the meet-up place looks closed at that time. */
@@ -75,13 +78,13 @@ export function MeetupCard({
   onSave: (meetAt: string | null, place: string | null) => Promise<void>;
   onLate: () => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(!meetAt);
+  const [editing, setEditing] = useState(!meetAt && !waitingOn);
   const [time, setTime] = useState(() => (meetAt ? clockTime(meetAt, timeZone) : soonest(timeZone)));
   const [where, setWhere] = useState(place ?? '');
   const [busy, setBusy] = useState(false);
   const now = useNow(30_000);
   useEffect(() => {
-    setEditing(!meetAt);
+    setEditing(!meetAt && !waitingOn);
     if (meetAt) setTime(clockTime(meetAt, timeZone));
     setWhere(place ?? '');
   }, [meetAt, place, timeZone]);
@@ -94,6 +97,17 @@ export function MeetupCard({
       setBusy(false);
     }
   };
+
+  if (!meetAt && waitingOn) {
+    return (
+      <section aria-labelledby="meet-label" className="card fade-up" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+        <h2 id="meet-label" className="section-label" style={{ margin: 0 }}>
+          {t('Meet-up')}
+        </h2>
+        <span style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.45 }}>{t('{name} will say when and where to meet.', { name: waitingOn })}</span>
+      </section>
+    );
+  }
 
   if (editing) {
     return (
@@ -168,9 +182,11 @@ export function MeetupCard({
             {t('I’m running late')}
           </button>
         )}
-        <button type="button" className="btn btn--secondary press" disabled={busy} onClick={() => setEditing(true)} style={{ flex: 1, height: 40, fontSize: 14 }}>
-          {t('Change')}
-        </button>
+        {!waitingOn && (
+          <button type="button" className="btn btn--secondary press" disabled={busy} onClick={() => setEditing(true)} style={{ flex: 1, height: 40, fontSize: 14 }}>
+            {t('Change')}
+          </button>
+        )}
       </div>
       {calendar && ms > 0 && (
         <button
@@ -221,10 +237,15 @@ export function VoteCard({
   const r = tally(options, votes, ids, endsAt, now);
   const mine = votes.find((v) => v.member_id === me.id)?.choice ?? null;
   const settled = useRef(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   useEffect(() => {
     if (!r.over || settled.current) return;
     settled.current = true;
-    onSettle(options[r.winner]).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+    // Nobody voted: nothing to settle, so it goes back to the decider rather than to option 1.
+    (r.voted === 0 ? onCancel() : onSettle(options[r.winner])).catch((e: unknown) => {
+      settled.current = false;
+      onError(e instanceof Error ? e.message : String(e));
+    });
   }, [r.over, r.winner]);
   const left = endsAt ? Math.max(0, Date.parse(endsAt) - now) : 0;
   const mm = Math.floor(left / 60_000);
@@ -240,7 +261,7 @@ export function VoteCard({
           {r.over ? t('Done') : `${mm}:${ss}`}
         </span>
       </div>
-      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('{n} of {total} voted. Ties go to the first option.', { n: r.voted, total: ids.length })}</span>
+      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('{n} of {total} voted. Ties go to the first option; if nobody votes, it goes back to the decider.', { n: r.voted, total: ids.length })}</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {options.map((o, i) => {
           const who = voters.filter((m) => votes.some((v) => v.member_id === m.id && v.choice === i));
@@ -283,8 +304,16 @@ export function VoteCard({
         })}
       </div>
       {isDecider && !r.over && (
-        <button type="button" className="press" onClick={() => onCancel().catch(() => {})} style={{ minHeight: 40, border: 'none', background: 'none', color: 'var(--muted)', fontSize: 14, fontWeight: 600 }}>
-          {t('Call off the vote')}
+        <button
+          type="button"
+          className="press"
+          onClick={() => {
+            if (!confirmCancel) return setConfirmCancel(true);
+            onCancel().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+          }}
+          style={{ minHeight: 40, border: 'none', background: 'none', color: confirmCancel ? 'var(--danger)' : 'var(--muted)', fontSize: 14, fontWeight: confirmCancel ? 700 : 600 }}
+        >
+          {confirmCancel ? t('Tap again to call off the vote') : t('Call off the vote')}
         </button>
       )}
     </section>

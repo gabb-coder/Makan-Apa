@@ -107,10 +107,14 @@ export function forgetSession(roomId = storage.get(ROOM_KEY)) {
   if (roomId) saveKnownRooms(knownRooms().filter((r) => r.roomId !== roomId));
 }
 
-/** Leave on this phone: drop this account's access to the room, then forget it. */
+/**
+ * Leave on this phone: drop this account's access to the room, then forget it. If the server
+ * didn't get it (offline), nothing changes, so you're not left in everyone's turns unawares.
+ */
 export async function leaveRoom(roomId: string): Promise<void> {
+  const { error } = await supabase.rpc('leave_room', { p_room_id: roomId });
+  if (error) throw new Error(t('Couldn’t leave just now. Check your connection and try again.'));
   forgetSession(roomId);
-  await supabase.rpc('leave_room', { p_room_id: roomId });
 }
 
 /** Code to prefill on the Join screen: a ?join= link first, then the last room used here. */

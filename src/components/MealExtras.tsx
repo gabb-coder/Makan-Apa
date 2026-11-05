@@ -53,6 +53,9 @@ export function RatingRow({ entryId, ratings, meId, label = t('How was it?'), on
 /** "Who paid?" or "Wei paid RM42.00 · split 3 ways", opening the bill sheet (also on the Bills tab). */
 export function BillLine({ bill, members, meId, onOpen }: { bill: MealBillRow | null; members: MemberRow[]; meId: string; onOpen: () => void }) {
   const nameOf = (id: string) => (id === meId ? t('You') : members.find((m) => m.id === id)?.name ?? t('Someone'));
+  // Everyone on the bill's lines, guests included (or the even split, for older bills).
+  const people = bill ? [...new Set(bill.items?.length ? bill.items.flatMap((i) => i.people) : bill.split_between)] : [];
+  const split = people.length === 1 ? (people[0] === bill?.paid_by ? t('no split') : t('for 1 person')) : t('split {n} ways', { n: people.length });
   return (
     <button
       type="button"
@@ -61,7 +64,7 @@ export function BillLine({ bill, members, meId, onOpen }: { bill: MealBillRow | 
       style={{ alignSelf: 'center', minHeight: 44, padding: '0 12px', border: 'none', background: 'none', fontSize: 14, fontWeight: 700, color: bill ? 'var(--ink-2)' : 'var(--accent-text)' }}
     >
       {bill
-        ? `${bill.from_kitty ? t('{amount} from the kitty', { amount: formatRM(bill.amount_cents) }) : bill.treat ? t('{name} treated everyone 🎉 ({amount})', { name: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents) }) : t('{name} paid {amount}', { name: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents) })} · ${bill.split_between.length === 1 ? t('no split') : t('split {n} ways', { n: bill.split_between.length })} · ${t('Edit')}`
+        ? `${bill.from_kitty ? t('{amount} from the kitty', { amount: formatRM(bill.amount_cents) }) : bill.treat ? t('{name} treated everyone 🎉 ({amount})', { name: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents) }) : t('{name} paid {amount}', { name: nameOf(bill.paid_by), amount: formatRM(bill.amount_cents) })} · ${split} · ${t('Edit')}`
         : t('Who paid? Split the bill')}
     </button>
   );

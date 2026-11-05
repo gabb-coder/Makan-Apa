@@ -1,5 +1,6 @@
 import { passport } from './passport';
 import { monthStats } from './stats';
+import type { EatCalendar } from './calendar';
 import type { Food } from './foods';
 import type { Spot } from './nearby';
 import type { DayEntryRow, MealBillRow, MemberRow, VetoRow } from './supabase';
@@ -23,6 +24,8 @@ export interface Wrapped {
   topPlace: { name: string; count: number } | null;
   /** Everything the room's bills came to, in sen. */
   spent: number;
+  /** How many meals had a bill (for the average). */
+  billed: number;
   topPayer: { name: string; cents: number } | null;
 }
 
@@ -35,15 +38,17 @@ export function wrapped(
   bills: MealBillRow[],
   spots: Spot[],
   nameOf: (id: string) => string,
+  cal?: EatCalendar,
 ): Wrapped {
-  const stats = monthStats(period, entries, vetoes, members, foodsById);
+  const stats = monthStats(period, entries, vetoes, members, foodsById, cal);
   const inPeriod = entries.filter((e) => e.entry_date.startsWith(period));
   const ids = new Set(inPeriod.map((e) => e.id));
   const stamps = passport(inPeriod, foodsById, spots);
-  // Kitty bills were already paid into the pot, so they'd count twice.
-  const periodBills = bills.filter((b) => ids.has(b.day_entry_id) && !b.from_kitty);
+  // Everything the meals cost, kitty bills included; but the kitty's keeper only handed over the
+  // pot's cash, so they don't count as having paid.
+  const periodBills = bills.filter((b) => ids.has(b.day_entry_id));
   const paid = new Map<string, number>();
-  for (const b of periodBills) paid.set(b.paid_by, (paid.get(b.paid_by) ?? 0) + b.amount_cents);
+  for (const b of periodBills) if (!b.from_kitty) paid.set(b.paid_by, (paid.get(b.paid_by) ?? 0) + b.amount_cents);
   const payer = [...paid].sort((a, b) => b[1] - a[1])[0];
   const ranked = [...stats.deciders].filter((d) => d.count > 0).sort((a, b) => b.count - a.count);
   const decider = ranked[0];
@@ -61,6 +66,7 @@ export function wrapped(
     places: stamps.length,
     topPlace: stamps[0] ? { name: stamps[0].spot.name, count: stamps[0].count } : null,
     spent: periodBills.reduce((n, b) => n + b.amount_cents, 0),
+    billed: periodBills.length,
     topPayer: payer ? { name: nameOf(payer[0]), cents: payer[1] } : null,
   };
 }

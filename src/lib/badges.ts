@@ -1,6 +1,7 @@
 import { tk } from './i18n';
 import { balances } from './money';
 import { bestNoRepeatStreak } from './stats';
+import type { EatCalendar } from './calendar';
 import { weeksAllDone } from './challenges';
 import type { DayEntryRow, MealBillRow, SettlementRow, VetoRow } from './supabase';
 
@@ -25,17 +26,19 @@ interface Input {
   settlements: SettlementRow[];
   /** Today in the room, for weekly challenges. */
   today?: string;
+  /** The room's eating days: weekends off don't break a no-repeat streak. */
+  cal?: EatCalendar;
 }
 
 /** Same food, whether picked from the list or typed in. */
 const keyOf = (e: DayEntryRow) => e.food_option_id ?? `custom:${(e.custom_food ?? '').toLowerCase()}`;
 
 /** Your badges in a room, earned first, from what the room has eaten and paid. */
-export function badgesFor({ meId, entries, vetoes, bills, settlements, today = new Date().toISOString().slice(0, 10) }: Input): Badge[] {
+export function badgesFor({ meId, entries, vetoes, bills, settlements, today = new Date().toISOString().slice(0, 10), cal }: Input): Badge[] {
   const meals = entries
     .filter((e) => e.status === 'accepted' && (e.food_option_id || e.custom_food))
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.meal ?? 'lunch').localeCompare(b.meal ?? 'lunch'));
-  const streak = bestNoRepeatStreak(meals.map((entry) => ({ entry, key: keyOf(entry) })));
+  const streak = bestNoRepeatStreak(meals.map((entry) => ({ entry, key: keyOf(entry) })), cal);
   const tried = new Set(meals.map(keyOf)).size;
   const decided = meals.filter((e) => e.decider_id === meId).length;
   const paid = bills.filter((b) => b.paid_by === meId).length;

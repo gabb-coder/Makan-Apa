@@ -124,6 +124,15 @@ button:disabled {
   cursor: default;
 }
 
+/* A button you can't press yet looks it. */
+.btn:disabled,
+.chip:disabled,
+.icon-btn:disabled {
+  opacity: 0.45;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
 a {
   color: var(--accent-text);
 }

@@ -26,21 +26,25 @@ export function DealsRow({ api, spots, today, onOpenSpot, onPost }: { api: Deals
     <div className="chip-row" role="list" aria-label={t('Deals')} style={{ gap: 8 }}>
       {api.deals.map((d) => {
         const spot = d.spot_id ? byId.get(d.spot_id) : undefined;
-        return (
-          <button
-            key={d.id}
-            type="button"
-            role="listitem"
-            className="chip press"
-            onClick={() => (spot ? onOpenSpot(spot) : undefined)}
-            style={{ flexShrink: 0, maxWidth: 260, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, height: 'auto', padding: '8px 12px', textAlign: 'left' }}
-          >
+        const style = { flexShrink: 0, maxWidth: 260, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, height: 'auto', padding: '8px 12px', textAlign: 'left' } as const;
+        const body = (
+          <>
             <span style={{ fontSize: 13, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>🏷️ {d.title}</span>
             <span style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
               {spot ? `${spot.name} · ` : ''}
               {untilText(d.ends_on, today)}
             </span>
+          </>
+        );
+        // Only a deal at a place opens something; the others are just notes.
+        return spot ? (
+          <button key={d.id} type="button" role="listitem" className="chip press" onClick={() => onOpenSpot(spot)} style={style}>
+            {body}
           </button>
+        ) : (
+          <div key={d.id} role="listitem" className="chip" style={style}>
+            {body}
+          </div>
         );
       })}
       <button type="button" className="chip press" onClick={onPost} style={{ flexShrink: 0 }}>

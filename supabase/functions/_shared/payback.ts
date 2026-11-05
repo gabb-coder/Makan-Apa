@@ -1,6 +1,6 @@
 // Who to nudge about paying someone back, and for which meals. Shared by send-reminders and
 // its tests (src/lib/payback.test.ts).
-import { balances, settleUp, shares, unsettled, type Bill, type Payment } from './money.ts';
+import { balances, settleUp, shares, unsettledFor, type Bill, type Payment } from './money.ts';
 
 /** Wait this many days after a meal before the first nudge, and between nudges. */
 export const NUDGE_AFTER_DAYS = 3;
@@ -25,7 +25,8 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00
 export function paybackNudge(member: string, bills: DatedBill[], payments: DatedPayment[], today: string): { owed: Payment[]; bills: DatedBill[] } | null {
   const owed = settleUp(balances(bills, payments)).filter((p) => p.from_member === member);
   if (!owed.length) return null;
-  const mine = unsettled(bills, payments, (b) => b.at, (p) => p.at).filter((b) => b.paid_by !== member && (shares(b).get(member) ?? 0) > 0);
+  // Only the meals since this person was last square, so nothing they've already paid for.
+  const mine = unsettledFor(member, bills, payments, (b) => b.at, (p) => p.at).filter((b) => b.paid_by !== member && (shares(b).get(member) ?? 0) > 0);
   if (!mine.length) return null;
   const oldest = mine.reduce((d, b) => (b.date < d ? b.date : d), mine[0].date);
   if (daysBetween(oldest, today) < NUDGE_AFTER_DAYS) return null;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import {
   ChoosingCard,
@@ -51,7 +51,7 @@ import { SuggestCard } from '../components/SuggestCard';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor, rotationOf } from '../lib/rotation';
-import { eatingDaysAfter, holidayOn, isEatingDay } from '../lib/calendar';
+import { eatingDaysAfter, holidayOn, isEatingDay, turnCalendar } from '../lib/calendar';
 import type { DayEntryRow, Meal, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
 import type { RoomExtras } from '../lib/useRoomExtras';
@@ -111,6 +111,13 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
   const [swipeSheet, setSwipeSheet] = useState(false);
+  // The pick this phone just said yes to: its Undo lasts 10 minutes.
+  const [acceptedHere, setAcceptedHere] = useState<string | null>(null);
+  useEffect(() => {
+    if (!acceptedHere) return;
+    const timer = window.setTimeout(() => setAcceptedHere(null), 10 * 60_000);
+    return () => window.clearTimeout(timer);
+  }, [acceptedHere]);
   const [suggesting, setSuggesting] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const events = useEvents(room.id, me.id);
@@ -201,17 +208,33 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   }, [todayEntry, justVetoed]);
 
   // The next day the room eats together: tomorrow, or after a weekend or holiday.
-  const nextDay = eatingDaysAfter(today, rot.cal, 1)[0] ?? addDays(today, 1);
+  const nextDay = eatingDaysAfter(today, turnCalendar(rot.cal), 1)[0] ?? addDays(today, 1);
   const tomorrow = deciderFor(members, rot, nextDay, meal, attendance.awayOn(nextDay, meal));
+  // Rooms deciding lunch and dinner say which meal the next turn is for.
+  const both = room.meals === 'both';
   const tomorrowText = !tomorrow
     ? ''
     : nextDay === addDays(today, 1)
       ? tomorrow.id === me.id
-        ? t('Tomorrow it’s your turn to decide.')
-        : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name })
+        ? both
+          ? meal === 'dinner' ? t('Tomorrow’s dinner is your turn.') : t('Tomorrow’s lunch is your turn.')
+          : t('Tomorrow it’s your turn to decide.')
+        : both
+          ? meal === 'dinner' ? t('Tomorrow’s dinner is {name}’s turn.', { name: tomorrow.name }) : t('Tomorrow’s lunch is {name}’s turn.', { name: tomorrow.name })
+          : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name })
       : tomorrow.id === me.id
-        ? t('Next turn, {day}: yours.', { day: dayLabel(nextDay) })
-        : t('Next turn, {day}: {name}.', { day: dayLabel(nextDay), name: tomorrow.name });
+        ? t('Next turn, {day}: yours.', { day: both ? `${dayLabel(nextDay)} ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayLabel(nextDay) })
+        : t('Next turn, {day}: {name}.', { day: both ? `${dayLabel(nextDay)} ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayLabel(nextDay), name: tomorrow.name });
+
+  // A new deal while you were swiping: say so, rather than the deck just vanishing.
+  const lastRound = useRef<number | null>(null);
+  useEffect(() => {
+    const round = todayEntry?.swipe_options ? (todayEntry.swipe_round ?? 0) : null;
+    if (round !== null && lastRound.current !== null && round > lastRound.current && todayEntry?.decider_id !== me.id) {
+      onToast(t('{name} dealt new foods. Swipe again!', { name: nameFor(todayEntry?.decider_id ?? null) }));
+    }
+    lastRound.current = round;
+  }, [todayEntry?.swipe_round, todayEntry?.swipe_options]);
 
   // A mystery pick: agreed at once and hidden from the others till the meet-up.
   const [mysteryOn, setMysteryOn] = useState(false);
@@ -367,7 +390,9 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         }
         busy={busy}
         // A secret-picks result is everyone's, so it's final.
-        onUndo={!isDecider && !secret ? () => run(days.undoAccept) : undefined}
+        // Only whoever said yes, on this phone, for a few minutes: a mistap, not a change of heart
+        // hours later (and never on a vote, swipe, mystery or fixed day, which nobody "accepted").
+        onUndo={acceptedHere === todayEntry.id ? () => run(async () => { await days.undoAccept(); setAcceptedHere(null); }) : undefined}
       />
     );
   } else if (secret && todayEntry.status === 'pending') {
@@ -400,7 +425,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
       );
     } else {
       let sub: string;
-      if (others.length === 0) sub = t('Nobody else here yet, so your pick is final.');
+      if (others.length === 0) sub = members.length > 1 ? t('Everyone else is out today, so your pick is final.') : t('Nobody else here yet, so your pick is final.');
       else if (latestVeto) sub = t('{name} vetoed {food}. Pick again.', { name: nameFor(latestVeto.member_id), food: latestVeto.rejected_food });
       else if (room.veto_limit === 0) sub = t('No vetoes today, so your pick stands.');
       else if (others.length === 1) {
@@ -464,7 +489,12 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         lastEatenText={lastEatenText(past ? daysBetween(past.entry_date, today) : null, past ? nameFor(past.decider_id, t('you')) : null)}
         vetoesLeft={myVetoesLeft}
         busy={busy}
-        onAccept={() => run(days.accept)}
+        onAccept={() =>
+          run(async () => {
+            await days.accept();
+            setAcceptedHere(todayEntry.id);
+          })
+        }
         onVeto={() =>
           run(async () => {
             const done = await days.veto(todayFood.name);
@@ -507,7 +537,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             ? t('Make this my secret pick instead')
             : t('Make this my secret pick')
           : undefined
-        : isDecider && todayEntry.status === 'pending'
+        : isDecider && todayEntry.status === 'pending' && !todayEntry.vote_options && !todayEntry.swipe_options
           ? others.length === 0
             ? t('Pick this for today')
             : t('Send to {name}', { name: waitingFor })
@@ -516,7 +546,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
   /* ----- Up next and Recently ----- */
 
-  const upNext = eatingDaysAfter(today, rot.cal, 3).map((date) => ({ date, member: deciderFor(members, rot, date, meal, attendance.awayOn(date, meal)) }));
+  const upNext = eatingDaysAfter(today, turnCalendar(rot.cal), 3).map((date) => ({ date, member: deciderFor(members, rot, date, meal, attendance.awayOn(date, meal)) }));
 
   const backHome = onHome && (
     <button type="button" className="icon-btn press" aria-label={t('All rooms')} onClick={onHome} style={{ flexShrink: 0, alignSelf: 'center' }}>
@@ -672,6 +702,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           place={todayEntry.meet_place ?? null}
           today={today}
           timeZone={room.timezone}
+          waitingOn={todayEntry.mystery_hidden ? decider.name : undefined}
           places={todayEntry.mystery_hidden ? [t('Lobby')] : [t('Lobby'), ...suiting(spotsFor(todayFood, 6, [...roomSpots, ...SUNWAY_SPOTS])).map((sp) => sp.name)]}
           late={members.filter((m) => m.id !== me.id && attendance.statusOf(m.id, today, meal) === 'late')}
           myStatus={attendance.statusOf(me.id, today, meal)}
@@ -1071,7 +1102,7 @@ function MysteryCard({ decider, meal, meetAt, timeZone }: { decider: string; mea
       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>
         {time
           ? t('{name} picked, and it suits everyone. Meet at {time}: you’ll find out what it is then.', { name: decider, time })
-          : t('{name} picked, and it suits everyone. You’ll find out once they say where to meet.', { name: decider })}
+          : t('{name} picked, and it suits everyone. You’ll find out at the meet-up time, once they set one.', { name: decider })}
       </p>
     </section>
   );

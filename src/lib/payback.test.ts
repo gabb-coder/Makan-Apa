@@ -22,6 +22,17 @@ describe('payback nudges', () => {
     expect(paybackNudge('alex', bills, payments, '2026-11-05')?.bills.map((b) => b.id)).toEqual(['b', 'a']);
   });
 
+  it('names only meals this person still owes for, even when others never paid back', () => {
+    const three = (id: string, date: string) => ({ ...bill(id, date, 'a', 3000), split_between: ['a', 'b', 'c'] });
+    const two = { ...bill('nov4', '2026-11-04', 'a', 2000), split_between: ['a', 'b'] };
+    const bills = [three('oct1', '2026-10-01'), two];
+    const paidBack = [{ from_member: 'b', to_member: 'a', amount_cents: 1000, at: Date.parse('2026-10-02T00:00:00Z') }];
+    // B paid for 1 Oct already; C never did. The 4 Nov meal is only a day old: no nudge yet.
+    expect(paybackNudge('b', bills, paidBack, '2026-11-05')).toBeNull();
+    expect(paybackNudge('b', bills, paidBack, '2026-11-07')?.bills.map((b) => b.id)).toEqual(['nov4']);
+    expect(paybackNudge('c', bills, paidBack, '2026-11-07')?.bills.map((b) => b.id)).toEqual(['oct1']);
+  });
+
   it('leaves out whoever paid, and anyone who owes nothing', () => {
     expect(paybackNudge('wei', [bill('b1', '2026-11-01')], [], '2026-11-05')).toBeNull();
     const paid = [{ from_member: 'alex', to_member: 'wei', amount_cents: 1000, at: Date.parse('2026-11-02T00:00:00Z') }];

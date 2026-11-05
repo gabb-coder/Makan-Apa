@@ -52,7 +52,7 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
 
     // Bills tab: Wei adds DuitNow; Alex sees what to pay and where
     await wei.click('nav >> text=Bills');
-    await expect(bills(wei)).toContainText('Alex owes You RM19.80');
+    await expect(bills(wei)).toContainText('Alex owes you RM19.80');
     await expect(bills(wei)).toContainText('receipt');
     await wei.click('main button:text-is("Add")');
     await wei.fill('#pay-duitnow', '012-345 6789');
@@ -78,8 +78,9 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
     const [roomId, weiId] = await wei.evaluate(() => [localStorage.getItem('makan.roomId'), localStorage.getItem('makan.memberId')]);
     await alex.goto(`/?room=${roomId}&paid=${weiId}:1980#bills`);
     await expect(alex.getByRole('dialog')).toContainText('Paid Wei back?');
-    await expect(alex.getByRole('dialog')).toContainText('RM19.80');
-    await alex.click('[role="dialog"] button:text-is("Yes, I’ve paid")');
+    await expect(alex.getByRole('dialog').locator('input')).toHaveValue('19.80');
+    await expect(alex.getByRole('dialog')).toContainText('Right now the app has you owing Wei RM19.80.');
+    await alex.click('[role="dialog"] button:text-is("Record RM19.80 to Wei")');
     await expect(bills(alex)).toContainText("Everyone's settled up.");
     await wei.click('nav >> text=History');
     await expect(wei.getByText('Room favourites')).toBeVisible();

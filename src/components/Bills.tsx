@@ -77,7 +77,9 @@ export function BillSheet({
   const eaters = present.length ? present : members;
   const [paidBy, setPaidBy] = useState(bill?.paid_by ?? start?.paidBy ?? meId);
   // Paid from the kitty: its keeper hands over the cash, and nobody owes anybody.
-  const [fromKitty, setFromKitty] = useState(!!bill?.from_kitty && !!kittyKeeper);
+  // A kitty bill stays one even if the kitty's since been turned off.
+  const [fromKitty, setFromKitty] = useState(!!bill?.from_kitty);
+  const kittyPayer = kittyKeeper ?? (bill?.from_kitty ? bill.paid_by : null);
   const broughtGuests = guests.flatMap((g) => Array.from({ length: g.count }, (_, n) => guestKey(g.hostId, n + 1)));
   const [rows, setRows] = useState<Row[]>(() => {
     if (bill?.items?.length) return bill.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: i.people }));
@@ -101,9 +103,20 @@ export function BillSheet({
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const scanInput = useRef<HTMLInputElement>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [scan, setScan] = useState<{ state: 'reading'; progress: number } | { state: 'done'; found: number; note: string | null } | { state: 'failed'; message: string } | null>(null);
 
   /** Read a receipt photo into lines, charges and the receipt photo. */
+  // Lines typed already: scanning asks whether to replace them or add to them.
+  const [scanAsk, setScanAsk] = useState(false);
+  const scanMode = useRef<'replace' | 'add'>('replace');
+  const hasLines = rows.some((x) => x.name.trim() || x.price.trim());
+  const startScan = (mode?: 'replace' | 'add') => {
+    if (!mode && hasLines) return setScanAsk(true);
+    scanMode.current = mode ?? 'replace';
+    setScanAsk(false);
+    scanInput.current?.click();
+  };
   const scanPhoto = async (file: File) => {
     setScan({ state: 'reading', progress: 0 });
     try {
@@ -114,7 +127,8 @@ export function BillSheet({
         return;
       }
       // The scanned lines replace the empty ones; anything already typed stays.
-      setRows((cur) => [...cur.filter((x) => x.name.trim() || x.price.trim()), ...r.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: [] }))]);
+      const scanned = r.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: [] }));
+      setRows((cur) => (scanMode.current === 'add' ? [...cur.filter((x) => x.name.trim() || x.price.trim()), ...scanned] : scanned));
       if (r.servicePct !== null) {
         setServiceOn(true);
         setServicePct(String(r.servicePct));
@@ -165,11 +179,20 @@ export function BillSheet({
     else if (!r.people.length) problems.push(t('Line {n}: tick who had it.', { n: i + 1 }));
     else items.push({ name: r.name.trim().slice(0, 40), cents, people: r.people });
   });
+  if (items.length > 60) problems.push(t('A bill can have up to 60 lines. Combine a few, like the drinks.'));
   if (svc === null) problems.push(t('Service charge should be a percentage from 0 to 30.'));
   if (sst === null) problems.push(t('SST should be a percentage from 0 to 30.'));
   const totals = billTotals(items, svc ?? 0, sst ?? 0);
   const each = items.length ? shares({ paid_by: paidBy, amount_cents: totals.total, split_between: [], items, birthday: treat && !fromKitty ? null : birthday || null }) : new Map<string, number>();
   const ready = items.length > 0 && problems.length === 0 && totals.total <= 10_000_000;
+  // Changed since it was saved: sharing would send the old numbers.
+  const dirty =
+    !!bill &&
+    (totals.total !== bill.amount_cents ||
+      (fromKitty ? kittyPayer : paidBy) !== bill.paid_by ||
+      (treat && !fromKitty) !== !!bill.treat ||
+      (birthday || null) !== (bill.birthday ?? null) ||
+      JSON.stringify(items.map((i) => [i.cents, i.people])) !== JSON.stringify((bill.items?.length ? bill.items : [{ cents: bill.amount_cents, people: bill.split_between }]).map((i) => [i.cents, i.people])));
 
   const update = (key: number, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const togglePerson = (r: Row, id: string) => update(r.key, { people: r.people.includes(id) ? r.people.filter((p) => p !== id) : [...r.people, id] });
@@ -191,8 +214,8 @@ export function BillSheet({
       const receipt_path = uploaded ?? (keepOld ? oldPath : null);
       await extras.saveBill({
         day_entry_id: dayEntryId,
-        paid_by: fromKitty && kittyKeeper ? kittyKeeper : paidBy,
-        from_kitty: fromKitty && !!kittyKeeper,
+        paid_by: fromKitty && kittyPayer ? kittyPayer : paidBy,
+        from_kitty: fromKitty && !!kittyPayer,
         amount_cents: totals.total,
         split_between: [...new Set(items.flatMap((i) => i.people).map(guestHost))],
         treat: treat && !fromKitty,
@@ -271,7 +294,7 @@ export function BillSheet({
                 {nameOf(m.id)}
               </button>
             ))}
-            {kittyKeeper && (
+            {kittyPayer && (
               <button type="button" className="chip press" aria-pressed={fromKitty} onClick={() => setFromKitty(true)}>
                 {t('🫙 The kitty')}
               </button>
@@ -286,7 +309,7 @@ export function BillSheet({
             type="button"
             className="btn btn--secondary press"
             disabled={scan?.state === 'reading'}
-            onClick={() => scanInput.current?.click()}
+            onClick={() => startScan()}
             style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -294,6 +317,19 @@ export function BillSheet({
             </svg>
             {scan?.state === 'reading' ? t('Reading the receipt… {n}%', { n: Math.round(scan.progress * 100) }) : t('Scan the receipt')}
           </button>
+          {scanAsk && (
+            <div role="group" aria-label={t('You’ve typed some lines already')} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 12, background: 'var(--accent-tint)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{t('You’ve typed some lines already. What should the receipt do?')}</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn btn--secondary press" onClick={() => startScan('replace')} style={{ flex: 1, height: 40, fontSize: 14 }}>
+                  {t('Replace them')}
+                </button>
+                <button type="button" className="btn btn--secondary press" onClick={() => startScan('add')} style={{ flex: 1, height: 40, fontSize: 14 }}>
+                  {t('Add to them')}
+                </button>
+              </div>
+            </div>
+          )}
           <input
             ref={scanInput}
             type="file"
@@ -375,7 +411,7 @@ export function BillSheet({
                 </button>
               </div>
               <div role="group" aria-label={t('Line {n}: who had it', { n: i + 1 })} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {members.length > 2 && (
+                {everyone.length >= 2 && (
                   <button
                     type="button"
                     className="chip press"
@@ -561,10 +597,18 @@ export function BillSheet({
             {error ?? problems[0]}
           </p>
         )}
+        {!error && !problems.length && !items.length && (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>{t('Add a price to at least one line to save.')}</p>
+        )}
         <button type="submit" className="btn btn--primary press" disabled={busy || !ready} style={{ height: 52, flexShrink: 0 }}>
           {busy ? t('Saving…') : t('Save bill')}
         </button>
-        {bill && (
+        {bill && dirty && (
+          <button type="button" className="btn btn--secondary press" disabled style={{ height: 44, flexShrink: 0 }}>
+            {t('Save first to share to WhatsApp')}
+          </button>
+        )}
+        {bill && !dirty && (
           <a
             className="btn btn--secondary press"
             href={whatsAppLink(mealBillMessage(bill, members, when ? `${when} · ${foodName}` : foodName))}
@@ -577,9 +621,22 @@ export function BillSheet({
           </a>
         )}
         {bill && (
-          <button type="button" className="btn btn--danger press" disabled={busy} onClick={() => void remove()} style={{ flexShrink: 0 }}>
-            {t('Remove bill')}
-          </button>
+          <>
+            {confirmRemove && extras.settlements.length > 0 && (
+              <p role="alert" style={{ margin: 0, fontSize: 13, lineHeight: 1.45, color: 'var(--danger)' }}>
+                {t('Paybacks already recorded stay. Removing this bill can turn them into money owed the other way, so check Settle up afterwards.')}
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn btn--danger press"
+              disabled={busy}
+              onClick={() => (confirmRemove ? void remove() : setConfirmRemove(true))}
+              style={{ flexShrink: 0 }}
+            >
+              {confirmRemove ? t('Tap again to remove the bill') : t('Remove bill')}
+            </button>
+          </>
         )}
       </form>
     </div>
@@ -681,7 +738,10 @@ export function SettleUpCard({
   onRecord,
   onUndo,
   onToast,
+  onRecordOther,
 }: {
+  /** "Record a payment": money sent that isn't one of the suggested paybacks. */
+  onRecordOther?: () => void;
   /** "Thu 5 Nov · Mamak" for a bill, for the message to the group. */
   labelOf: (bill: MealBillRow) => string | null;
   bills: MealBillRow[];
@@ -742,7 +802,11 @@ export function SettleUpCard({
               <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ flexGrow: 1, fontSize: 15 }}>
-                    {p.from_member === meId ? tNodes('{from} owe {to} {amount}', owes) : tNodes('{from} owes {to} {amount}', owes)}
+                    {p.from_member === meId
+                      ? tNodes('{from} owe {to} {amount}', owes)
+                      : p.to_member === meId
+                        ? tNodes('{from} owes you {amount}', owes)
+                        : tNodes('{from} owes {to} {amount}', owes)}
                   </span>
                   <button
                     type="button"
@@ -770,12 +834,19 @@ export function SettleUpCard({
           </a>
         </div>
       )}
+      {onRecordOther && (
+        <button type="button" className="press" onClick={onRecordOther} style={{ alignSelf: 'flex-start', minHeight: 40, padding: 0, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
+          {t('+ Record a payment')}
+        </button>
+      )}
       {recent.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 10, borderTop: '1px solid var(--divider)' }}>
           {recent.map((s) => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--muted)' }}>
               <span style={{ flexGrow: 1 }}>
-                {t('{from} paid {to} back {amount}', { from: nameOf(s.from_member), to: nameOf(s.to_member), amount: formatRM(s.amount_cents) })}
+                {s.to_member === meId
+                  ? t('{from} paid you back {amount}', { from: nameOf(s.from_member), amount: formatRM(s.amount_cents) })
+                  : t('{from} paid {to} back {amount}', { from: nameOf(s.from_member), to: nameOf(s.to_member), amount: formatRM(s.amount_cents) })}
               </span>
               <button
                 type="button"
@@ -935,22 +1006,35 @@ export function PayDetailsCard({ me, onSave, onQrChanged }: { me: MemberRow; onS
   );
 }
 
-/** From "I've paid" on a payback nudge: one tap to mark it paid. */
+/**
+ * Record money you sent someone: from "I've paid" on a payback nudge (who and how much filled in),
+ * or "Record a payment" on Settle up. The amount can always be changed, since what the app
+ * suggests can shift when bills change.
+ */
 export function PaidBackSheet({
-  to,
+  to: fixedTo,
+  members,
+  meId,
   cents,
-  owedNow,
+  owedTo,
   onConfirm,
   onClose,
 }: {
-  to: MemberRow;
-  /** What the nudge said. */
-  cents: number;
-  /** What you owe them now (null while bills are still loading). */
-  owedNow: number | null;
-  onConfirm: (cents: number) => Promise<void>;
+  /** Who you paid, when known (from a nudge). */
+  to: MemberRow | null;
+  /** Everyone you could have paid, when choosing. */
+  members: MemberRow[];
+  meId: string;
+  /** The amount to start with, in sen. */
+  cents: number | null;
+  /** What you owe each person right now (null while bills are still loading). */
+  owedTo: Map<string, number> | null;
+  onConfirm: (to: string, cents: number) => Promise<void>;
   onClose: () => void;
 }) {
+  const [toId, setToId] = useState<string | null>(fixedTo?.id ?? null);
+  const owedNow = toId && owedTo ? (owedTo.get(toId) ?? 0) : null;
+  const [amount, setAmount] = useState(() => (cents ? (cents / 100).toFixed(2) : ''));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -958,23 +1042,50 @@ export function PaidBackSheet({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  // Someone may have paid part of it since the nudge went out.
-  const amount = owedNow === null ? cents : Math.min(cents, owedNow);
+  const to = members.find((m) => m.id === toId) ?? fixedTo;
+  const parsed = parseRM(amount);
+  const choices = members.filter((m) => m.id !== meId && !m.left_at);
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="paid-back-title" onClick={(e) => e.stopPropagation()}>
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center', flexShrink: 0 }} />
         <h2 id="paid-back-title" className="title title--sm" style={{ fontSize: 24 }}>
-          {t('Paid {name} back?', { name: to.name })}
+          {fixedTo ? t('Paid {name} back?', { name: fixedTo.name }) : t('Record a payment')}
         </h2>
-        {owedNow === 0 ? (
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{t('You don’t owe {name} anything now. All square!', { name: to.name })}</p>
-        ) : (
-          <>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{tNodes('This marks {amount} to {name} as paid, so it’s off everyone’s list.', { amount: <b>{formatRM(amount)}</b>, name: <b>{to.name}</b> })}</p>
-            <PayLines member={to} onToast={() => {}} />
-          </>
+        {!fixedTo && (
+          <fieldset style={sectionStyle}>
+            <legend className="field-label" style={{ padding: 0, marginBottom: 8 }}>{t('Who did you pay?')}</legend>
+            <div className="chip-row" style={{ flexWrap: 'wrap' }}>
+              {choices.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className="chip press"
+                  aria-pressed={toId === m.id}
+                  onClick={() => {
+                    setToId(m.id);
+                    const owed = owedTo?.get(m.id);
+                    if (owed && !amount) setAmount((owed / 100).toFixed(2));
+                  }}
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
+          </fieldset>
         )}
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="field-label">{t('How much did you send? (RM)')}</span>
+          <input className="input" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ height: 48, fontWeight: 700, fontSize: 18 }} />
+        </label>
+        {to && owedNow !== null && (
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+            {owedNow > 0
+              ? t('Right now the app has you owing {name} {amount}.', { name: to.name, amount: formatRM(owedNow) })
+              : t('The app has you all square with {name} right now. If you sent them money anyway, you can still record it.', { name: to.name })}
+          </p>
+        )}
+        {to && <PayLines member={to} onToast={() => {}} />}
         {error && (
           <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--danger)' }}>
             {error}
@@ -982,29 +1093,28 @@ export function PaidBackSheet({
         )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="btn btn--secondary press" onClick={onClose} style={{ flex: 1 }}>
-            {owedNow === 0 ? t('Done') : t('Not yet')}
+            {t('Not yet')}
           </button>
-          {owedNow !== 0 && (
-            <button
-              type="button"
-              className="btn btn--primary press"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setError(null);
-                try {
-                  await onConfirm(amount);
-                  onClose();
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : t('Could not save.'));
-                  setBusy(false);
-                }
-              }}
-              style={{ flex: 2 }}
-            >
-              {busy ? t('Saving…') : t('Yes, I’ve paid')}
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn--primary press"
+            disabled={busy || !to || !parsed}
+            onClick={async () => {
+              if (!to || !parsed) return;
+              setBusy(true);
+              setError(null);
+              try {
+                await onConfirm(to.id, parsed);
+                onClose();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : t('Could not save.'));
+                setBusy(false);
+              }
+            }}
+            style={{ flex: 2 }}
+          >
+            {busy ? t('Saving…') : to && parsed ? t('Record {amount} to {name}', { amount: formatRM(parsed), name: to.name }) : t('Record payment')}
+          </button>
         </div>
       </div>
     </div>

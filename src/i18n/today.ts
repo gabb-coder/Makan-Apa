@@ -132,7 +132,6 @@ export const translations: Translations = {
     'e.g. {food}': 'cth. {food}',
     '{name} was vetoed today.': '{name} dah diveto hari ini.',
     'Lock in my pick': 'Kunci pilihan saya',
-    'Lock it in': 'Kunci',
 
     // Ratings and bills
     'How was it?': 'Sedap tak?',
@@ -306,7 +305,6 @@ export const translations: Translations = {
     'e.g. {food}': '例如：{food}',
     '{name} was vetoed today.': '{name}今天已被否决。',
     'Lock in my pick': '锁定我的选择',
-    'Lock it in': '就这个',
 
     // Ratings and bills
     'How was it?': '好吃吗？',

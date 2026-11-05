@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { hostOf } from './session';
 import { supabase, type MemberRow, type RoomRow } from './supabase';
@@ -65,11 +66,14 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[], m
 
   /** Move a member up or down the rotation, renumbering everyone 0..n-1. */
   const moveMember = async (id: string, delta: -1 | 1) => {
-    const order = members.slice();
-    const i = order.findIndex((m) => m.id === id);
+    // Only the people still in the room are on the list, so swap with the next one of them (not
+    // someone who left in between); those who left go after everyone.
+    const active = members.filter((m) => !m.left_at);
+    const i = active.findIndex((m) => m.id === id);
     const j = i + delta;
-    if (i === -1 || j < 0 || j >= order.length) return;
-    [order[i], order[j]] = [order[j], order[i]];
+    if (i === -1 || j < 0 || j >= active.length) return;
+    [active[i], active[j]] = [active[j], active[i]];
+    const order = [...active, ...members.filter((m) => m.left_at)];
     const renumbered = order.map((m, idx) => ({ ...m, sort_order: idx }));
     setMembers(renumbered);
     const changed = renumbered.filter((m) => members.find((x) => x.id === m.id)?.sort_order !== m.sort_order);
@@ -88,8 +92,8 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[], m
    * lose access on their phones, and need the host's OK to come back.
    */
   const removeMember = async (id: string) => {
-    if (hostOf(members, room.host_id)?.id !== meId) throw new Error('Only the host can remove people from the room.');
-    if (id === meId) throw new Error('To leave, use “Leave room on this phone”.');
+    if (hostOf(members, room.host_id)?.id !== meId) throw new Error(t('Only the host can remove people from the room.'));
+    if (id === meId) throw new Error(t('To leave, use “Leave room” in Settings.'));
     const { error } = await supabase.rpc('remove_member', { p_member_id: id });
     if (error) throw new Error(error.message);
     await load();
@@ -99,7 +103,7 @@ export function useRoomData(initialRoom: RoomRow, initialMembers: MemberRow[], m
   const deleteRoom = async () => {
     const { data, error } = await supabase.from('rooms').delete().eq('id', roomId).select('id');
     if (error) throw new Error(error.message);
-    if (!data?.length) throw new Error('Only the host can delete the room.');
+    if (!data?.length) throw new Error(t('Only the host can delete the room.'));
   };
 
   return { room, members, updateRoom, updateMember, moveMember, removeMember, deleteRoom };

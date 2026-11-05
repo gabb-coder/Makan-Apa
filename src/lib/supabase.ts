@@ -100,6 +100,8 @@ export interface DayEntryRow {
   /** A quick vote: the options, and when voting closes. */
   vote_options?: string[] | null;
   vote_ends_at?: string | null;
+  /** Which vote this is: votes are per round, so a called-off vote's don't carry over. */
+  vote_round?: number;
   /** Swipe to match: the foods dealt out, and which deal this is (swipes are per round). */
   swipe_options?: string[] | null;
   swipe_round?: number;
@@ -117,6 +119,7 @@ export interface DayEntryRow {
 export interface VoteRow {
   day_entry_id: string;
   member_id: string;
+  round?: number;
   /** Index into the day's vote_options. */
   choice: number;
   created_at: string;

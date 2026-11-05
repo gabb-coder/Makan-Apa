@@ -5,7 +5,6 @@ export const translations: Translations = {
   ms: {
     // Wheel screen
     'Back to today': 'Balik ke hari ini',
-    'Spin the wheel': 'Pusing roda',
     'Mute wheel sounds': 'Senyapkan bunyi roda',
     'Turn wheel sounds on': 'Hidupkan bunyi roda',
     'Wheel source': 'Sumber roda',
@@ -25,7 +24,6 @@ export const translations: Translations = {
     'The wheel says': 'Roda pilih',
     'Spin again': 'Pusing lagi',
     'Sending…': 'Menghantar…',
-    'Spinning…': 'Sedang pusing…',
     SPIN: 'PUSING',
     '{names} is off the wheel today.': '{names} tiada dalam roda hari ini.',
     '{names} are off the wheel today.': '{names} tiada dalam roda hari ini.',
@@ -60,7 +58,6 @@ export const translations: Translations = {
     Recent: 'Baru makan',
 
     // Food sheet
-    'Something went wrong.': 'Ada yang tak kena.',
     'Edit food': 'Edit makanan',
     'Archived food': 'Makanan diarkib',
     'New food': 'Makanan baru',
@@ -185,7 +182,6 @@ export const translations: Translations = {
     'The wheel needs at least 2 foods': '转盘至少需要2样食物',
     'Add your usual spots, or start with 8 Malaysian favourites and edit from there.':
       '添加你们常去的地方，或先用8样大马人气美食，再慢慢改。',
-    'Loading…': '载入中…',
     'Load starter pack': '载入新手包',
     'Search food': '搜索食物',
     'Search food or tags': '搜索食物或标签',
@@ -194,22 +190,18 @@ export const translations: Translations = {
     'Hide archived': '隐藏已归档',
     'Show archived': '显示已归档',
     'No tags': '没有标签',
-    Recent: '刚吃过',
 
     // Food sheet
-    'Something went wrong.': '出了点问题。',
     'Edit food': '编辑食物',
     'Archived food': '已归档食物',
     'New food': '新食物',
     Untitled: '未命名',
     Close: '关闭',
-    Name: '名称',
     'e.g. Banana Leaf': '例如：香蕉叶饭',
     Tags: '标签',
     'Remove tag {tag}': '移除标签{tag}',
     'Add a tag, then press Enter': '输入标签后按 Enter',
     Diet: '饮食',
-    'Price per person': '每人价格',
     Icon: '图标',
     Colour: '颜色',
     'Save changes': '保存更改',

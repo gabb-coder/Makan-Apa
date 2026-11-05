@@ -248,6 +248,14 @@ export function PoolScreen({ foods, api, onError, roomId, roomName = '', onToast
             }
           }}
           onClose={dropIncoming}
+          onLater={
+            otherRooms > 0
+              ? () => {
+                  setIncoming(null);
+                  onToast(t('Kept for now. Open the room it’s for, and it’s offered there.'));
+                }
+              : undefined
+          }
         />
       )}
 

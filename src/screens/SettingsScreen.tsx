@@ -92,7 +92,7 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
   const changeCalendar = (cal: EatCalendar) =>
     attempt(async () => {
       const today = todayIn(room.timezone);
-      await updateRoom({ eat_days: cal.days, skip_holidays: cal.holidays, rotation_offset: offsetKeeping(rotationOf(room), cal, today) });
+      await updateRoom({ eat_days: cal.days, skip_holidays: cal.holidays, rotation_offset: offsetKeeping(rotationOf(room), { ...cal, fixed: calendarOf(room).fixed }, today) });
       if (!isEatingDay(today, cal)) {
         await supabase
           .from('day_entries')
@@ -112,7 +112,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
       await fn();
       if (ok) onToast(ok);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : t('Could not save that change.'));
+      // Server rules ("Only the host can change that") come back in English: show them translated.
+      onToast(e instanceof Error ? t(e.message) : t('Could not save that change.'));
     }
   };
 
@@ -281,8 +282,10 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                   ) : (
                     <button
                       type="button"
+                      // Your own name, or anyone's if you're the host.
+                      disabled={!iAmHost && m.id !== me.id}
                       onClick={() => startEdit(m)}
-                      aria-label={t('Edit {name}', { name: m.name })}
+                      aria-label={iAmHost || m.id === me.id ? t('Edit {name}', { name: m.name }) : undefined}
                       style={{
                         flexGrow: 1,
                         minWidth: 0,
@@ -675,7 +678,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
                       const next = { ...fixed };
                       if (e.target.value) next[String(wd)] = e.target.value;
                       else delete next[String(wd)];
-                      attempt(() => updateRoom({ fixed_days: next }), e.target.value ? t('{day}: {food}, every week.', { day: weekdayName(wd), food: e.target.value }) : undefined);
+                      // Fixed days use nobody's turn: keep whoever's next up where they were.
+                      attempt(() => updateRoom({ fixed_days: next, rotation_offset: offsetKeeping(rotationOf(room), calendarOf({ ...room, fixed_days: next }), todayIn(room.timezone)) }), e.target.value ? t('{day}: {food}, every week.', { day: weekdayName(wd), food: e.target.value }) : undefined);
                     }}
                     style={{ flexGrow: 1, height: 40 }}
                   >
@@ -748,7 +752,14 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           {confirmLeave ? t('Tap again to leave this room') : t('Leave room')}
         </button>
         <p style={{ margin: 0, textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: 'var(--muted)' }}>
-          {t('You’re taken out of the turns and Who’s in. Your old meals and bills stay. Rejoin any time with code {code} and the same name.', { code: room.code })}
+          {[
+            t('You’re taken out of the turns and Who’s in. Your old meals and bills stay.'),
+            room.locked ? t('The room is locked, so coming back needs the host’s OK.') : t('Rejoin any time with code {code} and the same name.', { code: room.code }),
+            iAmHost && members.filter((m) => !m.left_at).length > 1 ? t('Someone else becomes the host.') : null,
+            room.kitty_keeper === me.id ? t('You stop being the kitty keeper, so hand over the kitty’s cash first.') : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
         </p>
         {iAmHost && (
           <>

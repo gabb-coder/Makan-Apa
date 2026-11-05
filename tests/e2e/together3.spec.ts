@@ -119,7 +119,7 @@ test('a mystery lunch with lifts, Wrapped, and copying the food list', async ({ 
     await wei.click('nav >> text=Food list');
     await wei.click('button:text-is("Copy from another room")');
     await wei.locator('.sheet button', { hasText: 'Mystery check' }).click();
-    await expect(wei.getByText(/Added \d+ foods and 0 places\./)).toBeVisible();
+    await expect(wei.getByText(/Added \d+ foods\./)).toBeVisible();
     await expect(wei.locator('button.row', { hasText: 'Mamak' })).toBeVisible();
     // Delete the copy (from inside it), then back to the first room
     await wei.click('nav >> text=Today');

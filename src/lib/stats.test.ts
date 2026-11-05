@@ -75,3 +75,14 @@ describe('monthStats', () => {
     expect(monthLabel('2025-10', '2026')).toBe('October 2025');
   });
 });
+
+describe('no-repeat streak over weekends', () => {
+  it('a weekend off doesn’t break it, and lunch plus dinner is one day', async () => {
+    const { bestNoRepeatStreak } = await import('./stats');
+    const m = (date: string, key: string, meal = 'lunch') => ({ key, entry: { entry_date: date, meal } as never });
+    const meals = [m('2026-11-06', 'a'), m('2026-11-09', 'b'), m('2026-11-09', 'c', 'dinner'), m('2026-11-10', 'd')];
+    expect(bestNoRepeatStreak(meals, { days: [1, 2, 3, 4, 5], holidays: false })).toBe(3);
+    // Every day is an eating day: the weekend gap breaks it.
+    expect(bestNoRepeatStreak(meals, { days: [0, 1, 2, 3, 4, 5, 6], holidays: false })).toBe(2);
+  });
+});

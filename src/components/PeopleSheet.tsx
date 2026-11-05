@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { addDays, dayLabel, deciderFor, rotationOf } from '../lib/rotation';
-import { eatingDaysAfter } from '../lib/calendar';
+import { eatingDaysAfter, turnCalendar } from '../lib/calendar';
 import { needsLabel } from '../lib/diet';
 import { t } from '../lib/i18n';
 import { hostOf, knownRooms, roomTitle } from '../lib/session';
@@ -31,7 +31,7 @@ export function nextTurn(member: MemberRow, members: MemberRow[], room: RoomRow,
   if (member.id === todayDeciderId) return t('Deciding today');
   const rot = rotationOf(room);
   // The same meal as "Deciding today", so the days follow on from it.
-  for (const date of eatingDaysAfter(today, rot.cal, members.length)) {
+  for (const date of eatingDaysAfter(today, turnCalendar(rot.cal), members.length)) {
     if (deciderFor(members, rot, date, meal)?.id === member.id) {
       return date === addDays(today, 1) ? t('Decides tomorrow') : t('Decides {day}', { day: dayLabel(date) });
     }

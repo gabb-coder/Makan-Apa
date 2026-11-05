@@ -287,6 +287,7 @@ export function SwipeCard({
 }) {
   const [open, setOpen] = useState(false);
   const [early, setEarly] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const ids = voters.map((m) => m.id);
   const r = tallySwipes(
@@ -389,10 +390,18 @@ export function SwipeCard({
             </button>
           )}
           <button type="button" className="press" onClick={onDealAgain} style={{ minHeight: 40, border: 'none', background: 'none', color: 'var(--accent-text)', fontSize: 14, fontWeight: 700 }}>
-            {t('🔀 Deal again')}
+            {t('🔀 New deal for everyone')}
           </button>
-          <button type="button" className="press" onClick={() => onCancel().catch(() => {})} style={{ minHeight: 40, border: 'none', background: 'none', color: 'var(--muted)', fontSize: 14, fontWeight: 600 }}>
-            {t('Call it off')}
+          <button
+            type="button"
+            className="press"
+            onClick={() => {
+              if (!confirmCancel) return setConfirmCancel(true);
+              onCancel().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+            }}
+            style={{ minHeight: 40, border: 'none', background: 'none', color: confirmCancel ? 'var(--danger)' : 'var(--muted)', fontSize: 14, fontWeight: confirmCancel ? 700 : 600 }}
+          >
+            {confirmCancel ? t('Tap again to call it off') : t('Call it off')}
           </button>
         </div>
       )}
