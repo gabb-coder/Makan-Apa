@@ -6,7 +6,7 @@ import { t } from '../lib/i18n';
 import { formatRM, shares } from '../lib/money';
 import { dayMonthLabel } from '../lib/rotation';
 import { roomTitle } from '../lib/session';
-import type { DayEntryRow, MemberRow, RoomRow } from '../lib/supabase';
+import type { DayEntryRow, MealBillRow, MemberRow, RoomRow } from '../lib/supabase';
 import type { MemberPatch } from '../lib/useRoomData';
 import { updateEverywhere } from '../lib/profile';
 import type { RoomExtras } from '../lib/useRoomExtras';
@@ -30,7 +30,7 @@ const PAGE = 10;
 
 /** Who owes whom, the meals to add bills to, and how to pay you back. */
 export function BillsScreen({ room, me, members, entries, foods, extras, updateMember, onToast, attendance }: Props) {
-  const [open, setOpen] = useState<{ id: string; food: string; away: ReadonlySet<string>; guests: { hostId: string; count: number }[] } | null>(null);
+  const [open, setOpen] = useState<{ id: string; food: string; when: string; away: ReadonlySet<string>; guests: { hostId: string; count: number }[] } | null>(null);
   const [shown, setShown] = useState(PAGE);
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const nameOf = (id: string) => (id === me.id ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
@@ -39,6 +39,14 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
   const meals = entries
     .filter((e) => e.status === 'accepted')
     .sort((a, b) => b.entry_date.localeCompare(a.entry_date) || (b.meal ?? 'lunch').localeCompare(a.meal ?? 'lunch'));
+  const whenOf = (e: DayEntryRow) => (room.meals === 'both' ? `${dayMonthLabel(e.entry_date)} · ${(e.meal ?? 'lunch') === 'dinner' ? t('Dinner') : t('Lunch')}` : dayMonthLabel(e.entry_date));
+  const foodOf = (e: DayEntryRow) => entryFood(e, foodsById)?.name ?? t('A deleted food');
+  const entriesById = new Map(entries.map((e) => [e.id, e]));
+  /** "Thu 5 Nov · Mamak", for the message to the group. */
+  const labelOf = (bill: MealBillRow) => {
+    const e = entriesById.get(bill.day_entry_id);
+    return e ? `${whenOf(e)} · ${foodOf(e)}` : null;
+  };
 
   return (
     <main className="screen" style={{ gap: 14 }}>
@@ -52,7 +60,7 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
         <span className="section-label">{t('Settle up')}</span>
         <SettleUpCard
-          roomName={roomTitle(room)}
+          labelOf={labelOf}
           bills={extras.bills}
           settlements={extras.settlements}
           members={members}
@@ -84,16 +92,16 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
         ) : (
           <div className="card" style={{ padding: '4px 0', display: 'flex', flexDirection: 'column' }}>
             {meals.slice(0, shown).map((e, i) => {
-              const food = entryFood(e, foodsById)?.name ?? t('A deleted food');
+              const food = foodOf(e);
               const bill = extras.bills.find((b) => b.day_entry_id === e.id);
               const myShare = bill ? shares(bill).get(me.id) : undefined;
-              const when = room.meals === 'both' ? `${dayMonthLabel(e.entry_date)} · ${(e.meal ?? 'lunch') === 'dinner' ? t('Dinner') : t('Lunch')}` : dayMonthLabel(e.entry_date);
+              const when = whenOf(e);
               return (
                 <button
                   key={e.id}
                   type="button"
                   className="press"
-                  onClick={() => setOpen({ id: e.id, food, away: attendance.awayOn(e.entry_date, e.meal ?? 'lunch'), guests: attendance.guestsOn(e.entry_date, e.meal ?? 'lunch') })}
+                  onClick={() => setOpen({ id: e.id, food, when, away: attendance.awayOn(e.entry_date, e.meal ?? 'lunch'), guests: attendance.guestsOn(e.entry_date, e.meal ?? 'lunch') })}
                   aria-label={bill ? t('{food}, {when}: edit bill', { food, when }) : t('{food}, {when}: add bill', { food, when })}
                   style={{
                     display: 'flex',
@@ -156,7 +164,7 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
       </section>
 
       {open && (
-        <BillSheet dayEntryId={open.id} foodName={open.food} members={members} meId={me.id} extras={extras} away={open.away} guests={open.guests} kittyKeeper={room.kitty_keeper} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
+        <BillSheet dayEntryId={open.id} foodName={open.food} when={open.when} members={members} meId={me.id} extras={extras} away={open.away} guests={open.guests} kittyKeeper={room.kitty_keeper} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
       )}
     </main>
   );

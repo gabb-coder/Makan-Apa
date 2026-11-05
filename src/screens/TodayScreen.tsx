@@ -820,6 +820,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
           dayEntryId={todayEntry.id}
           usuals={usuals}
           foodName={todayFood.name}
+          when={room.meals === 'both' ? `${dayMonthLabel(today)} · ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayMonthLabel(today)}
           members={members}
           meId={me.id}
           extras={extras}
