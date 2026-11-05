@@ -203,15 +203,21 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   // The next day the room eats together: tomorrow, or after a weekend or holiday.
   const nextDay = eatingDaysAfter(today, rot.cal, 1)[0] ?? addDays(today, 1);
   const tomorrow = deciderFor(members, rot, nextDay, meal, attendance.awayOn(nextDay, meal));
+  // Rooms deciding lunch and dinner say which meal the next turn is for.
+  const both = room.meals === 'both';
   const tomorrowText = !tomorrow
     ? ''
     : nextDay === addDays(today, 1)
       ? tomorrow.id === me.id
-        ? t('Tomorrow it’s your turn to decide.')
-        : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name })
+        ? both
+          ? meal === 'dinner' ? t('Tomorrow’s dinner is your turn.') : t('Tomorrow’s lunch is your turn.')
+          : t('Tomorrow it’s your turn to decide.')
+        : both
+          ? meal === 'dinner' ? t('Tomorrow’s dinner is {name}’s turn.', { name: tomorrow.name }) : t('Tomorrow’s lunch is {name}’s turn.', { name: tomorrow.name })
+          : t('Tomorrow it’s {name}’s turn.', { name: tomorrow.name })
       : tomorrow.id === me.id
-        ? t('Next turn, {day}: yours.', { day: dayLabel(nextDay) })
-        : t('Next turn, {day}: {name}.', { day: dayLabel(nextDay), name: tomorrow.name });
+        ? t('Next turn, {day}: yours.', { day: both ? `${dayLabel(nextDay)} ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayLabel(nextDay) })
+        : t('Next turn, {day}: {name}.', { day: both ? `${dayLabel(nextDay)} ${meal === 'dinner' ? t('Dinner') : t('Lunch')}` : dayLabel(nextDay), name: tomorrow.name });
 
   // A mystery pick: agreed at once and hidden from the others till the meet-up.
   const [mysteryOn, setMysteryOn] = useState(false);

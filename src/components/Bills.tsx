@@ -561,6 +561,9 @@ export function BillSheet({
             {error ?? problems[0]}
           </p>
         )}
+        {!error && !problems.length && !items.length && (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>{t('Add a price to at least one line to save.')}</p>
+        )}
         <button type="submit" className="btn btn--primary press" disabled={busy || !ready} style={{ height: 52, flexShrink: 0 }}>
           {busy ? t('Saving…') : t('Save bill')}
         </button>

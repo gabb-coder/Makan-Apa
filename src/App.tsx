@@ -477,7 +477,7 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
 
   const loading = (
     <main className="screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--muted)', textAlign: 'center' }}>
-      {foodsApi.error ? t("Couldn't load the food list. {error}", { error: foodsApi.error }) : t('Loading food list…')}
+      {foodsApi.error ? t("Couldn't load the food list. {error}", { error: foodsApi.error }) : t('Loading {room}…', { room: roomTitle(room) })}
     </main>
   );
 
