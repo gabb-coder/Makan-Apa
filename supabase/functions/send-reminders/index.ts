@@ -456,7 +456,8 @@ Deno.serve(async (req) => {
         continue;
       }
       summary[result]++;
-      await db.from('push_subscriptions').update({ last_nudge_on: local.date }).eq('id', sub.id);
+      // A nudge that didn't go out is tried again next run, not in 3 days.
+      if (result === 'sent') await db.from('push_subscriptions').update({ last_nudge_on: local.date }).eq('id', sub.id);
     }
 
     if (reminder) {

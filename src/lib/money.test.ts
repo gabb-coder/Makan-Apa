@@ -107,4 +107,19 @@ describe('treats, birthdays and guests', () => {
     const { balances } = await import('./money');
     expect([...balances([{ paid_by: 'a', amount_cents: 3000, split_between: ['a', 'b'], treat: true }], []).values()].every((v) => v === 0)).toBe(true);
   });
+
+  it('still charges a birthday person for the guest they brought, and the payer covers them if nobody else ate', async () => {
+    const { shares } = await import('./money');
+    const bill = {
+      paid_by: 'a',
+      amount_cents: 1500,
+      split_between: ['b'],
+      birthday: 'b',
+      items: [
+        { name: 'Cake', cents: 1000, people: ['b'] },
+        { name: 'Guest’s noodles', cents: 500, people: ['b+1'] },
+      ],
+    };
+    expect(Object.fromEntries(shares(bill))).toEqual({ b: 500, a: 1000 });
+  });
 });

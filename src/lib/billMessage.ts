@@ -1,6 +1,6 @@
 /** The bill messages sent to the group chat: when, what, and who to transfer the money to. */
 import { t } from './i18n';
-import { balances, formatRM, settleUp, shares, unsettled } from './money';
+import { balances, formatRM, settleUp, shares, unsettled, unsettledFor } from './money';
 import type { MealBillRow, MemberRow, SettlementRow } from './supabase';
 
 type Payee = Pick<MemberRow, 'id' | 'name' | 'pay_duitnow' | 'pay_bank'>;
@@ -55,7 +55,9 @@ export function settleUpMessage(bills: MealBillRow[], settlements: SettlementRow
   const name = (id: string) => byId.get(id)?.name ?? t('Someone');
   const plan = settleUp(balances(bills, settlements));
   if (!plan.length) return t("Everyone's settled up.");
-  const meals = unsettledBills(bills, settlements)
+  // The meals each person who owes is still paying for (since they were last square).
+  const owing = new Set(plan.map((p) => p.from_member));
+  const meals = [...new Set([...owing].flatMap((id) => unsettledFor(id, bills, settlements, at, at).filter((b) => b.paid_by !== id)))]
     .sort((a, b) => at(b) - at(a))
     .map(labelOf)
     .filter((l): l is string => !!l);

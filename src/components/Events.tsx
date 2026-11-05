@@ -258,7 +258,7 @@ function EventSheet({
               });
             }}
           >
-            {confirmCancel ? t('Tap again to cancel the event') : t('Cancel event')}
+            {confirmCancel ? (bill ? t('Tap again: the event and its bill go') : t('Tap again to cancel the event')) : t('Cancel event')}
           </button>
         )}
         <button type="button" className="btn btn--primary press" onClick={onClose}>

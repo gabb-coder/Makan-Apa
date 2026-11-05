@@ -159,7 +159,8 @@ export default function App() {
     const paidParam = params.get('paid');
     if (paidParam) {
       clearParam('paid');
-      storage.set(PENDING_PAID_KEY, paidParam);
+      // Tied to the nudge's room, so it can't pop up later in another one.
+      storage.set(PENDING_PAID_KEY, `${params.get('room') ?? ''}|${paidParam}`);
     }
     const roomParam = params.get('room');
     if (roomParam) {
