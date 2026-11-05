@@ -49,7 +49,11 @@ export function CopyFromRoomSheet({ roomId, onImport, onDone, onClose }: { roomI
       }
       onDone(
         added || newSpots.length
-          ? t('Added {foods} foods and {places} places.', { foods: added, places: newSpots.length })
+          ? (() => {
+              const foodsText = added === 1 ? t('1 food') : t('{n} foods', { n: added });
+              const placesText = newSpots.length === 1 ? t('1 place') : t('{n} places', { n: newSpots.length });
+              return !newSpots.length ? t('Added {what}.', { what: foodsText }) : !added ? t('Added {what}.', { what: placesText }) : t('Added {foods} and {places}.', { foods: foodsText, places: placesText });
+            })()
           : t('Nothing new: this room has all of them already.'),
       );
       onClose();
@@ -111,8 +115,24 @@ export async function shareFoodList(foods: Food[], roomTitle: string): Promise<s
 }
 
 /** Someone shared a food list: add it to this room? */
-export function IncomingFoodsSheet({ foods, have, roomName, onAdd, onClose }: { foods: FoodDraft[]; have: Set<string>; roomName: string; onAdd: () => Promise<void>; onClose: () => void }) {
-  useEscape(onClose);
+export function IncomingFoodsSheet({
+  foods,
+  have,
+  roomName,
+  onAdd,
+  onClose,
+  onLater,
+}: {
+  foods: FoodDraft[];
+  have: Set<string>;
+  roomName: string;
+  onAdd: () => Promise<void>;
+  /** Not wanted: forget the list. */
+  onClose: () => void;
+  /** It's for another room on this phone: keep it for when that room opens. */
+  onLater?: () => void;
+}) {
+  useEscape(onLater ?? onClose);
   const [busy, setBusy] = useState(false);
   const fresh = foods.filter((f) => !have.has(f.name.toLowerCase()));
   return (
@@ -136,7 +156,7 @@ export function IncomingFoodsSheet({ foods, have, roomName, onAdd, onClose }: { 
         </ul>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="btn btn--secondary press" onClick={onClose} style={{ flex: 1 }}>
-            {t('Not now')}
+            {t('Discard')}
           </button>
           <button
             type="button"
@@ -155,6 +175,11 @@ export function IncomingFoodsSheet({ foods, have, roomName, onAdd, onClose }: { 
             {fresh.length === 1 ? t('Add 1 food') : t('Add {n} foods', { n: fresh.length })}
           </button>
         </div>
+        {onLater && (
+          <button type="button" onClick={onLater} style={{ alignSelf: 'center', minHeight: 40, border: 'none', background: 'none', color: 'var(--accent-text)', fontWeight: 700, fontSize: 14 }}>
+            {t('It’s for another room')}
+          </button>
+        )}
       </div>
     </div>
   );

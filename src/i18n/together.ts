@@ -79,7 +79,7 @@ export const translations: Translations = {
     '{names} is coming late': '{names}会晚到',
     '{names} are coming late': '{names}会晚到',
     "Everyone's in so far.": '目前大家都参加。',
-    "You won't be the decider or on the bill.": '你不会当选择人，也不会算进账单。',
+    "You won't be the decider or on the bill.": '你不会当决定者，也不会算进账单。',
     // Tapau
     'Tapau run': '打包',
     'Tapau? Take everyone’s orders': '打包？收集大家的点单',

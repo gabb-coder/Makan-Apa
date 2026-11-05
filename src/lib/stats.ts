@@ -1,4 +1,6 @@
 import { daysBetween } from './dates';
+import { isEatingDay, type EatCalendar } from './calendar';
+import { addDays } from './rotation';
 import { entryFood, type Food } from './foods';
 import type { DayEntryRow, MemberRow, VetoRow } from './supabase';
 import { locale } from './i18n';
@@ -65,21 +67,26 @@ function rank<T>(items: T[], keyOf: (t: T) => string, describe: (t: T) => Omit<R
 }
 
 /**
- * Longest run of back-to-back days with an accepted meal where no food repeats.
- * `meals` must be oldest first.
+ * Longest run of back-to-back eating days where no food repeats, counted in days (lunch and
+ * dinner on one day are one day). Days the room doesn't eat together (weekends, holidays) don't
+ * break the run. `meals` must be oldest first.
  */
-export function bestNoRepeatStreak(meals: Pick<Meal, 'key' | 'entry'>[]): number {
+export function bestNoRepeatStreak(meals: Pick<Meal, 'key' | 'entry'>[], cal?: EatCalendar): number {
+  // Did the room skip an eating day between these two dates (a day it could have eaten, but no meal)?
+  const missed = (from: string, to: string) => {
+    if (!cal) return daysBetween(from, to) > 1;
+    for (let d = addDays(from, 1); d < to; d = addDays(d, 1)) if (isEatingDay(d, cal)) return true;
+    return false;
+  };
   let best = 0;
   let start = 0;
   const lastSeen = new Map<string, number>();
   for (let i = 0; i < meals.length; i++) {
-    // Lunch and dinner on the same day count as back to back too.
-    const gap = i > 0 ? daysBetween(meals[i - 1].entry.entry_date, meals[i].entry.entry_date) : 1;
-    if (gap !== 1 && gap !== 0) start = i;
+    if (i > 0 && meals[i - 1].entry.entry_date !== meals[i].entry.entry_date && missed(meals[i - 1].entry.entry_date, meals[i].entry.entry_date)) start = i;
     const seen = lastSeen.get(meals[i].key);
     if (seen !== undefined && seen >= start) start = seen + 1;
     lastSeen.set(meals[i].key, i);
-    best = Math.max(best, i - start + 1);
+    best = Math.max(best, new Set(meals.slice(start, i + 1).map((m) => m.entry.entry_date)).size);
   }
   return best;
 }
@@ -90,6 +97,8 @@ export function monthStats(
   vetoes: VetoRow[],
   members: MemberRow[],
   foodsById: Map<string, Food>,
+  /** The room's eating days, so weekends and holidays don't break the no-repeat streak. */
+  cal?: EatCalendar,
 ): MonthStats {
   // A month ("2026-11") or a whole year ("2026").
   const inMonth = entries.filter((e) => e.entry_date.startsWith(month));
@@ -113,7 +122,7 @@ export function monthStats(
 
   return {
     meals,
-    bestStreak: bestNoRepeatStreak([...meals].reverse()),
+    bestStreak: bestNoRepeatStreak([...meals].reverse(), cal),
     vetoes: monthVetoes,
     vetoesByMember: byMember((m) => monthVetoes.filter((v) => v.member_id === m.id).length),
     deciders: byMember((m) => meals.filter((x) => x.entry.decider_id === m.id).length),

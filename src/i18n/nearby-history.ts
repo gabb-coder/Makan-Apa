@@ -152,7 +152,6 @@ export const translations: Translations = {
     'Location is blocked for this app. To use it, allow location for this site in your browser or phone settings, then turn it on in Settings.':
       '这个应用的定位被封锁了。要使用的话，请在浏览器或手机设置里允许这个网站使用位置，然后在设置里开启。',
     "Couldn't get your location.": '无法获取你的位置。',
-    'Try again': '再试一次',
     'Closest to you first': '离你最近的排前面',
     "You're {distance} from {place}": '你离{place} {distance}',
     'Stop using location': '停止使用位置',
@@ -221,7 +220,6 @@ export const translations: Translations = {
 
     // History
     You: '你',
-    Someone: '某人',
     'Change month, showing {month}': '换月份，目前是{month}',
     Meals: '餐数',
     'this month': '本月',
@@ -247,7 +245,6 @@ export const translations: Translations = {
     'No meals that month.': '那个月没有记录。',
     dinner: '晚餐',
     lunch: '午餐',
-    '{name}, by wheel': '{name}，转盘决定',
     '{name} picked': '{name}选的',
     '{n} vetoed': '否决了{n}个',
     '{foods} vetoed': '否决了{foods}',

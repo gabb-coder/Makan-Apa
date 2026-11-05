@@ -140,7 +140,7 @@ export const translations: Translations = {
     '{n} min': '{n}分钟',
     'Start the vote': '开始投票',
     'Plan ahead': '提前安排',
-    'Tap the days you’re away. You’re skipped as decider and left off bills those days.': '点选你不在的日子。那几天你不会当选择人，也不会算进账单。',
+    'Tap the days you’re away. You’re skipped as decider and left off bills those days.': '点选你不在的日子。那几天你不会当决定者，也不会算进账单。',
     'Tomorrow': '明天',
     '{day} {meal}: {state}': '{day}{meal}：{state}',
     'away': '不在',

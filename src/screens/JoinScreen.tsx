@@ -86,6 +86,9 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
       document.getElementById('join-code')?.focus();
       return;
     }
+    // Already in that room on this phone: open it, rather than joining again as someone new.
+    const known = kind === 'join' ? rooms.find((r) => r.code === code) : undefined;
+    if (known && onOpenRoom) return onOpenRoom(known.roomId);
     setBusy(kind);
     setError(null);
     try {
@@ -105,7 +108,7 @@ export function JoinScreen({ onJoined, notice, rooms = [], onOpenRoom, onBack, m
           s,
           s.room.name
             ? t('“{name}” created. Share code {code} with your kakis.', { name: roomTitle(s.room), code: s.room.code })
-            : t('Room {code} created. Share code {code} with your kakis.', { code: s.room.code }),
+            : t('Room created. Share code {code} with your kakis.', { code: s.room.code }),
         );
       }
     } catch (e) {

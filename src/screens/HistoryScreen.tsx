@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { FoodTile } from '../components/FoodTile';
 import { formatTag, lastEatenLabel, type Food } from '../lib/foods';
 import { FOOD_COLORS } from '../lib/palette';
-import { dayLabel } from '../lib/rotation';
+import { calendarOf, dayLabel } from '../lib/rotation';
 import type { RoomExtras } from '../lib/useRoomExtras';
 import { exportFileName, historyFile, historySheet, loadHistory, loadMoney, moneySheet, saveFile } from '../lib/exportHistory';
 import { roomTitle } from '../lib/session';
@@ -81,7 +81,8 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const p = useCountUp(month);
 
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
-  const stats = useMemo(() => monthStats(month, entries, vetoes, members, foodsById), [month, entries, vetoes, members, foodsById]);
+  const cal = useMemo(() => calendarOf(room), [room]);
+  const stats = useMemo(() => monthStats(month, entries, vetoes, members, foodsById, cal), [month, entries, vetoes, members, foodsById, cal]);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const nameFor = (id: string | null) => (id === me.id ? t('You') : (id && memberById.get(id)?.name) || t('Someone'));
 
@@ -103,7 +104,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
   const stamps = useMemo(() => passport(entries, foodsById, [...extras.spots.map(roomSpot), ...SUNWAY_SPOTS]), [entries, foodsById, extras.spots]);
 
   const badges = useMemo(
-    () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements, today }),
+    () => badgesFor({ meId: me.id, entries, vetoes, bills: extras.bills, settlements: extras.settlements, today, cal }),
     [me.id, entries, vetoes, extras.bills, extras.settlements],
   );
 
@@ -215,7 +216,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontSize: 15, fontWeight: 800 }}>{t('Who decided')}</span>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {mealsN === 1 ? t('{n} day', { n: mealsN }) : t('{n} days', { n: mealsN })}
+            {mealsN === 1 ? t('{n} meal', { n: mealsN }) : t('{n} meals', { n: mealsN })}
           </span>
         </div>
         {stats.deciders.length === 0 ? (
@@ -225,9 +226,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
             role="img"
             aria-label={stats.deciders
               .map((d) =>
-                d.count === 1
-                  ? t('{name} decided {n} day', { name: nameFor(d.member.id), n: d.count })
-                  : t('{name} decided {n} days', { name: nameFor(d.member.id), n: d.count }),
+                d.count === 1 ? t('{name} decided once', { name: nameFor(d.member.id) }) : t('{name} decided {n} times', { name: nameFor(d.member.id), n: d.count }),
               )
               .join(', ')}
             style={{ display: 'flex', gap: 4, height: 12 }}
@@ -344,7 +343,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                       {m.entry.entry_date === today ? t('Today') : dayLabel(m.entry.entry_date)}
                       {(room.meals === 'both' || m.entry.meal === 'dinner') && ` ${m.entry.meal === 'dinner' ? t('dinner') : t('lunch')}`} ·{' '}
-                      {m.entry.method === 'wheel' ? t('{name}, by wheel', { name: who }) : t('{name} picked', { name: who })}
+                      {!m.entry.decider_id ? t('fixed day') : m.entry.method === 'wheel' ? t('{name}, by wheel', { name: who }) : t('{name} picked', { name: who })}
                       {(() => {
                         const r = extras.ratings.filter((x) => x.day_entry_id === m.entry.id);
                         const up = r.filter((x) => x.rating === 1).length;
@@ -540,7 +539,7 @@ export function HistoryScreen({ room, me, members, today, entries, vetoes, foods
       )}
       {wrapping && (
         <WrappedStory
-          data={wrapped(wrapping, entries, vetoes, members, foodsById, extras.bills, [...extras.spots.map(roomSpot), ...SUNWAY_SPOTS], (id) => nameFor(id))}
+          data={wrapped(wrapping, entries, vetoes, members, foodsById, extras.bills, [...extras.spots.map(roomSpot), ...SUNWAY_SPOTS], (id) => nameFor(id), cal)}
           room={roomTitle(room)}
           label={wrapping.length === 4 ? wrapping : monthLabel(wrapping, currentYear)}
           onClose={() => setWrapping(null)}

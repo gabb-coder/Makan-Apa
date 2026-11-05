@@ -44,3 +44,19 @@ describe('eating calendar', () => {
     expect(turnIndex(after, '2026-11-10')).toBe(before + 3);
   });
 });
+
+describe('fixed days', () => {
+  it('use nobody’s turn, so the same person isn’t always stuck on Friday', async () => {
+    const { turnIndex } = await import('./calendar');
+    const rot = { start: '2026-11-02', offset: 0, cal: { days: [1, 2, 3, 4, 5], holidays: false, fixed: [5] } };
+    // Mon–Thu are turns 0–3; Friday (fixed) counts as the next turn day, Monday the 9th.
+    expect(['2026-11-02', '2026-11-05', '2026-11-06', '2026-11-09', '2026-11-13', '2026-11-16'].map((d) => turnIndex(rot, d))).toEqual([0, 3, 4, 4, 8, 8]);
+  });
+  it('changing them keeps whoever’s next up', async () => {
+    const { offsetKeeping, turnIndex } = await import('./calendar');
+    const before = { start: '2026-11-02', offset: 0, cal: { days: [1, 2, 3, 4, 5], holidays: false } };
+    const cal = { days: [1, 2, 3, 4, 5], holidays: false, fixed: [5] };
+    const after = { ...before, cal, offset: offsetKeeping(before, cal, '2026-11-05') };
+    expect(turnIndex(after, '2026-11-05')).toBe(turnIndex(before, '2026-11-05'));
+  });
+});

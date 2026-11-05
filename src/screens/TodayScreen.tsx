@@ -51,7 +51,7 @@ import { SuggestCard } from '../components/SuggestCard';
 import { nearbyPref, usePref } from '../lib/prefs';
 import { spotSuitability, suitsEveryone } from '../lib/diet';
 import { addDays, dayLabel, dayMonthLabel, deciderFor, rotationOf } from '../lib/rotation';
-import { eatingDaysAfter, holidayOn, isEatingDay } from '../lib/calendar';
+import { eatingDaysAfter, holidayOn, isEatingDay, turnCalendar } from '../lib/calendar';
 import type { DayEntryRow, Meal, MemberRow, RoomRow, VetoRow } from '../lib/supabase';
 import type { useDays } from '../lib/useDays';
 import type { RoomExtras } from '../lib/useRoomExtras';
@@ -208,7 +208,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   }, [todayEntry, justVetoed]);
 
   // The next day the room eats together: tomorrow, or after a weekend or holiday.
-  const nextDay = eatingDaysAfter(today, rot.cal, 1)[0] ?? addDays(today, 1);
+  const nextDay = eatingDaysAfter(today, turnCalendar(rot.cal), 1)[0] ?? addDays(today, 1);
   const tomorrow = deciderFor(members, rot, nextDay, meal, attendance.awayOn(nextDay, meal));
   // Rooms deciding lunch and dinner say which meal the next turn is for.
   const both = room.meals === 'both';
@@ -546,7 +546,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
 
   /* ----- Up next and Recently ----- */
 
-  const upNext = eatingDaysAfter(today, rot.cal, 3).map((date) => ({ date, member: deciderFor(members, rot, date, meal, attendance.awayOn(date, meal)) }));
+  const upNext = eatingDaysAfter(today, turnCalendar(rot.cal), 3).map((date) => ({ date, member: deciderFor(members, rot, date, meal, attendance.awayOn(date, meal)) }));
 
   const backHome = onHome && (
     <button type="button" className="icon-btn press" aria-label={t('All rooms')} onClick={onHome} style={{ flexShrink: 0, alignSelf: 'center' }}>

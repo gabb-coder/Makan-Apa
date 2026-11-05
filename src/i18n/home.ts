@@ -176,7 +176,7 @@ export const translations: Translations = {
     'All your rooms ({n})': '你所有的房间（{n}）',
     'All rooms, or start another group': '所有房间，或开个新群',
     'e.g. Lai Kong, SS15': '例如：Lai Kong, SS15',
-    'Late still counts as in: you can decide and you’re on the bill.': '晚到也算参加：你可以当选择人，也会算进账单。',
+    'Late still counts as in: you can decide and you’re on the bill.': '晚到也算参加：你可以当决定者，也会算进账单。',
     'You’re taken out of the turns and Who’s in. Your old meals and bills stay. Rejoin any time with code {code} and the same name.':
       '你会被移出轮流和参加名单。以前的餐点和账单会保留。随时可用代码 {code} 和同样的名字重新加入。',
   },

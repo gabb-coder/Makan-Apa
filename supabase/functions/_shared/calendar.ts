@@ -18,6 +18,13 @@ export interface EatCalendar {
   days: EatDays;
   /** Skip public holidays in Selangor (Sunway's state), national ones included. */
   holidays: boolean;
+  /** Weekdays with a fixed lunch ("Friday is mamak"): eaten together, but nobody's turn. */
+  fixed?: EatDays;
+}
+
+/** The days that use somebody's turn: eating days that aren't fixed days. */
+export function turnCalendar(cal: EatCalendar): EatCalendar {
+  return cal.fixed?.length ? { days: cal.days.filter((d) => !cal.fixed!.includes(d)), holidays: cal.holidays } : cal;
 }
 
 /**
@@ -127,9 +134,12 @@ export interface Rotation {
   cal: EatCalendar;
 }
 
-/** The turn number on `date` (before wrapping round the members). Off days count as the next eating day. */
+/**
+ * The turn number on `date` (before wrapping round the members). Off days and fixed days use no
+ * turn: they count as the next day that does.
+ */
 export function turnIndex(rot: Rotation, date: string): number {
-  return rot.offset + eatingDaysBetween(rot.start, date, rot.cal);
+  return rot.offset + eatingDaysBetween(rot.start, date, turnCalendar(rot.cal));
 }
 
 /**
@@ -137,6 +147,7 @@ export function turnIndex(rot: Rotation, date: string): number {
  * up on or after `today` stays next up.
  */
 export function offsetKeeping(before: Rotation, cal: EatCalendar, today: string): number {
-  const ref = nextEatingDay(today, cal) ?? today;
-  return turnIndex(before, ref) - eatingDaysBetween(before.start, ref, cal);
+  const turns = turnCalendar(cal);
+  const ref = nextEatingDay(today, turns) ?? today;
+  return turnIndex(before, ref) - eatingDaysBetween(before.start, ref, turns);
 }

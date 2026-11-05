@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { storage } from './storage';
 import { supabase, type MessageRow, type PollRow, type PollVoteRow, type ReactionEmoji, type ReactionRow } from './supabase';
@@ -157,8 +158,11 @@ export function usePolls(roomId: string, meId: string) {
   /** A poll, posted to the chat as a message. */
   const ask = async (question: string, options: string[]) => {
     const q = question.trim().slice(0, 120);
-    const opts = options.map((o) => o.trim().slice(0, 40)).filter(Boolean).slice(0, 4);
-    if (!q || opts.length < 2) throw new Error('A poll needs a question and at least 2 options.');
+    let opts = options.map((o) => o.trim().slice(0, 40)).filter(Boolean).slice(0, 4);
+    // Just a question, with the Yes / No boxes left as they show: it's a yes-or-no poll.
+    if (!opts.length) opts = [t('Yes'), t('No')];
+    if (!q) throw new Error(t('Type a question to ask.'));
+    if (opts.length < 2) throw new Error(t('A poll needs at least 2 options.'));
     const { data, error } = await supabase.from('polls').insert({ room_id: roomId, member_id: meId, question: q, options: opts }).select().single();
     if (error) throw new Error(error.message);
     const poll = data as PollRow;

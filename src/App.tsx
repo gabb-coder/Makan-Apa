@@ -559,13 +559,11 @@ function RoomApp({ session, onToast, onLeave, onHome, onProfile }: RoomAppProps)
             await extras.clearReceipts().catch(() => {});
             await deleteRoom();
             onToast(t('{room} deleted.', { room: roomTitle(room) }));
-            void leaveRoom(room.id).catch(() => {});
+            // The room's gone for everyone, so just forget it here.
+            forgetSession(room.id);
             onLeave();
           }}
-          onLeave={() => {
-            void leaveRoom(room.id).catch(() => {});
-            onLeave();
-          }}
+          onLeave={() => leaveRoom(room.id).then(onLeave, (e: unknown) => onToast(e instanceof Error ? e.message : String(e)))}
           onToast={onToast}
           onOpenProfile={onProfile}
           foodNames={(active ?? []).map((f) => f.name)}

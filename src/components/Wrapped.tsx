@@ -364,9 +364,9 @@ function Spent({ w, reduce }: { w: Wrapped; reduce: boolean }) {
           <p className="wr-line">{t('{name} paid the most: {amount}', { name: w.topPayer.name, amount: formatRM(w.topPayer.cents) })}</p>
         </In>
       )}
-      {w.meals > 0 && (
+      {w.billed > 0 && (
         <In i={4}>
-          <span className="wr-chip">🍽️ {t('About {amount} a meal', { amount: formatRM(Math.round(w.spent / w.meals)) })}</span>
+          <span className="wr-chip">🍽️ {t('About {amount} a meal', { amount: formatRM(Math.round(w.spent / w.billed)) })}</span>
         </In>
       )}
     </>

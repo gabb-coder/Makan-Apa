@@ -140,7 +140,8 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
       .from('day_entries')
       .upsert(
         fixedFood
-          ? { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'accepted', custom_food: fixedFood, method: 'direct' }
+          ? // A fixed day is nobody's turn.
+            { room_id: room.id, entry_date: today, meal, decider_id: null, status: 'accepted', custom_food: fixedFood, method: 'direct' }
           : { room_id: room.id, entry_date: today, meal, decider_id: computedDecider.id, status: 'pending' },
         { onConflict: 'room_id,entry_date,meal', ignoreDuplicates: true },
       )
@@ -183,7 +184,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     if (untouched && fixedFood) {
       supabase
         .from('day_entries')
-        .update({ status: 'accepted', custom_food: fixedFood, method: 'direct' })
+        .update({ status: 'accepted', custom_food: fixedFood, method: 'direct', decider_id: null })
         .eq('id', todayEntry.id)
         .eq('status', 'pending')
         .is('food_option_id', null)

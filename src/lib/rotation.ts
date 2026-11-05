@@ -27,12 +27,13 @@ export function dayMonthLabel(date: string, loc = locale()): string {
 }
 
 /** The room's calendar: which days it eats together, and whether it skips public holidays. */
-export function calendarOf(room: Pick<RoomRow, 'eat_days' | 'skip_holidays'>): EatCalendar {
-  return { days: room.eat_days ?? EVERY_DAY, holidays: room.skip_holidays ?? false };
+export function calendarOf(room: Pick<RoomRow, 'eat_days' | 'skip_holidays' | 'fixed_days'>): EatCalendar {
+  const fixed = Object.keys(room.fixed_days ?? {}).map(Number);
+  return { days: room.eat_days ?? EVERY_DAY, holidays: room.skip_holidays ?? false, ...(fixed.length ? { fixed } : {}) };
 }
 
 /** How the room's turns run. */
-export function rotationOf(room: Pick<RoomRow, 'rotation_start' | 'rotation_offset' | 'eat_days' | 'skip_holidays'>): Rotation {
+export function rotationOf(room: Pick<RoomRow, 'rotation_start' | 'rotation_offset' | 'eat_days' | 'skip_holidays' | 'fixed_days'>): Rotation {
   return { start: room.rotation_start, offset: room.rotation_offset ?? 0, cal: calendarOf(room) };
 }
 
