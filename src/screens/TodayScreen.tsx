@@ -513,7 +513,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             ? t('Make this my secret pick instead')
             : t('Make this my secret pick')
           : undefined
-        : isDecider && todayEntry.status === 'pending'
+        : isDecider && todayEntry.status === 'pending' && !todayEntry.vote_options && !todayEntry.swipe_options
           ? others.length === 0
             ? t('Pick this for today')
             : t('Send to {name}', { name: waitingFor })

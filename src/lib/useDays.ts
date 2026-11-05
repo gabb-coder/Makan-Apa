@@ -150,7 +150,9 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   // Until the day has a pick or a veto, follow changes to the member order or rotation start.
   useEffect(() => {
     if (!todayEntry || !computedDecider) return;
-    const untouched = todayEntry.status === 'pending' && !todayEntry.food_option_id && !todayEntry.custom_food && todayVetoes.length === 0;
+    // A vote or a swipe in progress counts as started: the turn doesn't move under it.
+    const untouched =
+      todayEntry.status === 'pending' && !todayEntry.food_option_id && !todayEntry.custom_food && todayVetoes.length === 0 && !todayEntry.vote_options && !todayEntry.swipe_options;
     // Today's decider was removed from the room: hand the day to whoever the rotation says now.
     if (todayEntry.decider_id === null && todayEntry.status !== 'accepted') {
       supabase
@@ -158,6 +160,21 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         .update({ decider_id: computedDecider.id, status: 'pending', food_option_id: null, custom_food: null, method: null })
         .eq('id', todayEntry.id)
         .is('decider_id', null)
+        .neq('status', 'accepted')
+        .then(({ error: err }) => err && setError(err.message));
+      return;
+    }
+    // Today's decider left the room, or said they're out before picking: the turn moves on
+    // (vetoes so far still count), so nobody's stuck waiting for them.
+    const current = todayEntry.decider_id;
+    const gone = !!current && !members.some((m) => m.id === current);
+    const out = !!current && !!away?.has(current) && todayEntry.status === 'pending';
+    if ((gone ? todayEntry.status !== 'accepted' : out) && current !== computedDecider.id && !away?.has(computedDecider.id)) {
+      supabase
+        .from('day_entries')
+        .update({ decider_id: computedDecider.id, status: 'pending', food_option_id: null, custom_food: null, method: null, auto_picked: false })
+        .eq('id', todayEntry.id)
+        .eq('decider_id', current)
         .neq('status', 'accepted')
         .then(({ error: err }) => err && setError(err.message));
       return;
@@ -184,7 +201,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         .is('custom_food', null)
         .then(({ error: err }) => err && setError(err.message));
     }
-  }, [todayEntry, computedDecider, todayVetoes.length, fixedFood]);
+  }, [todayEntry, computedDecider, todayVetoes.length, fixedFood, members, away]);
 
   // Quick vote: everyone's votes for today, live.
   const [votes, setVotes] = useState<VoteRow[]>([]);
@@ -258,6 +275,11 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         custom_food: pick.foodId ? null : pick.name,
         method,
         status: soloRoom ? 'accepted' : 'proposed',
+        // A pick ends any vote or swipe, and it's the decider's own, not the wheel's at 12:00.
+        vote_options: null,
+        vote_ends_at: null,
+        swipe_options: null,
+        auto_picked: false,
       },
       // Only today's decider may pick, even if this phone's view of the rotation is a moment stale.
       (q) => q.neq('status', 'accepted').eq('decider_id', meId),
@@ -268,14 +290,24 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   /** Decider takes back a proposal nobody has answered yet. */
   const retract = async () => {
     await updateToday(
-      { food_option_id: null, custom_food: null, method: null, status: 'pending' },
+      { food_option_id: null, custom_food: null, method: null, status: 'pending', auto_picked: false },
       (q) => q.eq('status', 'proposed').eq('decider_id', meId),
     );
   };
 
+  /**
+   * Only if today's pick is still the one this phone is showing: the decider may have changed it
+   * a moment ago, and a yes or a veto shouldn't land on a pick nobody saw.
+   */
+  const samePick = (q: any) => {
+    const e = todayEntry!;
+    const withFood = e.food_option_id ? q.eq('food_option_id', e.food_option_id) : q.is('food_option_id', null);
+    return e.custom_food ? withFood.eq('custom_food', e.custom_food) : withFood.is('custom_food', null);
+  };
+
   /** Step 3: a non-decider accepts. */
   const accept = async () => {
-    const ok = await updateToday({ status: 'accepted' }, (q) => q.eq('status', 'proposed'));
+    const ok = await updateToday({ status: 'accepted' }, (q) => samePick(q.eq('status', 'proposed')));
     if (!ok) throw new Error(t('That pick changed. Have another look.'));
   };
 
@@ -289,8 +321,8 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     if (myVetoesToday >= room.veto_limit) throw new Error(t('No vetoes left today, so this pick stands.'));
     const previous = todayEntry;
     const ok = await updateToday(
-      { food_option_id: null, custom_food: null, method: null, status: 'pending' },
-      (q) => q.eq('status', 'proposed'),
+      { food_option_id: null, custom_food: null, method: null, status: 'pending', auto_picked: false },
+      (q) => samePick(q.eq('status', 'proposed')),
     );
     if (!ok) throw new Error(t('That pick changed. Have another look.'));
     const { data, error: err } = await supabase
@@ -313,7 +345,7 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
         method: previous.method,
         status: 'proposed',
       },
-      (q) => q.eq('status', 'pending').is('food_option_id', null).is('custom_food', null),
+      (q) => q.eq('status', 'pending').is('food_option_id', null).is('custom_food', null).is('vote_options', null).is('swipe_options', null),
     );
     if (!ok) throw new Error(t("Too late, there's a new pick."));
     const { error: err } = await supabase.from('vetoes').delete().eq('id', vetoRow.id);
