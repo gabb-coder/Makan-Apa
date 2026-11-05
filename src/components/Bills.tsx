@@ -100,6 +100,40 @@ export function BillSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const scanInput = useRef<HTMLInputElement>(null);
+  const [scan, setScan] = useState<{ state: 'reading'; progress: number } | { state: 'done'; found: number; note: string | null } | { state: 'failed'; message: string } | null>(null);
+
+  /** Read a receipt photo into lines, charges and the receipt photo. */
+  const scanPhoto = async (file: File) => {
+    setScan({ state: 'reading', progress: 0 });
+    try {
+      const { scanReceipt } = await import('../lib/scanReceipt');
+      const r = await scanReceipt(file, (progress) => setScan({ state: 'reading', progress }));
+      if (!r.items.length) {
+        setScan({ state: 'failed', message: t('Couldn’t find any items on that photo. Try again flat and well lit, close enough to fill the screen, or type them in.') });
+        return;
+      }
+      // The scanned lines replace the empty ones; anything already typed stays.
+      setRows((cur) => [...cur.filter((x) => x.name.trim() || x.price.trim()), ...r.items.map((i) => row({ name: i.name, price: (i.cents / 100).toFixed(2), people: [] }))]);
+      if (r.servicePct !== null) {
+        setServiceOn(true);
+        setServicePct(String(r.servicePct));
+      }
+      if (r.sstPct !== null) {
+        setSstOn(true);
+        setSstPct(String(r.sstPct));
+      }
+      if (!photo && !(keepOld && oldUrl)) setPhoto({ file, url: URL.createObjectURL(file) });
+      const sum = r.items.reduce((n, i) => n + i.cents, 0);
+      const note =
+        r.subtotal !== null && Math.abs(r.subtotal - sum) > 5
+          ? t('The lines add up to {sum}, but the receipt’s subtotal is {subtotal}. Check for a missed or misread line.', { sum: formatRM(sum), subtotal: formatRM(r.subtotal) })
+          : null;
+      setScan({ state: 'done', found: r.items.length, note });
+    } catch (e) {
+      setScan({ state: 'failed', message: e instanceof Error && e.message ? t('Couldn’t read the receipt. {error}', { error: e.message }) : t('Couldn’t read the receipt. Check your connection and try again.') });
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -248,6 +282,42 @@ export function BillSheet({
         <fieldset style={sectionStyle}>
           <legend className="field-label" style={{ padding: 0, marginBottom: 4 }}>{t('What everyone had')}</legend>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>{t('Type each price from the receipt, before service charge and SST. Tick more than one person to share an item.')}</p>
+          <button
+            type="button"
+            className="btn btn--secondary press"
+            disabled={scan?.state === 'reading'}
+            onClick={() => scanInput.current?.click()}
+            style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 9h8M8 12h8M8 15h5" />
+            </svg>
+            {scan?.state === 'reading' ? t('Reading the receipt… {n}%', { n: Math.round(scan.progress * 100) }) : t('Scan the receipt')}
+          </button>
+          <input
+            ref={scanInput}
+            type="file"
+            accept="image/*"
+            hidden
+            data-testid="scan-input"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void scanPhoto(file);
+              e.target.value = '';
+            }}
+          />
+          {scan?.state === 'reading' && (
+            <div role="progressbar" aria-label={t('Reading the receipt')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(scan.progress * 100)} style={{ height: 6, borderRadius: 999, background: 'var(--bar-track)', overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', width: `${Math.max(4, scan.progress * 100)}%`, background: 'var(--accent)', transition: 'width 0.3s ease' }} />
+            </div>
+          )}
+          {scan && scan.state !== 'reading' && (
+            <p role="status" style={{ margin: 0, padding: '10px 12px', borderRadius: 12, fontSize: 13, lineHeight: 1.45, fontWeight: 600, background: scan.state === 'failed' ? 'var(--danger-tint)' : 'var(--accent-tint)', color: scan.state === 'failed' ? 'var(--danger)' : 'var(--ink)' }}>
+              {scan.state === 'failed'
+                ? scan.message
+                : `${scan.found === 1 ? t('Found 1 item. Check it, then tick who had it.') : t('Found {n} items. Check them, then tick who had each one.', { n: scan.found })}${scan.note ? ` ${scan.note}` : ''}`}
+            </p>
+          )}
           {(() => {
             // Empty lines for one person whose usual here we know.
             const fillable = rows.filter((r) => !r.name.trim() && !r.price.trim() && r.people.length === 1 && usuals?.has(r.people[0]));
@@ -862,5 +932,81 @@ export function PayDetailsCard({ me, onSave, onQrChanged }: { me: MemberRow; onS
         </button>
       </div>
     </form>
+  );
+}
+
+/** From "I've paid" on a payback nudge: one tap to mark it paid. */
+export function PaidBackSheet({
+  to,
+  cents,
+  owedNow,
+  onConfirm,
+  onClose,
+}: {
+  to: MemberRow;
+  /** What the nudge said. */
+  cents: number;
+  /** What you owe them now (null while bills are still loading). */
+  owedNow: number | null;
+  onConfirm: (cents: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  // Someone may have paid part of it since the nudge went out.
+  const amount = owedNow === null ? cents : Math.min(cents, owedNow);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="paid-back-title" onClick={(e) => e.stopPropagation()}>
+        <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 999, background: 'var(--border-strong)', alignSelf: 'center', flexShrink: 0 }} />
+        <h2 id="paid-back-title" className="title title--sm" style={{ fontSize: 24 }}>
+          {t('Paid {name} back?', { name: to.name })}
+        </h2>
+        {owedNow === 0 ? (
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{t('You don’t owe {name} anything now. All square!', { name: to.name })}</p>
+        ) : (
+          <>
+            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{tNodes('This marks {amount} to {name} as paid, so it’s off everyone’s list.', { amount: <b>{formatRM(amount)}</b>, name: <b>{to.name}</b> })}</p>
+            <PayLines member={to} onToast={() => {}} />
+          </>
+        )}
+        {error && (
+          <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--danger)' }}>
+            {error}
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn--secondary press" onClick={onClose} style={{ flex: 1 }}>
+            {owedNow === 0 ? t('Done') : t('Not yet')}
+          </button>
+          {owedNow !== 0 && (
+            <button
+              type="button"
+              className="btn btn--primary press"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  await onConfirm(amount);
+                  onClose();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : t('Could not save.'));
+                  setBusy(false);
+                }
+              }}
+              style={{ flex: 2 }}
+            >
+              {busy ? t('Saving…') : t('Yes, I’ve paid')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

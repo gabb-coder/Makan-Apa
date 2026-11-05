@@ -10,8 +10,9 @@ export type Event =
   | { type: 'bill'; payer: string; amount: string; food: string; share: string }
   | { type: 'tapau'; runner: string; place: string }
   | { type: 'order'; who: string; item: string }
-  | { type: 'nudge'; to: string; amount: string; several: boolean }
+  | { type: 'nudge'; to: string; amount: string; several: boolean; meals?: string; canMarkPaid?: boolean }
   | { type: 'vote'; decider: string; options: string }
+  | { type: 'swipe'; decider: string; n: string }
   | { type: 'meet'; time: string; place: string }
   | { type: 'late'; who: string }
   | { type: 'leaving'; time: string; place: string }
@@ -71,6 +72,11 @@ const TEXT: Record<Event['type'], Record<Lang, [string, string]>> = {
     en: ['{decider} put lunch to a vote', '{options}. Tap to vote.'],
     ms: ['{decider} buat undian makan', '{options}. Tekan untuk undi.'],
     zh: ['{decider}发起了投票', '{options}。点开投票。'],
+  },
+  swipe: {
+    en: ['{decider} started Swipe to match', 'Swipe yes or no on {n} foods. The ones everyone likes are the matches.'],
+    ms: ['{decider} mulakan Leret untuk padan', 'Leret ya atau tidak pada {n} makanan. Yang semua suka ialah padanannya.'],
+    zh: ['{decider}开始了“滑动配对”', '对{n}种食物滑动选择喜欢或不喜欢。大家都喜欢的就是配对。'],
   },
   meet: {
     en: ['Leaving at {time}', 'Meet at {place}.'],
@@ -139,6 +145,31 @@ const TEXT: Record<Event['type'], Record<Lang, [string, string]>> = {
   },
 };
 
+/** "For Nasi Lemak (Tue 3 Nov)." and what to do next, when the nudge can name the meals. */
+const NUDGE_FOR: Record<Lang, [string, string]> = {
+  en: ['For {meals}. Tap I’ve paid once you’ve sent it.', 'For {meals}. Pay them back, then tap Mark paid in Bills.'],
+  ms: ['Untuk {meals}. Tekan Dah bayar selepas kamu hantar.', 'Untuk {meals}. Bayar balik, kemudian tekan Tanda dah bayar dalam Bil.'],
+  zh: ['{meals}的钱。转账后点“我已付”。', '{meals}的钱。还钱后，在账单里点“标记已付”。'],
+};
+
+/** The button on a payback nudge. */
+export const PAID_ACTION: Record<Lang, string> = { en: 'I’ve paid', ms: 'Dah bayar', zh: '我已付' };
+
+/** "Nasi Lemak (Tue 3 Nov)" in the phone's language; the date is YYYY-MM-DD. */
+export function mealLabel(food: string, date: string, lang: Lang): string {
+  const loc = lang === 'ms' ? 'ms-MY' : lang === 'zh' ? 'zh-CN' : 'en-GB';
+  const when = new Intl.DateTimeFormat(loc, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+  return lang === 'zh' ? `${when}的${food}` : `${food} (${when})`;
+}
+
+/** Two meals by name, then "and 2 more". */
+export function mealList(labels: string[], lang: Lang): string {
+  const and = lang === 'ms' ? 'dan' : lang === 'zh' ? '和' : 'and';
+  const more = (n: number) => (lang === 'ms' ? `${n} lagi` : lang === 'zh' ? `另外${n}餐` : `${n} more`);
+  if (labels.length <= 2) return labels.join(lang === 'zh' ? '和' : ` ${and} `);
+  return `${labels.slice(0, 2).join(lang === 'zh' ? '、' : ', ')} ${and} ${more(labels.length - 2)}`;
+}
+
 const NUDGE_SEVERAL: Record<Lang, string> = {
   en: 'You owe {amount} in total',
   ms: 'Kamu hutang {amount} semuanya',
@@ -154,7 +185,10 @@ export function message(e: Event, lang: Lang = 'en'): Text {
     vars.Meal = vars.meal.charAt(0).toUpperCase() + vars.meal.slice(1);
   }
   const [title, body] = TEXT[e.type][l];
-  if (e.type === 'nudge' && e.several) return { title: fill(NUDGE_SEVERAL[l], vars), body: fill(body, vars) };
+  if (e.type === 'nudge') {
+    const nudgeBody = e.meals ? NUDGE_FOR[l][e.canMarkPaid ? 0 : 1] : body;
+    return { title: fill(e.several ? NUDGE_SEVERAL[l] : title, vars), body: fill(nudgeBody, vars) };
+  }
   return { title: fill(title, vars), body: fill(body, vars) };
 }
 

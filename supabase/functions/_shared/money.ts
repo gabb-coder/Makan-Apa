@@ -178,6 +178,27 @@ export function settleUp(net: Map<string, number>): Payment[] {
   return out;
 }
 
+/**
+ * The bills still being paid back: the ones after the last moment everyone was all square, in
+ * order. `billAt` and `payAt` say when each bill and payback happened (ms since 1970). Treats
+ * and kitty bills leave nobody owing, so they're never in it.
+ */
+export function unsettled<B extends Bill, P extends Payment>(bills: B[], payments: P[], billAt: (b: B) => number, payAt: (p: P) => number): B[] {
+  const events = [
+    ...bills.filter((b) => !b.treat && !b.from_kitty).map((b) => ({ when: billAt(b), bill: b as B | null, pay: null as P | null })),
+    ...payments.map((p) => ({ when: payAt(p), bill: null as B | null, pay: p as P | null })),
+  ].sort((a, b) => a.when - b.when);
+  const seenBills: B[] = [];
+  const seenPays: P[] = [];
+  let since = 0;
+  events.forEach((e, i) => {
+    if (e.bill) seenBills.push(e.bill);
+    if (e.pay) seenPays.push(e.pay);
+    if (settleUp(balances(seenBills, seenPays)).length === 0) since = i + 1;
+  });
+  return events.slice(since).flatMap((e) => (e.bill ? [e.bill] : []));
+}
+
 export interface TopUp {
   member_id: string;
   amount_cents: number;

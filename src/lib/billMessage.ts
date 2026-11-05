@@ -1,6 +1,6 @@
 /** The bill messages sent to the group chat: when, what, and who to transfer the money to. */
 import { t } from './i18n';
-import { balances, formatRM, settleUp, shares, type Payment } from './money';
+import { balances, formatRM, settleUp, shares, unsettled } from './money';
 import type { MealBillRow, MemberRow, SettlementRow } from './supabase';
 
 type Payee = Pick<MemberRow, 'id' | 'name' | 'pay_duitnow' | 'pay_bank'>;
@@ -43,26 +43,8 @@ export function mealBillMessage(bill: MealBillRow, members: Payee[], label: stri
 /** When a bill or payback happened, for putting them in order. */
 const at = (x: { updated_at?: string; created_at?: string }) => Date.parse(x.updated_at ?? x.created_at ?? '') || 0;
 
-/**
- * The bills still being paid back: the ones after the last time everyone was all square. Treats
- * and kitty bills leave nobody owing, so they're never in it.
- */
-export function unsettledBills(bills: MealBillRow[], settlements: SettlementRow[]): MealBillRow[] {
-  const owing = bills.filter((b) => !b.treat && !b.from_kitty);
-  const events = [
-    ...owing.map((b) => ({ when: at(b), bill: b as MealBillRow | null, pay: null as Payment | null })),
-    ...settlements.map((s) => ({ when: at(s), bill: null, pay: s as Payment })),
-  ].sort((a, b) => a.when - b.when);
-  const seenBills: MealBillRow[] = [];
-  const seenPays: Payment[] = [];
-  let since = 0;
-  events.forEach((e, i) => {
-    if (e.bill) seenBills.push(e.bill);
-    if (e.pay) seenPays.push(e.pay);
-    if (settleUp(balances(seenBills, seenPays)).length === 0) since = i + 1;
-  });
-  return events.slice(since).flatMap((e) => (e.bill ? [e.bill] : []));
-}
+/** The bills still being paid back: the ones after the last time everyone was all square. */
+export const unsettledBills = (bills: MealBillRow[], settlements: SettlementRow[]): MealBillRow[] => unsettled(bills, settlements, at, at);
 
 /**
  * Settling up across meals: the meals it's for, then who transfers what to whom, grouped by

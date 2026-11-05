@@ -32,6 +32,7 @@ describe('notifications', () => {
       { type: 'order', who: 'A', item: 'B' },
       { type: 'nudge', to: 'A', amount: 'RM1', several: false },
       { type: 'vote', decider: 'A', options: 'B · C' },
+      { type: 'swipe', decider: 'A', n: '8' },
       { type: 'meet', time: '12:30', place: 'Lobby' },
       { type: 'late', who: 'A' },
       { type: 'leaving', time: '12:30', place: 'Lobby' },

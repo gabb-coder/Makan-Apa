@@ -116,7 +116,7 @@ interface YourTurnProps {
 
 const stuckLink = { minHeight: 40, border: 'none', background: 'none', color: '#FFFFFF', fontSize: 14, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 } as const;
 
-export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote, onSuggest }: YourTurnProps & { onVote?: () => void; onSuggest?: () => void }) {
+export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote, onSuggest, onSwipe }: YourTurnProps & { onVote?: () => void; onSuggest?: () => void; onSwipe?: () => void }) {
   return (
     <DeciderShell decider={me} label={t("Today's decider")}>
       <DeciderHeading decider={me} title={t('Your turn!')} sub={sub} />
@@ -155,12 +155,17 @@ export function YourTurnCard({ me, sub, onSpin, onPickList, onType, onVote, onSu
           {t('Type my own')}
         </button>
       </div>
-      {(onVote || onSuggest) && (
+      {(onVote || onSuggest || onSwipe) && (
         // Help for when the decider is stuck: an idea from the app, or let everyone vote.
         <div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', columnGap: 20 }}>
           {onSuggest && (
             <button type="button" className="press" onClick={onSuggest} style={stuckLink}>
               {t('✨ Suggest one')}
+            </button>
+          )}
+          {onSwipe && (
+            <button type="button" className="press" onClick={onSwipe} style={stuckLink}>
+              {t('💘 Swipe to match')}
             </button>
           )}
           {onVote && (
