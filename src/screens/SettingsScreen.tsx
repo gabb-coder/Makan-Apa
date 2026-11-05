@@ -102,7 +102,8 @@ export function SettingsScreen({ room, me, members, updateRoom, updateMember, mo
           .eq('status', 'pending')
           .is('food_option_id', null)
           .is('custom_food', null)
-          .is('vote_options', null);
+          .is('vote_options', null)
+          .is('swipe_options', null);
       }
     });
 

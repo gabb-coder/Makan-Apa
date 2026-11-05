@@ -68,14 +68,18 @@ self.addEventListener('push', (event) => {
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       tag: data.tag || 'makan-reminder',
-      data: { url: data.url || '/#today' },
+      // A payback nudge has an "I've paid" button that opens the app ready to mark it paid.
+      actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
+      data: { url: data.url || '/#today', paidUrl: data.paidUrl || null },
     }),
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || '/#today', self.location.origin).href;
+  const data = event.notification.data || {};
+  const target = event.action === 'paid' && data.paidUrl ? data.paidUrl : data.url || '/#today';
+  const url = new URL(target, self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
       const open = windows.find((w) => w.url.startsWith(self.location.origin));

@@ -74,7 +74,12 @@ test('diet needs, ratings, who paid, dinner and room spots', async ({ browser })
     expect(meal).toContain('Transfer to Wei');
     await alex.keyboard.press('Escape');
     await alex.locator('.sheet').waitFor({ state: 'detached' });
-    await alex.click('button:text-is("Mark paid")');
+    // "I've paid" on a payback nudge opens Bills ready to mark it paid
+    const [roomId, weiId] = await wei.evaluate(() => [localStorage.getItem('makan.roomId'), localStorage.getItem('makan.memberId')]);
+    await alex.goto(`/?room=${roomId}&paid=${weiId}:1980#bills`);
+    await expect(alex.getByRole('dialog')).toContainText('Paid Wei back?');
+    await expect(alex.getByRole('dialog')).toContainText('RM19.80');
+    await alex.click('[role="dialog"] button:text-is("Yes, I’ve paid")');
     await expect(bills(alex)).toContainText("Everyone's settled up.");
     await wei.click('nav >> text=History');
     await expect(wei.getByText('Room favourites')).toBeVisible();

@@ -16,6 +16,7 @@ import { BillSheet } from '../components/Bills';
 import { TapauLine, TapauSheet } from '../components/Tapau';
 import { WhosInCard } from '../components/WhosIn';
 import { MeetupCard, PlanAheadSheet, VoteCard, VoteSheet } from '../components/Plans';
+import { SwipeCard, SwipeSheet } from '../components/Swipe';
 import type { BillItem } from '../lib/money';
 import type { AttendanceApi } from '../lib/useAttendance';
 import { useTapau } from '../lib/useTapau';
@@ -109,6 +110,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
   const [billStart, setBillStart] = useState<{ paidBy: string; items: BillItem[] } | undefined>(undefined);
   const [tapauOpen, setTapauOpen] = useState(false);
   const [voteSheet, setVoteSheet] = useState(false);
+  const [swipeSheet, setSwipeSheet] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const events = useEvents(room.id, me.id);
@@ -268,6 +270,23 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         onError={onToast}
       />
     );
+  } else if (todayEntry.swipe_options && todayEntry.status !== 'accepted') {
+    main = (
+      <SwipeCard
+        key={todayEntry.swipe_round ?? 0}
+        foods={todayEntry.swipe_options.map(foodByName)}
+        swipes={days.swipes}
+        round={todayEntry.swipe_round ?? 0}
+        voters={present}
+        me={me}
+        decider={decider}
+        onSwipe={days.swipe}
+        onSettle={(food) => days.settleSwipe(food.id.startsWith('custom') ? { foodId: null, name: food.name } : { foodId: food.id, name: food.name })}
+        onDealAgain={() => setSwipeSheet(true)}
+        onCancel={days.cancelSwipe}
+        onError={onToast}
+      />
+    );
   } else if (todayEntry.vote_options && todayEntry.status !== 'accepted') {
     const options = todayEntry.vote_options;
     main = (
@@ -404,6 +423,7 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
             onPickList={() => setSheet('list')}
             onType={() => setSheet('type')}
             onVote={others.length > 0 && pickable.length >= 2 ? () => setVoteSheet(true) : undefined}
+            onSwipe={others.length > 0 && pickable.length >= 3 ? () => setSwipeSheet(true) : undefined}
             onSuggest={() => setSuggesting((on) => !on)}
           />
           {suggesting && (
@@ -836,6 +856,17 @@ export function TodayScreen({ room, me, members, today, foods, pickable, days, o
         />
       )}
 
+      {swipeSheet && (
+        <SwipeSheet
+          foods={(() => {
+            // Foods everyone can eat, when there are enough of them.
+            const suiting = pickable.filter((f) => suitsEveryone(f, present));
+            return suiting.length >= 3 ? suiting : pickable;
+          })()}
+          onStart={days.startSwipe}
+          onClose={() => setSwipeSheet(false)}
+        />
+      )}
       {voteSheet && (
         <VoteSheet foods={pickable.map((f) => f.name)} onStart={(options, minutes) => days.startVote(options, minutes)} onClose={() => setVoteSheet(false)} />
       )}

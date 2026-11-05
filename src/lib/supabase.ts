@@ -100,6 +100,9 @@ export interface DayEntryRow {
   /** A quick vote: the options, and when voting closes. */
   vote_options?: string[] | null;
   vote_ends_at?: string | null;
+  /** Swipe to match: the foods dealt out, and which deal this is (swipes are per round). */
+  swipe_options?: string[] | null;
+  swipe_round?: number;
   updated_at?: string;
   /** The wheel picked it because the decider hadn't by 12:00 (7pm for dinner). */
   auto_picked?: boolean;
@@ -116,6 +119,16 @@ export interface VoteRow {
   member_id: string;
   /** Index into the day's vote_options. */
   choice: number;
+  created_at: string;
+}
+
+export interface SwipeRow {
+  day_entry_id: string;
+  member_id: string;
+  round: number;
+  /** Index into the day's swipe_options. */
+  choice: number;
+  yes: boolean;
   created_at: string;
 }
 

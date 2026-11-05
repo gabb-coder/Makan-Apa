@@ -3,7 +3,7 @@ import { t } from './i18n';
 import { deciderFor, rotationOf } from './rotation';
 import { isEatingDay } from './calendar';
 import { maskMystery, useNow } from './mystery';
-import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type VetoRow, type VoteRow } from './supabase';
+import { supabase, type DayEntryRow, type Meal, type MemberRow, type RoomRow, type SecretPickRow, type SwipeRow, type VetoRow, type VoteRow } from './supabase';
 
 /** What the decider is proposing: a pool food, or a name typed in. */
 export type Pick = { foodId: string; name: string } | { foodId: null; name: string };
@@ -210,6 +210,32 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     };
   }, [votingId]);
 
+  // Swipe to match: everyone's swipes on today's deal, live.
+  const [swipes, setSwipes] = useState<SwipeRow[]>([]);
+  const swipingId = todayEntry?.swipe_options ? todayEntry.id : null;
+  const swipeRound = todayEntry?.swipe_round ?? 0;
+  useEffect(() => {
+    setSwipes([]);
+    if (!swipingId) return;
+    const load = () =>
+      supabase
+        .from('swipes')
+        .select('*')
+        .eq('day_entry_id', swipingId)
+        .eq('round', swipeRound)
+        .then(({ data }) => data && setSwipes(data as SwipeRow[]));
+    void load();
+    const channel = supabase
+      .channel(`swipes:${swipingId}:${swipeRound}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swipes', filter: `day_entry_id=eq.${swipingId}` }, () => void load())
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void load();
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [swipingId, swipeRound]);
+
   /** Run an update on today's entry; returns false if `guard` no longer matched (someone got there first). */
   const updateToday = async (patch: Partial<DayEntryRow>, guard: (q: any) => any = (q) => q): Promise<boolean> => {
     if (!todayEntry) throw new Error(t('Today isn’t ready yet. Try again in a moment.'));
@@ -342,6 +368,33 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
   const settleVote = (pick: Pick) =>
     updateToday({ food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted' }, (q) => q.neq('status', 'accepted'));
 
+  /** The decider deals out foods for everyone to swipe on; dealing again starts a new round. */
+  const startSwipe = async (options: string[]) => {
+    const ok = await updateToday(
+      { swipe_options: options, swipe_round: (todayEntry?.swipe_round ?? 0) + 1, vote_options: null, vote_ends_at: null, food_option_id: null, custom_food: null, method: null, status: 'pending' },
+      (q) => q.neq('status', 'accepted').eq('decider_id', meId),
+    );
+    if (!ok) throw new Error(t('It’s not your turn right now, or today’s already decided.'));
+  };
+  /** Yes or no on one card. */
+  const swipe = async (choice: number, yes: boolean) => {
+    if (!todayEntry) return;
+    const row = { day_entry_id: todayEntry.id, member_id: meId, round: todayEntry.swipe_round ?? 0, choice, yes };
+    setSwipes((cur) => [...cur.filter((x) => !(x.member_id === meId && x.choice === choice && x.round === row.round)), { ...row, created_at: new Date().toISOString() }]);
+    const { error: err } = await supabase.from('swipes').upsert(row);
+    if (err) throw new Error(err.message);
+  };
+  /** The decider calls it off. */
+  const cancelSwipe = async () => {
+    await updateToday({ swipe_options: null }, (q) => q.neq('status', 'accepted'));
+  };
+  /** The decider goes with one of the matches: everyone's had their say, so it's agreed. */
+  const settleSwipe = (pick: Pick) =>
+    updateToday(
+      { food_option_id: pick.foodId, custom_food: pick.foodId ? null : pick.name, method: 'direct', status: 'accepted', swipe_options: null },
+      (q) => q.neq('status', 'accepted').eq('decider_id', meId),
+    );
+
   /** When to head out and where to meet, once decided; null clears it. */
   const setMeetup = async (meetAt: string | null, place: string | null) => {
     const ok = await updateToday({ meet_at: meetAt, meet_place: place?.trim().slice(0, 60) || null });
@@ -365,6 +418,11 @@ export function useDays(room: RoomRow, members: MemberRow[], meId: string, today
     proposeMystery,
     revealMystery,
     votes,
+    swipes,
+    startSwipe,
+    swipe,
+    cancelSwipe,
+    settleSwipe,
     startVote,
     cancelVote,
     castVote,

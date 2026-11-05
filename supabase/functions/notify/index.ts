@@ -39,6 +39,7 @@ interface Entry {
   food_option_id: string | null;
   custom_food: string | null;
   vote_options: string[] | null;
+  swipe_options: string[] | null;
   meet_at: string | null;
   meet_place: string | null;
   auto_picked: boolean;
@@ -65,7 +66,7 @@ async function foodName(entry: Entry): Promise<string> {
 }
 
 async function entry(id: string): Promise<Entry | null> {
-  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food, vote_options, meet_at, meet_place, auto_picked, mystery, mystery_revealed').eq('id', id).maybeSingle();
+  const { data } = await db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, custom_food, vote_options, swipe_options, meet_at, meet_place, auto_picked, mystery, mystery_revealed').eq('id', id).maybeSingle();
   return (data as Entry | null) ?? null;
 }
 
@@ -152,7 +153,7 @@ Deno.serve(async (req) => {
     if (!order || !runner || runner === actor) return json({ skipped: 'own order' });
     recipients.set(runner, { type: 'order', who: nameOf(order.member_id), item: order.qty > 1 ? `${order.qty}× ${order.item}` : order.item });
     tag = `makan-orders-${order.run_id}`;
-  } else if (type === 'vote' || type === 'meet') {
+  } else if (type === 'vote' || type === 'meet' || type === 'swipe') {
     const e = await entry(id);
     if (!e) return json({ skipped: 'stale' });
     const away = await awayFor(e);
@@ -160,6 +161,9 @@ Deno.serve(async (req) => {
     if (type === 'vote') {
       if (!e.vote_options || e.status === 'accepted') return json({ skipped: 'stale' });
       ev = { type, decider: nameOf(e.decider_id), options: e.vote_options.join(' · ') };
+    } else if (type === 'swipe') {
+      if (!e.swipe_options || e.status === 'accepted') return json({ skipped: 'stale' });
+      ev = { type, decider: nameOf(e.decider_id), n: String(e.swipe_options.length) };
     } else {
       if (!e.meet_at) return json({ skipped: 'stale' });
       const { data: room } = await db.from('rooms').select('timezone').eq('id', roomId).maybeSingle();

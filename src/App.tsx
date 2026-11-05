@@ -28,6 +28,7 @@ import { useRain } from './lib/weather';
 import { roomSpot, SUNWAY_CENTRE, SUNWAY_SPOTS, spotIsCovered, spotsFor } from './lib/nearby';
 import { useDeals } from './lib/useDeals';
 import { decodeFoods, PENDING_FOODS_KEY } from './lib/foodShare';
+import { PENDING_PAID_KEY } from './lib/paidLink';
 import { storage } from './lib/storage';
 import { useConnection } from './lib/offline';
 import { JoinScreen } from './screens/JoinScreen';
@@ -153,6 +154,12 @@ export default function App() {
           return restore();
         }
       }
+    }
+    // "I've paid" on a payback nudge: ?paid=<who>:<sen>, confirmed on the Bills tab.
+    const paidParam = params.get('paid');
+    if (paidParam) {
+      clearParam('paid');
+      storage.set(PENDING_PAID_KEY, paidParam);
     }
     const roomParam = params.get('room');
     if (roomParam) {

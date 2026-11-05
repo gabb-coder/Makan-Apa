@@ -8,7 +8,8 @@
 // lunch and dinner are reminded about lunch only. Reminders are in each phone's language.
 //
 // Paybacks: phones with alerts on whose person still owes money get a nudge at their reminder
-// hour, at most every 3 days.
+// hour once the oldest meal they owe for is 3 days old, then at most every 3 days. It names the
+// meals, and when there's one person to pay it has an "I've paid" button.
 //
 // Weekly recap: on Sunday from 8pm (room's time), phones with reminders on that haven't turned
 // the recap off get a summary of the past 7 days: meals, the favourite, vetoes and who paid most.
@@ -18,8 +19,9 @@
 // veto as usual. Days the room doesn't eat together (weekends, holidays) get no reminders.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
-import { message, type Lang } from '../_shared/messages.ts';
-import { balances, formatRM, settleUp, type Bill, type Payment } from '../_shared/money.ts';
+import { mealLabel, mealList, message, PAID_ACTION, type Lang } from '../_shared/messages.ts';
+import { formatRM } from '../_shared/money.ts';
+import { NUDGE_AFTER_DAYS, paybackNudge, type DatedBill, type DatedPayment } from '../_shared/payback.ts';
 import { isEatingDay, turnIndex, type Rotation } from '../_shared/calendar.ts';
 import { autoPhase, pickFood, pickTime, type Meal, type PickFood } from '../_shared/autopick.ts';
 
@@ -115,7 +117,7 @@ function deciderFor(members: Member[], rot: Rotation, date: string, away: Set<st
   return sorted[i].id;
 }
 
-const NUDGE_EVERY_DAYS = 3;
+const NUDGE_EVERY_DAYS = NUDGE_AFTER_DAYS;
 
 async function vapidKeys(config: Record<string, string>) {
   if (config.vapid) return JSON.parse(config.vapid) as { publicKey: string; privateKey: string };
@@ -126,7 +128,7 @@ async function vapidKeys(config: Record<string, string>) {
 }
 
 /** Send one notification; a 404/410 means the browser dropped it, so the row is deleted. */
-async function send(sub: Sub, payload: Record<string, string>): Promise<'sent' | 'failed' | 'gone'> {
+async function send(sub: Sub, payload: Record<string, unknown>): Promise<'sent' | 'failed' | 'gone'> {
   try {
     await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), {
       TTL: 6 * 60 * 60,
@@ -225,11 +227,11 @@ async function autoDecide(now: Date, subs: Sub[]): Promise<{ nudged: number; aut
   const [log, people, recent, out, foodRows] = await Promise.all([
     db.from('auto_decisions').select('room_id, entry_date, meal, nudged_at, decided_at').in('room_id', ids).in('entry_date', dates),
     db.from('members').select('id, room_id, name, sort_order, created_at, left_at, diet, budget').in('room_id', ids).is('left_at', null),
-    db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, vote_options').in('room_id', ids).gte('entry_date', since),
+    db.from('day_entries').select('id, room_id, entry_date, meal, decider_id, status, food_option_id, vote_options, swipe_options').in('room_id', ids).gte('entry_date', since),
     db.from('attendance').select('room_id, entry_date, meal, member_id').in('room_id', ids).in('entry_date', dates).eq('status', 'out'),
     db.from('food_options').select('id, room_id, name, diet, price').in('room_id', ids).eq('is_active', true),
   ]);
-  type Row = { id: string; room_id: string; entry_date: string; meal: Meal | null; decider_id: string | null; status: string; food_option_id: string | null; vote_options: string[] | null };
+  type Row = { id: string; room_id: string; entry_date: string; meal: Meal | null; decider_id: string | null; status: string; food_option_id: string | null; vote_options: string[] | null; swipe_options: string[] | null };
   const entries = (recent.data ?? []) as Row[];
   const todayIds = entries.filter((e) => dates.includes(e.entry_date)).map((e) => e.id);
   const vetoRows = todayIds.length ? ((await db.from('vetoes').select('day_entry_id, rejected_food').in('day_entry_id', todayIds)).data ?? []) : [];
@@ -241,8 +243,8 @@ async function autoDecide(now: Date, subs: Sub[]): Promise<{ nudged: number; aut
     if (phase === 'nudge' ? mark?.nudged_at || mark?.decided_at : mark?.decided_at) continue;
     const rot = rotationOf(room);
     const entry = entries.find((e) => e.room_id === room.id && e.entry_date === date && (e.meal ?? 'lunch') === meal);
-    // Already picked, a vote is on, or a day off nobody started: nothing to do.
-    if (entry && (entry.status !== 'pending' || entry.vote_options)) continue;
+    // Already picked, a vote or a swipe is on, or a day off nobody started: nothing to do.
+    if (entry && (entry.status !== 'pending' || entry.vote_options || entry.swipe_options)) continue;
     if (!entry && !isEatingDay(date, rot.cal)) continue;
     const away = new Set(((out.data ?? []) as { room_id: string; entry_date: string; meal: Meal; member_id: string }[]).filter((a) => a.room_id === room.id && a.entry_date === date && a.meal === meal).map((a) => a.member_id));
     const members = ((people.data ?? []) as (Member & { diet: string[] | null; budget: number | null })[]).filter((m) => m.room_id === room.id);
@@ -286,6 +288,7 @@ async function autoDecide(now: Date, subs: Sub[]): Promise<{ nudged: number; aut
       .eq('id', entryId)
       .eq('status', 'pending')
       .is('vote_options', null)
+      .is('swipe_options', null)
       .select('id');
     if (updated?.length) done.autoPicked++;
   }
@@ -332,23 +335,44 @@ Deno.serve(async (req) => {
   const since = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
   const [attendance, mealBills, settlements, eventBills] = await Promise.all([
     db.from('attendance').select('room_id, entry_date, member_id').in('room_id', roomIds).eq('meal', 'lunch').eq('status', 'out').gte('entry_date', since),
-    db.from('meal_bills').select('room_id, paid_by, amount_cents, split_between, items, from_kitty, treat, birthday').in('room_id', roomIds),
-    db.from('settlements').select('room_id, from_member, to_member, amount_cents').in('room_id', roomIds),
-    db.from('event_bills').select('room_id, paid_by, amount_cents, split_between, items, from_kitty, treat, birthday').in('room_id', roomIds),
+    db
+      .from('meal_bills')
+      .select('day_entry_id, room_id, paid_by, amount_cents, split_between, items, from_kitty, treat, birthday, updated_at, day_entries(entry_date, custom_food, food_options(name))')
+      .in('room_id', roomIds),
+    db.from('settlements').select('room_id, from_member, to_member, amount_cents, created_at').in('room_id', roomIds),
+    db.from('event_bills').select('event_id, room_id, paid_by, amount_cents, split_between, items, from_kitty, treat, birthday, updated_at, events(title, starts_at)').in('room_id', roomIds),
   ]);
-  // Meal and event bills both count towards who owes whom.
-  const bills = { data: [...(mealBills.data ?? []), ...(eventBills.data ?? [])] };
+  // Meal and event bills both count towards who owes whom, each with its day and what it was.
+  type Named = DatedBill & { room_id: string; what: string };
+  type MealBillRow = DatedBill & { day_entry_id: string; room_id: string; updated_at: string; day_entries: { entry_date: string; custom_food: string | null; food_options: { name: string } | null } | null };
+  type EventBillRow = DatedBill & { event_id: string; room_id: string; updated_at: string; events: { title: string; starts_at: string } | null };
+  const tzOf = (roomId: string) => (rooms.data as Room[] | null)?.find((r) => r.id === roomId)?.timezone ?? 'Asia/Kuala_Lumpur';
+  const allBills: Named[] = [
+    ...((mealBills.data ?? []) as unknown as MealBillRow[]).map((b) => ({
+      ...b,
+      id: b.day_entry_id,
+      date: b.day_entries?.entry_date ?? b.updated_at.slice(0, 10),
+      at: Date.parse(b.updated_at),
+      what: b.day_entries?.food_options?.name ?? b.day_entries?.custom_food ?? 'a meal',
+    })),
+    ...((eventBills.data ?? []) as unknown as EventBillRow[]).map((b) => ({
+      ...b,
+      id: b.event_id,
+      date: b.events ? localNow(tzOf(b.room_id), new Date(b.events.starts_at)).date : b.updated_at.slice(0, 10),
+      at: Date.parse(b.updated_at),
+      what: b.events?.title ?? 'an event',
+    })),
+  ];
+  const allPayments = ((settlements.data ?? []) as (DatedPayment & { room_id: string; created_at: string })[]).map((p) => ({ ...p, at: Date.parse(p.created_at) }));
   const outOn = (roomId: string, date: string) =>
     new Set(((attendance.data ?? []) as { room_id: string; entry_date: string; member_id: string }[]).filter((a) => a.room_id === roomId && a.entry_date === date).map((a) => a.member_id));
-  const roomDebts = new Map<string, Payment[]>();
-  const debtsIn = (roomId: string) => {
-    if (!roomDebts.has(roomId)) {
-      const b = ((bills.data ?? []) as (Bill & { room_id: string })[]).filter((x) => x.room_id === roomId);
-      const p = ((settlements.data ?? []) as (Payment & { room_id: string })[]).filter((x) => x.room_id === roomId);
-      roomDebts.set(roomId, b.length ? settleUp(balances(b, p)) : []);
-    }
-    return roomDebts.get(roomId)!;
-  };
+  const nudgeFor = (roomId: string, memberId: string, date: string) =>
+    paybackNudge(
+      memberId,
+      allBills.filter((b) => b.room_id === roomId),
+      allPayments.filter((p) => p.room_id === roomId),
+      date,
+    ) as { owed: { from_member: string; to_member: string; amount_cents: number }[]; bills: Named[] } | null;
   const now = new Date();
   // Meet-ups starting in the next ~10 minutes that haven't had their "leaving soon" alert.
   const leavingSoon = (entries.data as Entry[]).filter((e) => {
@@ -410,13 +434,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Every few days, a gentle note to anyone who still owes money (alerts on only).
-    const owed = debtsIn(room.id).filter((p) => p.from_member === sub.member_id);
-    if (sub.notify_events && owed.length && (!sub.last_nudge_on || daysBetween(sub.last_nudge_on, local.date) >= NUDGE_EVERY_DAYS)) {
+    // Every few days, a gentle note to anyone who still owes money (alerts on only), once the
+    // oldest meal they owe for is a few days old.
+    const due = sub.notify_events && (!sub.last_nudge_on || daysBetween(sub.last_nudge_on, local.date) >= NUDGE_EVERY_DAYS) ? nudgeFor(room.id, sub.member_id, local.date) : null;
+    if (due) {
+      const owed = due.owed;
       const total = owed.reduce((n, p) => n + p.amount_cents, 0);
       const to = everyone.find((m) => m.id === owed[0].to_member)?.name ?? 'someone';
-      const nudge = message({ type: 'nudge', to, amount: formatRM(total), several: owed.length > 1 }, sub.lang);
-      const result = await send(sub, { ...nudge, url: `/?room=${room.id}#bills`, tag: `makan-owe-${room.id}-${local.date}` });
+      const one = owed.length === 1;
+      const meals = mealList(due.bills.map((b) => mealLabel(b.what, b.date, sub.lang)), sub.lang);
+      const nudge = message({ type: 'nudge', to, amount: formatRM(total), several: !one, meals, canMarkPaid: one }, sub.lang);
+      const result = await send(sub, {
+        ...nudge,
+        url: `/?room=${room.id}#bills`,
+        // One person to pay: the button opens the app ready to mark it paid.
+        ...(one ? { paidUrl: `/?room=${room.id}&paid=${owed[0].to_member}:${owed[0].amount_cents}#bills`, actions: [{ action: 'paid', title: PAID_ACTION[sub.lang] ?? PAID_ACTION.en }] } : {}),
+        tag: `makan-owe-${room.id}-${local.date}`,
+      });
       if (result === 'gone') {
         summary.removed++;
         continue;

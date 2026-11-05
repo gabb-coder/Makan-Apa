@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
-import { BillSheet, PayDetailsCard, SettleUpCard } from '../components/Bills';
+import { useEffect, useMemo, useState } from 'react';
+import { BillSheet, PaidBackSheet, PayDetailsCard, SettleUpCard } from '../components/Bills';
+import { PENDING_PAID_KEY, parsePaid } from '../lib/paidLink';
+import { storage } from '../lib/storage';
 import { KittyCard } from '../components/Kitty';
 import { entryFood, type Food } from '../lib/foods';
 import { t } from '../lib/i18n';
-import { formatRM, shares } from '../lib/money';
+import { balances, formatRM, settleUp, shares } from '../lib/money';
 import { dayMonthLabel } from '../lib/rotation';
 import { roomTitle } from '../lib/session';
 import type { DayEntryRow, MealBillRow, MemberRow, RoomRow } from '../lib/supabase';
@@ -32,6 +34,14 @@ const PAGE = 10;
 export function BillsScreen({ room, me, members, entries, foods, extras, updateMember, onToast, attendance }: Props) {
   const [open, setOpen] = useState<{ id: string; food: string; when: string; away: ReadonlySet<string>; guests: { hostId: string; count: number }[] } | null>(null);
   const [shown, setShown] = useState(PAGE);
+  // "I've paid" on a payback nudge lands here, ready to mark it paid.
+  const [paying, setPaying] = useState<{ to: MemberRow; cents: number } | null>(null);
+  useEffect(() => {
+    const p = parsePaid(storage.get(PENDING_PAID_KEY));
+    storage.remove(PENDING_PAID_KEY);
+    const to = p && members.find((m) => m.id === p.to);
+    if (p && to && to.id !== me.id) setPaying({ to, cents: p.cents });
+  }, []);
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const nameOf = (id: string) => (id === me.id ? t('You') : (members.find((m) => m.id === id)?.name ?? t('Someone')));
 
@@ -163,6 +173,18 @@ export function BillsScreen({ room, me, members, entries, foods, extras, updateM
         />
       </section>
 
+      {paying && (
+        <PaidBackSheet
+          to={paying.to}
+          cents={paying.cents}
+          owedNow={extras.bills.length ? (settleUp(balances(extras.bills, extras.settlements)).find((p) => p.from_member === me.id && p.to_member === paying.to.id)?.amount_cents ?? 0) : null}
+          onConfirm={async (cents) => {
+            await extras.recordPayment({ from_member: me.id, to_member: paying.to.id, amount_cents: cents });
+            onToast(t('Payment recorded.'));
+          }}
+          onClose={() => setPaying(null)}
+        />
+      )}
       {open && (
         <BillSheet dayEntryId={open.id} foodName={open.food} when={open.when} members={members} meId={me.id} extras={extras} away={open.away} guests={open.guests} kittyKeeper={room.kitty_keeper} onSaved={(removed) => onToast(removed ? t('Bill removed.') : t('Bill saved.'))} onClose={() => setOpen(null)} />
       )}
