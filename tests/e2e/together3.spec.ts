@@ -93,12 +93,22 @@ test('a mystery lunch with lifts, Wrapped, and copying the food list', async ({ 
 
     // History has the month as a story
     await wei.click('nav >> text=History');
+    // With motion on, so the story plays by itself
+    await wei.emulateMedia({ reducedMotion: 'no-preference' });
     await wei.locator('button.chip', { hasText: /wrapped/ }).first().click();
     await expect(wei.getByRole('dialog')).toContainText('Mystery check');
+    // The story moves on by itself to the top food, then Next goes on to variety
+    await expect(wei.getByRole('dialog')).toContainText('Mamak', { timeout: 12_000 });
+    await expect(wei.getByRole('dialog')).toContainText('2/');
     await wei.click('[role="dialog"] button:text-is("Next")');
-    await expect(wei.getByRole('dialog')).toContainText('Mamak');
+    await expect(wei.getByRole('dialog')).toContainText('different food');
+    // Pausing stops it moving on
+    await wei.click('[role="dialog"] button[aria-label="Pause"]');
+    await wei.waitForTimeout(7_500);
+    await expect(wei.getByRole('dialog')).toContainText('3/');
     await wei.keyboard.press('Escape');
     await expect(wei.getByRole('dialog')).toHaveCount(0);
+    await wei.emulateMedia({ reducedMotion: 'reduce' });
 
     // A second room on Wei's phone copies this room's food list
     await wei.goto('/');
