@@ -1,0 +1,736 @@
+/* Makan Wrapped: a room's month or year as a full-screen story. */
+
+.wr {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(160deg, var(--wr-a), var(--wr-b));
+  transition: background 0.6s ease;
+  font-family: var(--font-body);
+  animation: wrOpen 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+@keyframes wrOpen {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+/* Soft colour blobs drifting behind everything. */
+.wr-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: background 0.8s ease;
+}
+.wr-blob--1 {
+  width: 70vmax;
+  height: 70vmax;
+  top: -25vmax;
+  right: -30vmax;
+  background: var(--wr-c);
+  animation: wrDrift 14s ease-in-out infinite alternate;
+}
+.wr-blob--2 {
+  width: 60vmax;
+  height: 60vmax;
+  bottom: -25vmax;
+  left: -25vmax;
+  background: var(--wr-d);
+  animation: wrDrift 18s ease-in-out -6s infinite alternate-reverse;
+}
+@keyframes wrDrift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-8vmax, 6vmax) scale(1.12);
+  }
+  100% {
+    transform: translate(6vmax, -4vmax) scale(0.94);
+  }
+}
+
+/* Grain, so the gradients don't look flat. */
+.wr::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Emoji floating up in the background. */
+.wr-float {
+  position: absolute;
+  bottom: -60px;
+  font-size: var(--size, 28px);
+  opacity: 0;
+  pointer-events: none;
+  animation: wrFloat var(--dur, 9s) linear var(--delay, 0s) infinite;
+}
+@keyframes wrFloat {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.32;
+  }
+  85% {
+    opacity: 0.32;
+  }
+  100% {
+    transform: translateY(-115vh) rotate(var(--spin, 40deg));
+    opacity: 0;
+  }
+}
+
+.wr-top {
+  position: relative;
+  z-index: 2;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wr-bars {
+  display: flex;
+  gap: 4px;
+}
+.wr-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+.wr-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+  transform-origin: left;
+}
+.wr-bar--live > span {
+  animation: wrFill var(--wr-slide, 6.5s) linear both;
+}
+.wr--paused .wr-bar--live > span {
+  animation-play-state: paused;
+}
+@keyframes wrFill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.wr-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wr-brand {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.wr-brand b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+}
+.wr-brand span {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wr-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+.wr-icon:focus-visible,
+.wr-btn:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.wr-stage {
+  position: relative;
+  z-index: 2;
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 24px;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+/* Tap the left third to go back, the rest to go on. */
+.wr-tap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+}
+.wr-tap--back {
+  left: 0;
+  width: 30%;
+}
+.wr-tap--next {
+  right: 0;
+  width: 70%;
+}
+
+.wr-slide {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  pointer-events: none;
+  animation: wrSlideIn 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.wr-slide--back {
+  animation-name: wrSlideInBack;
+}
+@keyframes wrSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(40px) scale(0.97);
+    filter: blur(6px);
+  }
+}
+@keyframes wrSlideInBack {
+  from {
+    opacity: 0;
+    transform: translateX(-40px) scale(0.97);
+    filter: blur(6px);
+  }
+}
+
+/* Pieces of a slide come in one after another: set --i on each. */
+.wr-in {
+  animation: wrRise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) calc(0.12s + var(--i, 0) * 0.12s) backwards;
+}
+@keyframes wrRise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
+.wr-pop {
+  animation: wrPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.1s + var(--i, 0) * 0.12s) backwards;
+}
+@keyframes wrPop {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-12deg);
+  }
+}
+
+.wr-eyebrow {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.wr-emoji {
+  font-size: 64px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.25));
+}
+.wr-big {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 12vw, 64px);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+}
+.wr-huge {
+  font-family: var(--font-display);
+  font-size: clamp(88px, 30vw, 156px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 32px rgba(0, 0, 0, 0.2);
+}
+.wr-line {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.4;
+  opacity: 0.94;
+}
+.wr-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 14px;
+  font-weight: 800;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Intro: the period's letters drop in one by one, with a tilted "wrapped" sticker. */
+.wr-letters {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+.wr-letter {
+  display: inline-block;
+  white-space: pre;
+  animation: wrLetter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.15s + var(--i) * 0.05s) backwards;
+}
+@keyframes wrLetter {
+  from {
+    opacity: 0;
+    transform: translateY(-40px) rotate(-14deg);
+  }
+}
+.wr-sticker {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 6px 16px 8px;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--wr-ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  transform: rotate(-4deg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  animation: wrSticker 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s backwards;
+}
+@keyframes wrSticker {
+  from {
+    opacity: 0;
+    transform: rotate(12deg) scale(2.2);
+  }
+}
+
+/* Top foods: a podium that rises. */
+.wr-podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.wr-step {
+  flex: 1;
+  max-width: 130px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.wr-step-food {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  animation: wrPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.55s + var(--i) * 0.2s) backwards;
+}
+.wr-step-name {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.wr-step-block {
+  width: 100%;
+  height: var(--h);
+  border-radius: 14px 14px 4px 4px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 10px;
+  gap: 2px;
+  transform-origin: bottom;
+  animation: wrGrowY 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) calc(0.2s + var(--i) * 0.2s) backwards;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.wr-step--1 .wr-step-block {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--wr-ink);
+}
+.wr-step-block b {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
+}
+.wr-step-block span {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+@keyframes wrGrowY {
+  from {
+    transform: scaleY(0);
+  }
+}
+.wr-crown {
+  font-size: 30px;
+  line-height: 1;
+  animation: wrBob 2.4s ease-in-out 1.4s infinite;
+}
+@keyframes wrBob {
+  50% {
+    transform: translateY(-6px) rotate(-6deg);
+  }
+}
+
+/* Variety: no-repeat days light up one by one. */
+.wr-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wr-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.wr-dot--on {
+  background: #fff;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
+  animation: wrDot 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.6s + var(--i) * 0.07s) backwards;
+}
+@keyframes wrDot {
+  from {
+    transform: scale(0);
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* Deciders: bars that grow. */
+.wr-rank {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.wr-rank-row {
+  display: grid;
+  grid-template-columns: minmax(0, 92px) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.wr-rank-row > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wr-rank-track {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+.wr-rank-track > span {
+  display: block;
+  height: 100%;
+  width: var(--w);
+  border-radius: inherit;
+  background: #fff;
+  transform-origin: left;
+  animation: wrGrowX 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) calc(0.4s + var(--i) * 0.12s) backwards;
+}
+@keyframes wrGrowX {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Most vetoed: a rubber stamp slams down. */
+.wr-veto {
+  position: relative;
+  align-self: flex-start;
+  padding-right: 8px;
+}
+.wr-stamp {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  padding: 4px 12px;
+  border: 4px solid #fff;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  transform: translateY(-50%) rotate(-14deg);
+  background: rgba(0, 0, 0, 0.12);
+  animation: wrStamp 0.45s cubic-bezier(0.5, 0, 0.75, 0) 0.7s backwards;
+}
+@keyframes wrStamp {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) rotate(-30deg) scale(3);
+  }
+}
+.wr-slide--shake {
+  animation:
+    wrSlideIn 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards,
+    wrThud 0.3s ease-out 1.12s;
+}
+@keyframes wrThud {
+  30% {
+    transform: translate(-4px, 3px);
+  }
+  60% {
+    transform: translate(3px, -2px);
+  }
+}
+
+/* The favourite spot: a pin drops, with ripples. */
+.wr-pin {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+}
+.wr-pin > b {
+  position: relative;
+  z-index: 1;
+  font-size: 64px;
+  line-height: 1;
+  animation: wrDrop 0.8s cubic-bezier(0.34, 1.4, 0.64, 1) 0.15s backwards;
+}
+@keyframes wrDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-120px);
+  }
+}
+.wr-ring {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 80px;
+  height: 26px;
+  margin-left: -40px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  opacity: 0;
+  animation: wrRipple 2.2s ease-out calc(0.9s + var(--i) * 0.7s) infinite;
+}
+@keyframes wrRipple {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+/* Money: coins rain down. */
+.wr-coin {
+  position: absolute;
+  top: -50px;
+  font-size: 30px;
+  pointer-events: none;
+  animation: wrCoin var(--dur, 2.4s) cubic-bezier(0.5, 0, 0.75, 0) var(--delay, 0s) backwards;
+  opacity: 0;
+}
+@keyframes wrCoin {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(105vh) rotate(var(--spin, 300deg));
+  }
+}
+
+/* Finale: the whole month on one card, and confetti. */
+.wr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.wr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.wr-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  min-width: 0;
+}
+.wr-tile b {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 7vw, 30px);
+  white-space: nowrap;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.wr-tile span {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+.wr-confetti {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  animation: wrConfetti var(--dur, 3s) cubic-bezier(0.25, 0.6, 0.5, 1) var(--delay, 0s) backwards;
+}
+@keyframes wrConfetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0px), 105vh) rotate(var(--spin, 720deg));
+  }
+}
+
+.wr-foot {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.wr-btn {
+  height: 52px;
+  border: none;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.15s ease;
+}
+.wr-btn:active {
+  transform: scale(0.96);
+}
+.wr-btn--ghost {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.wr-btn--solid {
+  flex: 2;
+  background: #fff;
+  color: var(--wr-ink);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+.wr-btn--shine {
+  position: relative;
+  overflow: hidden;
+}
+.wr-btn--shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.8) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: wrShine 2.6s ease-in-out 1.2s infinite;
+}
+@keyframes wrShine {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-float,
+  .wr-coin,
+  .wr-confetti,
+  .wr-ring {
+    display: none;
+  }
+  .wr-blob {
+    animation: none !important;
+  }
+}

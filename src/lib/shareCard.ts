@@ -139,7 +139,18 @@ export async function shareCard(info: CardInfo): Promise<string | null> {
 }
 
 /** A 1080×1350 picture of a room's month or year, for sharing. `lines` are the highlights. */
-export async function drawWrapped(title: string, subtitle: string, lines: string[]): Promise<Blob> {
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** A room's Wrapped as one picture: the period, four big numbers, the highlights and the vibe. */
+export async function drawWrapped(card: { room: string; title: string; tiles: { value: string; label: string }[]; lines: string[]; vibe: string | null }): Promise<Blob> {
   await document.fonts?.ready;
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -147,34 +158,89 @@ export async function drawWrapped(title: string, subtitle: string, lines: string
   const ctx = canvas.getContext('2d')!;
   const display = "'Bricolage Grotesque', 'Plus Jakarta Sans', sans-serif";
   const body = "'Plus Jakarta Sans', system-ui, sans-serif";
-  ctx.fillStyle = '#18181B';
+
+  // A deep gradient with two glowing blobs, like the story's last slide.
+  const bg = ctx.createLinearGradient(0, 0, W * 0.6, H);
+  bg.addColorStop(0, '#18181B');
+  bg.addColorStop(1, '#5B21B6');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
-  const colours = ['#CC3F17', '#E8B931', '#3C8D5A', '#2F6FD6', '#8E44AD'];
-  colours.forEach((c, i) => {
-    ctx.fillStyle = c;
-    ctx.beginPath();
-    ctx.arc(W - 140 + i * 18, 160 + i * 40, 220 - i * 36, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = `600 44px ${body}`;
-  ctx.fillText(subtitle, 80, 140);
-  ctx.font = `800 96px ${display}`;
-  wrap(ctx, title, W - 160).slice(0, 2).forEach((l, i) => ctx.fillText(l, 80, 270 + i * 104));
-  ctx.font = `700 52px ${body}`;
-  let y = 560;
-  for (const line of lines.slice(0, 6)) {
-    for (const l of wrap(ctx, line, W - 160).slice(0, 2)) {
-      ctx.fillText(l, 80, y);
-      y += 66;
-    }
-    y += 34;
+  const glow = (x: number, y: number, r: number, colour: string) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, colour);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  };
+  glow(W - 80, 120, 560, 'rgba(236,72,153,0.75)');
+  glow(60, H - 160, 620, 'rgba(245,158,11,0.55)');
+  // Confetti along the top.
+  const colours = ['#FFFFFF', '#FDE047', '#F472B6', '#60A5FA', '#34D399', '#FB923C'];
+  for (let i = 0; i < 34; i++) {
+    ctx.save();
+    ctx.translate((i * 137) % W, 30 + ((i * 71) % 230));
+    ctx.rotate(((i * 47) % 360) * (Math.PI / 180));
+    ctx.fillStyle = colours[i % colours.length];
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(-7, -11, 14, 22);
+    ctx.restore();
   }
-  ctx.font = `800 72px ${display}`;
-  ctx.fillText('Makan apa?', 80, H - 110);
-  ctx.font = `500 36px ${body}`;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `800 34px ${body}`;
+  ctx.fillText(card.room.toUpperCase().slice(0, 40), 80, 300);
+  ctx.font = `800 104px ${display}`;
+  const titleLines = wrap(ctx, card.title, W - 160).slice(0, 2);
+  titleLines.forEach((l, i) => ctx.fillText(l, 80, 400 + i * 104));
+  let y = 400 + (titleLines.length - 1) * 104 + 50;
+
+  // Four tiles, two by two.
+  const gap = 24;
+  const tw = (W - 160 - gap) / 2;
+  const th = 170;
+  card.tiles.slice(0, 4).forEach((tile, k) => {
+    const x = 80 + (k % 2) * (tw + gap);
+    const ty = y + Math.floor(k / 2) * (th + gap);
+    roundRect(ctx, x, ty, tw, th, 32);
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    let size = 84;
+    ctx.font = `800 ${size}px ${display}`;
+    while (ctx.measureText(tile.value).width > tw - 56 && size > 40) ctx.font = `800 ${(size -= 4)}px ${display}`;
+    ctx.fillText(tile.value, x + 28, ty + 98);
+    ctx.font = `700 34px ${body}`;
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(tile.label, x + 28, ty + 144);
+    ctx.globalAlpha = 1;
+  });
+  y += 2 * th + gap + 70;
+
+  ctx.font = `700 42px ${body}`;
+  for (const line of card.lines.slice(0, 3)) {
+    const [l] = wrap(ctx, line, W - 160);
+    ctx.fillText(l, 80, y);
+    y += 62;
+  }
+  if (card.vibe && y < H - 230) {
+    ctx.font = `600 34px ${body}`;
+    ctx.globalAlpha = 0.9;
+    for (const l of wrap(ctx, card.vibe, W - 160).slice(0, 2)) {
+      y += 6;
+      ctx.fillText(l, 80, y + 20);
+      y += 44;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.font = `800 64px ${display}`;
+  ctx.fillText('Makan Wrapped', 80, H - 100);
+  ctx.font = `500 32px ${body}`;
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.fillText(t('Decided together on Makan apa?'), 80, H - 60);
+  ctx.fillText(t('Decided together on Makan apa?'), 80, H - 52);
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No image'))), 'image/png'));
 }
 
